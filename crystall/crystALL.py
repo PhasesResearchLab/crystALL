@@ -276,7 +276,12 @@ def run_MPDD(
 #MPDD = client['MPDD']
 #collections = ['community', 'curated']
 
-def run_compositional_MPDD(targetCompositionDict: dict, devs: dict, MPDD, collections: list):
+def run_compositional_MPDD(
+        targetCompositionDict: Dict[str, int],
+        devs: Dict[str, int],
+        MPDD: Database,
+        collections: List[str]
+    ) -> str:
     # Target formula
     meanFormula = ''.join(''.join((key, str(val))) for (key, val) in targetCompositionDict.items())
     rangesStr = '+-(' + ','.join(str(r) for r in devs.values()) + ')'
