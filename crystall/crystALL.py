@@ -487,7 +487,7 @@ def sortedElementsList(mgComp):
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'I', 'U']]
 def elementPermutations(sEL):
     generatingList = [[list(i) for i in permutations(lev)] for lev in sEL]
-    outList = [[item for sublist in list(permutation) for iterm in sublist] for permutation in product(*generatingList)]
+    outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
     return outList
 
 # For a given (1) composition dictionary with permil fractions (1/1000)
