@@ -20,6 +20,7 @@ def run_local(
         targetFormula: Union[str, mg.Composition], 
         candidatePath: str
     ) -> str:
+    
     print('\nSearching for structure candidates for: '+targetFormula)
     print('Structure candidate dataset:\n' + candidatePath)
 
@@ -142,6 +143,7 @@ def run_MPDD(
         MPDD: Database,
         collections: List[str]
     ) -> str:
+
     print('\nSearching for structure candidates for: '+targetFormula)
     print('Using MPDD Database with collections: '+', '.join(collections))
 
@@ -282,6 +284,7 @@ def run_compositional_MPDD(
         MPDD: Database,
         collections: List[str]
     ) -> str:
+
     # Target formula
     meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
     rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
@@ -438,6 +441,7 @@ def estimate_compositional_MPDD(
         MPDD: Database,
         collections: List[str]
     ) -> str:
+
     # Target formula
     meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
     rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
@@ -463,6 +467,7 @@ def compositionalManhattanDistanceAdd(
         csvfile: str, 
         targetCompositionDict: Dict[str, int]
     ) -> None:
+
     oldCSVpath = structureFiles + '/' + csvfile
     reader = csv.reader(open(oldCSVpath, 'r'))
     newCSV = open(oldCSVpath.replace('.csv', '') + '_distances.csv', 'w', newline='')
@@ -489,6 +494,7 @@ def compositionalManhattanDistanceAdd(
 def sortedElementsList(
         comp: mg.Composition
     ) -> List[List[str]]:
+
     fractions = re.sub(r'[A-z]+', '', comp.formula).split()
     elements = re.sub(r'[0-9]+', '', comp.formula).split()
     compl = []
@@ -527,7 +533,11 @@ def sortedElementsList(
 #  ['Gd', 'O', 'Bi', 'Al', 'Ni', 'As', 'I', 'U'],
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'U', 'I'],
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'I', 'U']]
-def elementPermutations(sEL):
+
+def elementPermutations(
+        sEL: List[List[str]]
+    ) -> List[List[str]]:
+
     generatingList = [[list(i) for i in permutations(lev)] for lev in sEL]
     outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
     return outList
@@ -537,7 +547,11 @@ def elementPermutations(sEL):
 # and a list of allowed composition deviations
 # e.g. {'Nd':50, 'Sn':50, 'Bi':20}
 # returns a MPDD query for ananymous composition space with N components and
-def comp2acompQ(compDict: dict, devs: dict) -> dict:
+def comp2acompQ(
+        compDict: Dict[str, int],
+        devs: Dict[str, int]
+    ) -> Dict[str, Union[Dict[str, int], int]]:
+
     eVals = []
     for e in compDict:
         eVals.append([compDict[e], devs[e]])
@@ -548,7 +562,11 @@ def comp2acompQ(compDict: dict, devs: dict) -> dict:
     result.update({f'material.nComponents': len(eVals)})
     return result
 
-def comp2compQ(compDict: dict, devs: dict) -> dict:
+def comp2compQ(
+        compDict: Dict[str, int],
+        devs: Dict[str, int]
+    ) -> Dict[str, Union[Dict[str, int], int]]:
+
     meanComposition = mg.Composition(' '.join(''.join((key, str(val))) for (key, val) in compDict.items()))
     mpddQuery = dict()
     mpddQuery.update({'material.system': meanComposition.chemical_system})
@@ -560,7 +578,12 @@ def comp2compQ(compDict: dict, devs: dict) -> dict:
 # For a given composition, returns elements grouped by their occurrence in the formula,
 # starting from the least common.
 # E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
-def orderedAllowedSubstitutions(targetCompDict: dict, devs: dict, candidateCompDict: dict):
+def orderedAllowedSubstitutions(
+        targetCompDict: Dict[str, int],
+        devs: Dict[str, int],
+        candidateCompDict: Dict[str, int]
+    ) -> List[List[str]]:
+
     # Finds what eleemnts can be used for substitution
     allInRangeSubstitutions = []
     for c in candidateCompDict:
