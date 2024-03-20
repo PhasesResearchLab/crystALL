@@ -11,13 +11,27 @@ import math
 import json
 from statistics import mean
 import csv
+from typing import List, Dict, Union
+from pymongo.database import Database
+
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
-def run_local(targetFormula, candidatePath):
+def run_local(
+        targetFormula: Union[str, mg.Composition], 
+        candidatePath: str
+    ) -> str:
     print('\nSearching for structure candidates for: '+targetFormula)
     print('Structure candidate dataset:\n' + candidatePath)
-    #Formula to pymatgen Composition
-    composition = mg.Composition(targetFormula)
+    
+    if isinstance(targetFormula, str):
+        #Formula to pymatgen Composition
+        composition = mg.Composition(targetFormula)
+    elif isinstance(targetFormula, mg.Composition):
+        composition = targetFormula
+    else:
+        raise ValueError('Target formula must be a string or a pymatgen Composition object')
+    assert os.path.isdir(candidatePath), 'Candidate path must be a valid directory'
+
     aFormula = composition.anonymized_formula
     nElements = composition.to_data_dict['nelements']
 
