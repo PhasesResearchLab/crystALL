@@ -22,7 +22,7 @@ def run_local(
     ) -> str:
     print('\nSearching for structure candidates for: '+targetFormula)
     print('Structure candidate dataset:\n' + candidatePath)
-    
+
     if isinstance(targetFormula, str):
         #Formula to pymatgen Composition
         composition = mg.Composition(targetFormula)
@@ -283,8 +283,8 @@ def run_compositional_MPDD(
         collections: List[str]
     ) -> str:
     # Target formula
-    meanFormula = ''.join(''.join((key, str(val))) for (key, val) in targetCompositionDict.items())
-    rangesStr = '+-(' + ','.join(str(r) for r in devs.values()) + ')'
+    meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
+    rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
 
     print('\nSearching for structure candidates for: ' + meanFormula + ' ' + rangesStr)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
@@ -432,10 +432,15 @@ def run_compositional_MPDD(
 
     return finPath
 
-def estimate_compositional_MPDD(targetCompositionDict: dict, devs: dict, MPDD, collections: list):
+def estimate_compositional_MPDD(
+        targetCompositionDict: Dict[str, int],
+        devs: Dict[str, int],
+        MPDD: Database,
+        collections: List[str]
+    ) -> str:
     # Target formula
-    meanFormula = ''.join(''.join((key, str(val))) for (key, val) in targetCompositionDict.items())
-    rangesStr = '+-(' + ','.join(str(r) for r in devs.values()) + ')'
+    meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
+    rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
 
     # Sorted fractions dictionary query
     sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
