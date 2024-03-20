@@ -458,7 +458,11 @@ def estimate_compositional_MPDD(
 
 # Calcualte distance between structures in POSCAR files and the composition given by the target composition dictionary
 # CSV file needs to be in the structure files folder
-def compositionalManhattanDistanceAdd(structureFiles: str, csvfile: str, targetCompositionDict: dict):
+def compositionalManhattanDistanceAdd(
+        structureFiles: str,
+        csvfile: str, 
+        targetCompositionDict: Dict[str, int]
+    ) -> None:
     oldCSVpath = structureFiles + '/' + csvfile
     reader = csv.reader(open(oldCSVpath, 'r'))
     newCSV = open(oldCSVpath.replace('.csv', '') + '_distances.csv', 'w', newline='')
@@ -482,15 +486,17 @@ def compositionalManhattanDistanceAdd(structureFiles: str, csvfile: str, targetC
 # For a given composition, returns elements grouped by their occurrence in the formula,
 # starting from the least common.
 # E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
-def sortedElementsList(mgComp):
-    fractions = re.sub(r'[A-z]+', '', mgComp.formula).split()
-    elements = re.sub(r'[0-9]+', '', mgComp.formula).split()
+def sortedElementsList(
+        comp: mg.Composition
+    ) -> List[List[str]]:
+    fractions = re.sub(r'[A-z]+', '', comp.formula).split()
+    elements = re.sub(r'[0-9]+', '', comp.formula).split()
     compl = []
     for i in range(elements.__len__()):
         compl.append([elements[i],int(fractions[i])])
     compl.sort(key=itemgetter(1))
-    sortedEL = [[x for x,y in g]
-           for k,g in  groupby(compl,key=itemgetter(1))]
+    sortedEL = [[x for x, _ in g]
+           for _, g in groupby(compl,key=itemgetter(1))]
     return sortedEL
 
 # For a given list of elements grouped by occurrence in the formula (see sortedElementsList())
