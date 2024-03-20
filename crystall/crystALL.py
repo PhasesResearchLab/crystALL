@@ -137,12 +137,24 @@ def run_local(
 
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
-def run_MPDD(targetFormula, MPDD, collections):
+def run_MPDD(
+        targetFormula: Union[str, mg.Composition],
+        MPDD: Database,
+        collections: List[str]
+    ) -> str:
     print('\nSearching for structure candidates for: '+targetFormula)
     print('Using MPDD Database with collections: '+', '.join(collections))
 
-    #Formula to pymatgen Composition
-    composition = mg.Composition(targetFormula)
+    if isinstance(targetFormula, str):
+        #Formula to pymatgen Composition
+        composition = mg.Composition(targetFormula)
+    elif isinstance(targetFormula, mg.Composition):
+        composition = targetFormula
+    else:
+        raise ValueError('Target formula must be a string or a pymatgen Composition object')
+    assert len(collections) > 0, 'At least one collection must be specified'
+    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object corresponding to the MPDD database or another database following (at least partially) the same schema'
+
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
 
