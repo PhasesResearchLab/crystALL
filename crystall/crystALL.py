@@ -14,6 +14,7 @@ import csv
 from typing import List, Dict, Union
 from pymongo.database import Database
 from pymongo import MongoClient
+from colorama import Fore, Style
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
@@ -638,7 +639,7 @@ class CrystALLSearch:
         # Internal parameters to use during the processing steps
         self.prospectPath: str = None
         self.availableCollections: List[str] = None
-        
+
 
     def connect_MPDD(
             self,
@@ -649,6 +650,8 @@ class CrystALLSearch:
         self.MPDD = MongoClient(uri)[db]
         self.availableCollections = self.MPDD.list_collection_names()
         assert len(self.availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
+        print(f"Connected to database {Fore.MAGENTA}{Style.BRIGHT}{db}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.availableCollections)}{Style.RESET_ALL}")
         assert set(collections).issubset(self.availableCollections), 'At least one of the specified collections is not available in the database'
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
+        print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
