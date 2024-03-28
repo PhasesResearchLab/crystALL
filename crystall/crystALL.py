@@ -610,7 +610,31 @@ def orderedAllowedSubstitutions(
 class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` candidates from either MPDD or a local 
-    dataset of POSCAR files, (2) featurizing the candidates with KS2022 or future ``pySIPFENN`` descriptor calculators,
-    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the candidates in ``KS2022`` 
-    feature space, and (5) selecting candidates based on desired property and cluster affiliation.
+    dataset of POSCAR files, (2) featurizing the prospects with KS2022 or future ``pySIPFENN`` descriptor calculators,
+    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the prospects in ``KS2022`` 
+    feature space, and (5) selecting prospects based on desired property and cluster affiliation.
     """
+
+    def __init__(
+            self,
+            targetFormula: Union[str, mg.Composition],
+            MPDD: Database = None,
+            collections: List[str] = None,
+            candidatePath: str = None
+    ) -> None:
+        
+        # Defined at initialization
+        self.MPDD = MPDD
+        self.collections = collections
+        self.candidatePath = candidatePath
+        if isinstance(targetFormula, str):
+            self.targetFormula = mg.Composition(targetFormula)
+        elif isinstance(targetFormula, mg.Composition):
+            self.targetFormula = targetFormula
+        else:
+            raise TypeError('Target formula must be a string or a pymatgen Composition object')
+        
+        # Internal parameters to use during the processing steps
+        self.prospectPath = None
+
+        
