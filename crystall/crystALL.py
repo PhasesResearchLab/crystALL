@@ -13,6 +13,7 @@ from statistics import mean
 import csv
 from typing import List, Dict, Union
 from pymongo.database import Database
+from pymongo import MongoClient
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
@@ -635,6 +636,19 @@ class CrystALLSearch:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
         
         # Internal parameters to use during the processing steps
-        self.prospectPath = None
-
+        self.prospectPath: str = None
+        self.availableCollections: List[str] = None
         
+
+    def connect_MPDD(
+            self,
+            uri: str,
+            db: str,
+            collections: List[str]
+    ) -> None:
+        self.MPDD = MongoClient(uri)[db]
+        self.availableCollections = self.MPDD.list_collection_names()
+        assert len(self.availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
+        assert set(collections).issubset(self.availableCollections), 'At least one of the specified collections is not available in the database'
+        assert len(collections) > 0, 'At least one collection must be specified'
+        self.collections = collections
