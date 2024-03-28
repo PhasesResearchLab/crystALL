@@ -15,6 +15,8 @@ from typing import List, Dict, Union
 from pymongo.database import Database
 from pymongo import MongoClient
 from colorama import Fore, Style
+from pysipfenn import Calculator
+import numpy as np
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
@@ -640,6 +642,10 @@ class CrystALLSearch:
         self.prospectPath: str = None
         self.availableCollections: List[str] = None
 
+        self.ks2022: np.ndarray = None
+        self.clusterAffiliation: np.ndarray = None
+        self.propertyPredictions: List[Dict[str, float]] = None
+
 
     def connect_MPDD(
             self,
@@ -655,3 +661,22 @@ class CrystALLSearch:
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
+
+
+
+
+
+
+
+
+
+    def run_pysipfenn(
+            self,
+            calculator: Calculator
+    ) -> None:
+        calculator.run_fromDirectory(self.prospectPath, 'KS2022', mode='parallel', max_workers=8)
+        self.ks2022 = calculator.descriptorData
+        print(f"Featurized {len(self.ks2022)} prospects with KS2022 using pySIPFENN")
+        resultDict = calculator.get_resultDicts()
+        for i in range(len(resultDict)):
+            self.propertyPredictions[i].update(resultDict[i])
