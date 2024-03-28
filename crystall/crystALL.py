@@ -14,7 +14,7 @@ import csv
 from typing import List, Dict, Union
 from pymongo.database import Database
 
-
+# *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_local(
         targetFormula: Union[str, mg.Composition], 
@@ -603,3 +603,14 @@ def orderedAllowedSubstitutions(
     # E.g. [('Al', 'Fe', 'N'), ('Fe', 'Al', 'N')]
 
     return allAllowedSubstitutions
+
+
+# *********** Convenience High-Level API Class ***********
+
+class CrystALLSearch:
+    """
+    A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` candidates from either MPDD or a local 
+    dataset of POSCAR files, (2) featurizing the candidates with KS2022 or future ``pySIPFENN`` descriptor calculators,
+    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the candidates in ``KS2022`` 
+    feature space, and (5) selecting candidates based on desired property and cluster affiliation.
+    """
