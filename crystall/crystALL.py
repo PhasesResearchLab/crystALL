@@ -16,12 +16,18 @@ from pymongo.database import Database
 from pymongo import MongoClient
 from colorama import Fore, Style
 from pysipfenn import Calculator
+from alignn import pretrained
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import KMeans
 import numpy as np
+import plotly.express as px
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_local(
-        targetFormula: Union[str, mg.Composition], 
+        targetFormula: str, 
         candidatePath: str
     ) -> str:
     
@@ -133,7 +139,7 @@ def run_local(
             else:
                 newName = newNameRoot + str.replace(st.formula, ' ', '') + '.POSCAR'
             sP = Poscar(st)
-            sP.write_file(finPath + '/' + newName)
+            sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
@@ -143,9 +149,10 @@ def run_local(
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_MPDD(
-        targetFormula: Union[str, mg.Composition],
+        targetFormula: str,
         MPDD: Database,
-        collections: List[str]
+        collections: List[str],
+        limit: int = 100
     ) -> str:
 
     print('\nSearching for structure candidates for: '+targetFormula)
@@ -196,7 +203,7 @@ def run_MPDD(
 
             print(namePrint)
             p = Poscar(s)
-            p.write_file(natPath + '/' + name + '.POSCAR')
+            p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
     print('Done.\n')
 
     print('\nDetecting Candidates:')
@@ -210,7 +217,7 @@ def run_MPDD(
 
     #Substitution elements combination.
     print('{0:*^80}'.format('Substituting elements in the candidates.'))
-    sEL = sortedElementsList(mg.Composition(targetFormula))
+    sEL = sortedElementsList(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
     print('\nTarget Element Combination: ' + str(sELtarget))
 
@@ -240,7 +247,7 @@ def run_MPDD(
     for col in collections:
         for candidate in MPDD[col].find(
                 {'material.anonymizedFormula' : aFormula}
-                ).hint([('material.anonymizedFormula', 1)]):
+                ).hint([('material.anonymizedFormula', 1)]).limit(limit):
 
             s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
 
@@ -256,7 +263,7 @@ def run_MPDD(
             p = 0
             for permut in permuts:
                 d = {}
-                p = p + 1
+                p += 1
                 st = s.copy()
                 for e in range(permut.__len__()):
                     d.update({mg.Element(permut[e]): mg.Element(sELtarget[e])})
@@ -266,7 +273,7 @@ def run_MPDD(
                 else:
                     name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
                 sP = Poscar(st)
-                sP.write_file(finPath + '/' + name)
+                sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
             allS = allS + p
             if allS % 1000 == 0:
                 print(str(allS) + ' substitutions complete.')
@@ -334,7 +341,7 @@ def run_compositional_MPDD(
 
             print(namePrint)
             p = Poscar(s)
-            p.write_file(natPath + '/' + name + '.POSCAR')
+            p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
             targetPresent += 1
 
     print('Done.')
@@ -425,7 +432,7 @@ def run_compositional_MPDD(
                 else:
                     name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
                 sP = Poscar(st)
-                sP.write_file(finPath + '/' + name)
+                sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
             allS = allS + p
             if allS % 50 == 0:
                 print(str(allS) + ' substitutions complete.')
@@ -541,7 +548,6 @@ def sortedElementsList(
 def elementPermutations(
         sEL: List[List[str]]
     ) -> List[List[str]]:
-
     generatingList = [[list(i) for i in permutations(lev)] for lev in sEL]
     outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
     return outList
@@ -614,9 +620,9 @@ def orderedAllowedSubstitutions(
 class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` candidates from either MPDD or a local 
-    dataset of POSCAR files, (2) featurizing the prospects with KS2022 or future ``pySIPFENN`` descriptor calculators,
-    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the prospects in ``KS2022`` 
-    feature space, and (5) selecting prospects based on desired property and cluster affiliation.
+    dataset of POSCAR files, (2) featurizing the candidates with KS2022 or future ``pySIPFENN`` descriptor calculators,
+    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the candidates in ``KS2022`` 
+    feature space, and (5) selecting candidates based on desired property and cluster affiliation.
     """
 
     def __init__(
@@ -632,20 +638,18 @@ class CrystALLSearch:
         self.collections = collections
         self.candidatePath = candidatePath
         if isinstance(targetFormula, str):
-            self.targetFormula = mg.Composition(targetFormula)
-        elif isinstance(targetFormula, mg.Composition):
             self.targetFormula = targetFormula
+        elif isinstance(targetFormula, mg.Composition):
+            self.targetFormula = targetFormula.formula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
         
         # Internal parameters to use during the processing steps
-        self.prospectPath: str = None
         self.availableCollections: List[str] = None
-
+        self.inputFiles: List[str] = None
         self.ks2022: np.ndarray = None
-        self.clusterAffiliation: np.ndarray = None
+        self.clusterAffiliation: Dict[int, List[str, float]] = None
         self.propertyPredictions: List[Dict[str, float]] = None
-
 
     def connect_MPDD(
             self,
@@ -661,22 +665,121 @@ class CrystALLSearch:
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
-
-
-
-
-
-
-
-
+        self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections)
 
     def run_pysipfenn(
             self,
             calculator: Calculator
     ) -> None:
-        calculator.run_fromDirectory(self.prospectPath, 'KS2022', mode='parallel', max_workers=8)
-        self.ks2022 = calculator.descriptorData
-        print(f"Featurized {len(self.ks2022)} prospects with KS2022 using pySIPFENN")
+        if self.candidatePath == None:
+            print(f"No candidates folder identified. Please run ``connect_MPDD`` first.")
+            return
+        
+        # Check for pysipfenn models
+        calculator.downloadModels()
+
+        calculator.runFromDirectory(self.candidatePath, 'KS2022', mode='parallel', max_workers=8)
+        self.ks2022, self.inputFiles = np.array(calculator.descriptorData), calculator.inputFiles
+        
+        print(f"Featurized {len(self.ks2022)} candidates with KS2022 using pySIPFENN")
+
         resultDict = calculator.get_resultDicts()
+        self.propertyPredictions = [{} for _ in range(len(resultDict))]
+        
         for i in range(len(resultDict)):
             self.propertyPredictions[i].update(resultDict[i])
+
+        print(f"Predicted properties for {len(self.ks2022)} candidates using pySIPFENN")
+    
+    def run_alignn(
+            self
+    ) -> None:
+        if self.candidatePath == None:
+            print(f"No candidates folder identified. Please run ``connect_MPDD`` first.")
+            return
+        
+        # Check for alignn models
+        pretrained.download_default_models()
+        
+        resultDict = pretrained.run_models_from_directory(self.candidatePath, mode='parallel')
+        self.propertyPredictions = [{} for _ in range(len(resultDict))]
+
+        for i in range(len(resultDict)):
+            self.propertyPredictions[i].update({j: resultDict[i][j] for j in ['ALIGNN-JARVIS Formation Energy [eV/atom]', 
+                                                                              'ALIGNN-MP Formation Energy [eV/atom]']})
+        
+        print(f"Predicted properties for {len(resultDict)} candidates using ALIGNN")
+        
+    def cluster_candidates(
+            self,
+            n_clusters: int = None,
+            model: str = 'SIPFENN_Krajewski2022_NN30',
+            avg: bool = False
+    ) -> None:
+        if self.ks2022 is None:
+            print(f"No features identified. Please run ``run_pysipfenn`` first.")
+            return
+        elif 'ALIGNN' in model and not any('ALIGNN' in key for key in self.propertyPredictions[0].keys()):
+            print(f"No alignn property predictions identified. Please run ``run_alignn`` first.")
+            return
+
+        scaler = MinMaxScaler()
+        self.scaledks2022 = scaler.fit_transform(self.ks2022)
+        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
+        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+
+        sil = {}
+        K_range = [n_clusters] if n_clusters is not None else range(2, min(15, len(self.ks2022)))
+
+        for k in reversed(K_range):
+            kmeans = KMeans(n_clusters=k, n_init=500, max_iter=1000, random_state=580)
+            clusterData = kmeans.fit(self.embeddedks2022)
+            silhouette_avg = silhouette_score(self.embeddedks2022, kmeans.labels_)
+            sil[silhouette_avg] = clusterData
+
+        # Determine the optimal number of clusters as the one with the highest silhouette score
+        ClusterData = sil[max(sil.keys())]
+
+        print(f"Clustered candidates into {ClusterData.n_clusters} clusters using t-SNE\n")
+
+        # Create a list of lists for the clusters
+        clusters = [[] for _ in range(ClusterData.n_clusters)]
+
+        # Assign each data point to its cluster
+        for i, label in enumerate(ClusterData.labels_):
+            clusters[label].append((i, self.inputFiles[i], self.propertyPredictions[i][model]))
+
+        print(f"List of candidates selected by the {'average' if avg == True else 'lowest'} energy of each cluster:")
+        
+        self.clusterAffiliation = {}
+
+        for cluster in clusters:
+            if avg == True:
+                # Find the data point with the Prediction value closest to avgPrediction
+                avgPrediction = sum(x[2] for x in cluster) / len(cluster)
+                candidate = min(cluster, key=lambda x: abs(x[2] - avgPrediction))
+            else:
+                # Find the data point with the lowest Prediction value
+                candidate = min(cluster, key=lambda x: x[2])
+            
+            # Add the candidate to the dictionary of cluster candidates
+            self.clusterAffiliation[candidate[0]] = [candidate[1], candidate[2]]
+
+            print(f"{candidate[1]} ({candidate[2]})") 
+
+        fig = px.scatter(x=np.transpose(self.embeddedks2022)[0],
+                        y=np.transpose(self.embeddedks2022)[1],
+                        hover_name=['<br>'.join([s,str(p[model])]) for s,p in zip(self.inputFiles,self.propertyPredictions)],
+                        color=['cluster candidate' if i in self.clusterAffiliation.keys() else 'other' for i in
+                                range(len(self.embeddedks2022))],
+                        opacity=0.85,
+                        color_discrete_sequence=px.colors.qualitative.Dark24,
+                        template='plotly_white',
+                        labels={'x': f'{len(self.scaledks2022[0])}D->2D TSNE1',
+                                'y': f'{len(self.scaledks2022[0])}D->2D TSNE2',
+                                'color': f'Embedded Points'},
+                        height=400,
+                        width=800
+                        )
+        
+        fig.write_html('cluster_candidates.html')
