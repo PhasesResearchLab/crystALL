@@ -152,7 +152,7 @@ def run_MPDD(
         targetFormula: str,
         MPDD: Database,
         collections: List[str],
-        limit: int = 100
+        limit: int = 0 #No limit
     ) -> str:
 
     print('\nSearching for structure candidates for: '+targetFormula)
@@ -655,7 +655,8 @@ class CrystALLSearch:
             self,
             uri: str,
             db: str,
-            collections: List[str]
+            collections: List[str],
+            limit: int = 100
     ) -> None:
         self.MPDD = MongoClient(uri)[db]
         self.availableCollections = self.MPDD.list_collection_names()
@@ -665,7 +666,7 @@ class CrystALLSearch:
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
-        self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections)
+        self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, limit)
 
     def run_pysipfenn(
             self,
