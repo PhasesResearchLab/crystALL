@@ -12,7 +12,7 @@ authors:
     affiliation: 1
     corresponding: true
   - name: Ricardo Amaral
-    orcid: ()
+    orcid: 0000-0003-1070-9964
     affiliation: 1
   - name: Jonathan W. Siegel
     orcid: 0000-0002-1493-4889
