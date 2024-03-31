@@ -35,21 +35,47 @@ bibliography: paper.bib
 
 # Summary
 
-(summary)
+- (2 sentences) Motivation for materials discovery
+- Typically done through combinatoric search based on protoypes and DFT
+    - Proposing new structures for compounds is not a new idea based on geometrical constraints [@LeBail2005]
+    - AFLOW Database [@Toher2018] built by expert-intuition driven population of AFLOW Prototype Library [@Mehl2016] with new chemistries in a systematic way
+    - Similarity driven prediction of substitutions [@Wang2021]
+    - Compositional complexity grows quickly with dimensionality, considering thhat substitutions [@Krajewski2024Nimplex]
+
+- (3 sentences) Past deployment on the Nd-Bi system [@Im2022] and Figure 7a of [@Im2022] showing excellent ordering of the candidates when evaluated vs different DFT methods. Past deployment in Al-Fe [@Shang2021].
 
 # Statement of need
 
 (statement of need)
 
+- Motivation slightly reiterating the summary with more focus on impact and need
+- (**Rushi**, 3 sentences) Importance of Ru-Zn in the study of catalysts. Importance of KCl-LaCl3 system in the study of molten salts. How `crystALL` is continuously used in the lab to predict structures of unknown compounds and if the automated experience has been positive.
+- (**Adam**, 1 sentence) Conclusion on the importance of automation for user tool.
+
 # Methods
 
 ## MPDD Database
 
-(about MPDD)
+Contains:
+- OQMD [@Shen2022]
+- AFLOW Database [@Toher2018]
+- Materials Project [@Jain2013]
+- NIST-JARVIS [@Choudhary2020]
+- COD [@Grazulis2019]
+- GNoME [@Merchant2023]
+
+API:
+- native pymongo
+- OPTIMADE [@Evans2024]
+
+- use of `pymatgen` [@Ong2013] for data processing
 
 ## Predictive Modeling Pipeline
 
 (about the pySIPFENN, MPDD-ALIGNN, and other models)
+
+- pySIPFENN software [@Krajewski2022] and models on Zenodo [@Krajewski2020SIPFENNModels]
+- ALIGNN [@Choudhary2021]
 
 (schematic of crystALL software)
 
