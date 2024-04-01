@@ -20,6 +20,9 @@ authors:
   - name: Rushi Gong
     orcid: 0009-0004-0543-581X
     affiliation: 1
+  - name: ShunLi Shang
+    orcid: 0000-0002-6524-8897
+    affiliation: 1
   - name: Zi-Kui Liu
     orcid: 0000-0003-3346-3696
     affiliation: 1
