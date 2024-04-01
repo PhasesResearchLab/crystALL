@@ -36,6 +36,8 @@ bibliography: paper.bib
 # Summary
 
 - (2 sentences) Motivation for materials discovery
+    - CALPHAD [@Olson2023]
+    - Going beyond stability. It is not enough [@Zunger2019] because of the complexities involved in the synthesis of new materials. Phase coexistance can take properties to extreme, e.g. infinitely negative thermal expansion [@Liu2022].
 - Typically done through combinatoric search based on protoypes and DFT
     - Proposing new structures for compounds is not a new idea based on geometrical constraints [@LeBail2005]
     - AFLOW Database [@Toher2018] built by expert-intuition driven population of AFLOW Prototype Library [@Mehl2016] with new chemistries in a systematic way
@@ -83,11 +85,13 @@ API:
 
 (about the structure prediction)
 
-(compound figure)
+![Compound-Based Structure Search. Reproduced from [@Im2022] under permission. \label{fig:compoundSearch}](assets/NdBi2_GraphicalAbstract_V4.png){width="300pt"}
 
 ## Composition-Based Structure Prediction
 
 (uncertainty in compound composition extends the previous method)
+
+![Composition-Based Structure Search. \label{fig:compositionalSearch}](assets/crystALL_composition_diagram_V3.png){width="300pt"}
 
 # Acknowledgements
 
