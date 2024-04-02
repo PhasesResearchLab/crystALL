@@ -36,22 +36,29 @@ date: March 31st 2024
 bibliography: paper.bib
 ---
 
+# Statement of need
+
+The ability to determine atomic structure of existing or hypothetical solids formed by chemical elements is one of the fundamental challanges in theoritical crystallography and in materials science as a whole. For the last several decades [@Hawthorne1994], the two remaining challenges are predictions of (a) compositions forming compounds of interest and (b) candidate topologies or approximate atomic arrangements they can form. Given these, the exact structure can be solved experimentally, e.g., by matching X-ray diffraction profile to candidates using method by [@LeBail1988] and interpreting the profile, or by similar investigation of the Raman spectrum [@Ferrari2013]. For hypothetical compounds in their pure quantum states, the exact structure can also be solved using ab initio quantum mechanical methods, such as Kohn-Sham density functional theory (DFT) [@Kohn1965], which are computationally expensive but can provide accurate results and continue to improve [@Kothakonda2023].
+
+The latter problem of proposing the topologies has been traditionally approached by finding geometries satisfying constraints, like the principles systematized by [@Pauling1929], which included then-novel concepts like coördination. Over decades, this has evolved into automated computational tools like the `GRINSP` by [@LeBail2005] which can propose such structures. More recently, increasing computational power shifted focus towards testing many options, with some of the methods starting from random arrangements and collapsing them into local minima, like `AIRSS` by [@Pickard2011], or by evolutionary techniques, like `USPEX` [@Glass2006]. 
+
+Several efforts have been made to tackle it simultaneously with the composition problem, such as high-throughput construction of the `AFLOW` [@Curtarolo2012] DFT Database [@Toher2018] (and others, see [#Methods] Section) built by sustematicly populating the earlier, yet continously growing, library of prototype structures [@Mehl2016] with new chemistries based on the expert knowledge. However, even for a limited set of elements, this problem becomes combinatorically challenging (see [@Krajewski2024Nimplex]). This prompted recent efforts into (1) systematic similarity-driven prediction of substitutions which would result in finding new low-energy structures [@Wang2021], (2) into brute-force substitutions filtered by machine learning models [@Schmidt2023], and (3) the combination thereof [@Merchant2023] leading to rapid discovery of new structures stable at 0K temperature and 0Pa pressure against competing arrangements.
+
+While finding such $T=0$K $P=0$ hypothetical structures certainly opens the world for new discoveries, it warrants some key questions. First, *To what degree have we biased the discovery of new structures?* through many steps of biasing the search to our expectations, which is philosophically analogous to how retraining Large Language Models (LLMs) and other machine learnig (ML) models on generated data underestimate improbable events causing, so called, *Model Collapse* [@Shumailov2023], and drift from the real distribution of the data [@Alemohammad2023].
+
+*Do we need diverse energy landscapes to find new structures?*
+
+
 # Summary
 
 - (2 sentences) Motivation for materials discovery
     - CALPHAD [@Olson2023]
-    - Going beyond stability. It is not enough [@Zunger2019] because of the complexities involved in the synthesis of new materials. Phase coexistance can take properties to extreme, e.g. infinitely negative thermal expansion [@Liu2022].
+    - Going beyond stability. It is not enough [@Zunger2019] because of the complexities involved in the synthesis of new materials. Phase coexistance can take properties to extreme, e.g. infinitely negative thermal expansion [@Liu2022]. Superconductors [@Ferreira2023]
 - Typically done through combinatoric search based on protoypes and DFT
-    - Proposing new structures for compounds is not a new idea based on geometrical constraints [@LeBail2005]
-    - AFLOW Database [@Toher2018] built by expert-intuition driven population of AFLOW Prototype Library [@Mehl2016] with new chemistries in a systematic way
-    - Similarity driven prediction of substitutions [@Wang2021]
-    - Compositional complexity grows quickly with dimensionality, considering thhat substitutions [@Krajewski2024Nimplex]
+    - Similarity driven prediction of substitutions 
+    - Compositional complexity grows quickly with dimensionality, considering thhat substitutions 
 
 - (3 sentences) Past deployment on the Nd-Bi system [@Im2022] and Figure 7a of [@Im2022] showing excellent ordering of the candidates when evaluated vs different DFT methods. Past deployment in Al-Fe [@Shang2021].
-
-# Statement of need
-
-(statement of need)
 
 - Motivation slightly reiterating the summary with more focus on impact and need
 - (**Rushi**, 3 sentences) *(Importance of Ru-Zn in the study of catalysts. Importance of KCl-LaCl3 system in the study of molten salts. How `crystALL` is continuously used in the lab to predict structures of unknown compounds and if the automated experience has been positive.)*
