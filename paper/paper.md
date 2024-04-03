@@ -42,14 +42,20 @@ The ability to determine atomic structure of existing or hypothetical solids for
 
 The latter problem of proposing the topologies has been traditionally approached by finding geometries satisfying constraints, like the principles systematized by [@Pauling1929], which included then-novel concepts like coördination. Over decades, this has evolved into automated computational tools like the `GRINSP` by [@LeBail2005] which can propose such structures. More recently, increasing computational power shifted focus towards testing many options, with some of the methods starting from random arrangements and collapsing them into local minima, like `AIRSS` by [@Pickard2011], or by evolutionary techniques, like `USPEX` [@Glass2006]. 
 
-Several efforts have been made to tackle it simultaneously with the composition problem, such as high-throughput construction of the `AFLOW` [@Curtarolo2012] DFT Database [@Toher2018] (and others, see [#Methods] Section) built by sustematicly populating the earlier, yet continously growing, library of prototype structures [@Mehl2016] with new chemistries based on the expert knowledge. However, even for a limited set of elements, this problem becomes combinatorically challenging (see [@Krajewski2024Nimplex]). This prompted recent efforts into (1) systematic similarity-driven prediction of substitutions which would result in finding new low-energy structures [@Wang2021], (2) into brute-force substitutions filtered by machine learning models [@Schmidt2023], and (3) the combination thereof [@Merchant2023] leading to rapid discovery of new structures stable at 0K temperature and 0Pa pressure against competing arrangements.
+Several efforts have been made to tackle both topological and compositional challenges simultaneously, such as high-throughput construction of the `AFLOW` [@Curtarolo2012] DFT Database [@Toher2018] (and others, see [Methods](#Methods) Section) built by systematicly populating the earlier, yet continously growing, library of prototype structures [@Mehl2016] with new chemistries based on the expert knowledge. However, even for a limited set of elements, this problem becomes combinatorically challenging [@Krajewski2024Nimplex]. This prompted recent efforts into (1) systematic similarity-driven prediction of substitutions which would result in finding new low-energy structures [@Wang2021]; (2) into brute-force substitutions filtered by machine learning models [@Schmidt2023]; and (3) the combination thereof [@Merchant2023], leading to rapid discovery of new structures stable at 0K temperature and 0Pa pressure against competing arrangements.
 
-While finding such $T=0$K $P=0$ hypothetical structures certainly opens the world for new discoveries, it warrants some key questions. First, *To what degree have we biased the discovery of new structures?* through many steps of biasing the search to our expectations, which is philosophically analogous to how retraining Large Language Models (LLMs) and other machine learnig (ML) models on generated data underestimate improbable events causing, so called, *Model Collapse* [@Shumailov2023], and drift from the real distribution of the data [@Alemohammad2023].
+While finding new candidates for zero-temperature zero-pressure hypothetical structures certainly opens the world for new discoveries, it warrants some key questions. Firstly, *"To what degree have we biased the discovery of new structures?"* through many iterations of biasing the search to our expectations, which is philosophically analogous to how retraining Large Language Models (LLMs) and other machine learnig (ML) models on generated data makes them underestimate improbable events causing, so called, *Model Collapse* [@Shumailov2023], and drift from the real distribution of the data [@Alemohammad2023]. 
 
-*Do we need diverse energy landscapes to find new structures?*
+In case the data becomes biased towards low-energy solutions, one needs to ask *"Do we need the diverse energy landscapes to discover new materials?"* to which the answer is a multifaceted yes.
+
+
 
 
 # Summary
+
+`crystALL` is a concise computational tool which leverages millions of previously calculated structures from authors' [MPDD](#MPDD-Database) Database and other databases accessed through the OPTIMADE API [@Evans2024] to identify structures of target stoichiometry and perform all permutations of substitutions to arrive at a list of candidate structures. This list 
+
+
 
 - (2 sentences) Motivation for materials discovery
     - CALPHAD [@Olson2023]
@@ -69,19 +75,8 @@ To enhance nylon manufacturing efficiency, Ru-based catalysts are recognized as 
 
 ## MPDD Database
 
-Contains:
-- OQMD [@Shen2022]
-- AFLOW Database [@Toher2018]
-- Materials Project [@Jain2013]
-- NIST-JARVIS [@Choudhary2020]
-- COD [@Grazulis2019]
-- GNoME [@Merchant2023]
+The `MPDD` or Materials-Properties-Descriptors Database is an infrastructure combining a growing collection of millions of atomic structures with a number of optimizations for rapid featurization and deployment of ML models. It includes author's own DFT data, as well as a number of other databases, including the `OQMD` [@Shen2022], `AFLOW` [@Toher2018], `MP` or Materials Project [@Jain2013], `NIST-JARVIS` [@Choudhary2020], `COD` [@Grazulis2019], and `GNoME` [@Merchant2023]. The database is accessible through (a) a restricted high-throughput API serving enabling fetching of several thousand structures per second, and (b) a public OPTIMADE API [@Evans2024] with low-throughput access but compatibility with other databases. Internally, the data is largely handled using modified `pymatgen` [@Ong2013] kept up-to-date with upstream changes, to ensure wide compatibility with other tools in the field.
 
-API:
-- native pymongo
-- OPTIMADE [@Evans2024]
-
-- use of `pymatgen` [@Ong2013] for data processing
 
 ## Predictive Modeling Pipeline
 
@@ -109,3 +104,5 @@ API:
 - (a loooot of grants over 5 years: NSF superalloys, PSU Seed, all from Nd-Bi study, DOE ARPA-E, NSF-POSE, ONR FGM)
 - All Phases Research Lab members who tested the software in production
 - All Phases Research Lab members who provided feedback on the software
+
+# References
