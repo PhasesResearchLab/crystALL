@@ -20,9 +20,10 @@ from alignn import pretrained
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN
 import numpy as np
 import plotly.express as px
+from plotly.graph_objs import Figure
 from importlib import resources
 
 # *********** Top-Level Functions ***********
@@ -650,7 +651,8 @@ class CrystALLSearch:
         self.availableCollections: List[str] = None
         self.inputFiles: List[str] = None
         self.ks2022: np.ndarray = None
-        self.available_modes = ['Average of Predictions']
+        self.figure: Figure = None
+        self.available_modes = []
         self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
         self.candidates: List[Dict[str, Union[str, float]]] = []
         self.finalCandidates: List[Dict[str, Union[str, float]]] = []
@@ -809,8 +811,8 @@ class CrystALLSearch:
             self.candidates[i].update(resultDicts[i])
         
         print(f"Predicted properties for {len(resultDicts)} candidates using ALIGNN")
-        
-    def cluster_candidates_TSNE(
+
+    def cluster_candidates_KMeans(
             self,
             n_clusters: int = None,
             modes: List[str] = None
@@ -829,14 +831,16 @@ class CrystALLSearch:
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
         assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
 
+        # Calculate the average of the predictions
+        if len(self.available_modes) > 1:
+            self.available_modes += ['Avg of Predictions'] if 'Avg of Predictions' not in self.available_modes else []
+            for i, prediction in enumerate(self.candidates):
+                average_prediction = sum(prediction[mode] for mode in self.available_modes if mode != 'Avg of Predictions') / (len(self.available_modes) - 1)
+                self.candidates[i].update({'Avg of Predictions': average_prediction})
+
         modes = modes if modes is not None else self.available_modes
         assert not any(value not in self.available_modes for value in modes), "Modes should contain only models with calculated results and/or their average: " + ', '.join(self.available_modes)
         
-        # Calculate the average of the predictions
-        for i, prediction in enumerate(self.candidates):
-            average_prediction = sum(prediction[mode] for mode in self.available_modes if mode != 'Average of Predictions') / (len(self.available_modes) - 1)
-            self.candidates[i].update({'Average of Predictions': average_prediction})
-            
         # Scale the features and embed them in 2D t-SNE space
         scaler = MinMaxScaler()
         self.scaledks2022 = scaler.fit_transform(self.ks2022)
@@ -847,9 +851,9 @@ class CrystALLSearch:
         
         # Determine the optimal number of clusters using silhouette score
         sil_dict = {}
-        k_range = [n_clusters] if n_clusters is not None else np.geomspace(2, len(self.ks2022) - 1, 25).astype(int)
+        k_range = [n_clusters] if n_clusters is not None else np.geomspace(2, len(self.ks2022) - 1, 20).astype(int)
         for i, k in enumerate(np.unique(k_range)):
-            print(f"Processing.. [{i}/25]")
+            print(f"Processing.. {100*i/20} %") if i != 0 else None
             kmeans = KMeans(n_clusters=k, n_init=500, max_iter=1000, random_state=580)
             clusterData = kmeans.fit(self.embeddedks2022)
             sil_score = silhouette_score(self.embeddedks2022, kmeans.labels_)
@@ -876,6 +880,80 @@ class CrystALLSearch:
             print(f"\nMode: {mode}")
             self.clusterAffiliation[mode] = {}
             for label, cluster in enumerate(clusters):
+                candidate = min(cluster, key=lambda x: x[mode])
+                self.clusterAffiliation[mode].update({candidate['cluster']: candidate['index']})
+                print(f"      Cluster {label + 1}: {candidate['name']}")
+        
+        # Create a list of final candidates
+        self.finalCandidates, i = [], 0
+        for mode in modes:
+            for index in self.clusterAffiliation[mode].values():
+                self.finalCandidates.append(self.candidates[index].copy())
+                self.finalCandidates[i].update({'mode': mode})
+                i += 1
+
+    def cluster_candidates_DBSCAN(
+            self,
+            eps: float = 0.3,
+            min_samples: int = 2,
+            p: int = 1,
+            modes: List[str] = None
+    ) -> None:
+        """
+        Clusters the candidates using DBSCAN and selects the best ones based on the predicted property.
+        The function also scales the features and assigns each data point to its cluster.
+
+        Args:
+            eps (float, optional): The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
+            min_samples (int, optional): The number of samples in a neighborhood for a point to be considered as a core point. Defaults to 2.
+            modes (List[str], optional): List of modes to consider. If not provided, all allowed modes are used.
+
+        Raises:
+            AssertionError: If no features are identified, if eps is not a float, if min_samples is not an integer, or if any mode is not allowed.
+        """
+
+        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+        assert isinstance(eps, float), "eps must be a float"
+        assert isinstance(min_samples, int), "min_samples must be an integer"
+
+        # Calculate the average of the predictions
+        if len(self.available_modes) > 1:
+            self.available_modes += ['Avg of Predictions'] if 'Avg of Predictions' not in self.available_modes else []
+            for i, prediction in enumerate(self.candidates):
+                average_prediction = sum(prediction[mode] for mode in self.available_modes if mode != 'Avg of Predictions') / (len(self.available_modes) - 1)
+                self.candidates[i].update({'Avg of Predictions': average_prediction})
+
+        modes = modes if modes is not None else self.available_modes
+        assert not any(value not in self.available_modes for value in modes), "Modes should contain only models with calculated results and/or their average: " + ', '.join(self.available_modes)
+        
+        # Scale the features
+        scaler = MinMaxScaler()
+        self.scaledks2022 = scaler.fit_transform(self.ks2022)
+        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
+        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+
+        # Cluster the candidates using DBSCAN
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
+        dbscan.fit(self.scaledks2022)
+
+        # Determine the number of clusters identified by DBSCAN
+        n_clusters = len(set(dbscan.labels_)) - (1 if -1 in dbscan.labels_ else 0)
+        print(f"\nClustered candidates into {n_clusters} clusters using DBSCAN.\n")
+        
+        # Assign each data point to its cluster
+        clusters = {}
+        for i, label in enumerate(dbscan.labels_):
+            self.candidates[i].update({'cluster': label})
+            clusters.setdefault(label, []).append(self.candidates[i])
+
+        print(f"List of candidates selected per energy of each cluster:")
+        
+        # Select the best candidate per cluster based on the minimum predicted property
+        self.clusterAffiliation = {}
+        for mode in modes:
+            print(f"\nMode: {mode}")
+            self.clusterAffiliation[mode] = {}
+            for label, cluster in clusters.items():
                 candidate = min(cluster, key=lambda x: x[mode])
                 self.clusterAffiliation[mode].update({candidate['cluster']: candidate['index']})
                 print(f"      Cluster {label + 1}: {candidate['name']}")
@@ -923,23 +1001,19 @@ class CrystALLSearch:
                 dict_writer.writeheader()
                 dict_writer.writerows(self.finalCandidates)
   
-    def export_plot(
+    def make_plot(
             self,
-            mode: str = 'Average of Predictions',
-            save: bool = False
+            mode: str = 'Avg of Predictions'
     ) -> None:
         """
         Creates a scatter plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
 
         Args:
-            mode (str, optional): The mode to consider for the plot. Must be a key in self.clusterAffiliation. Defaults to 'Average of Predictions'.
+            mode (str, optional): The mode to consider for the plot. Must be a key in self.clusterAffiliation. Defaults to 'Avg of Predictions'.
             save (bool, optional): If True, the plot is saved as an HTML file. Defaults to False.
 
         Raises:
             AssertionError: If no clusters are identified or if the mode is not in self.clusterAffiliation.
-
-        Returns:
-            None: Displays the plot.
         """
         
         assert self.clusterAffiliation, "No clusters identified. Please run ``cluster_candidates_TSNE`` first."
@@ -948,7 +1022,7 @@ class CrystALLSearch:
         fig = px.scatter(
             x=np.transpose(self.embeddedks2022)[0],
             y=np.transpose(self.embeddedks2022)[1],
-            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['Candidate:'] + n[0:1] + ['-'.join(n[1:3])] + ['-'.join(n[3:5])] + ['-'.join(n[5:7])] + [mode + ': '] + [round(p, 4)]) 
+            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['-'.join([n[0]] + n[1:3] + [n[6]])] + ['-'.join(n[3:5])] + [mode + ': '] + [str(round(p, 4))]) 
                         for c in self.candidates 
                         for cl, n, p in [(c['cluster'], c['name'].replace('permutation_', 'P').replace('.POSCAR', '').split('-'), c[mode])]],
             color=[
@@ -970,7 +1044,26 @@ class CrystALLSearch:
             width=800
             )
         
-        if save:
-            fig.write_html('clusterCandidates.html')
+        self.figure = fig
+
+    def plot(
+            self,
+            save: bool = False
+    ) -> None:
+        """
+        Displays the plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
+
+        Args:
+            save (bool, optional): If True, the plot is saved as an HTML file. Defaults to False.
         
-        return fig.show()
+        Raises:
+            AssertionError: If no plot is identified. Please run ``make_plot`` first.
+        """
+        
+        assert self.figure is not None, "No plot identified. Please run ``export_plot`` first."
+
+        if save:
+            self.figure.write_html('clusterCandidates.html')
+
+        else:
+            self.figure.show()
