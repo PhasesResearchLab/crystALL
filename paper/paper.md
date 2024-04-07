@@ -38,16 +38,19 @@ bibliography: paper.bib
 
 # Statement of need
 
-The ability to determine atomic structure of existing or hypothetical solids formed by chemical elements is one of the fundamental challanges in theoritical crystallography and in materials science as a whole. For the last several decades [@Hawthorne1994], the two remaining challenges are predictions of (a) compositions forming compounds of interest and (b) candidate topologies or approximate atomic arrangements they can form. Given these, the exact structure can be solved experimentally, e.g., by matching X-ray diffraction profile to candidates using method by [@LeBail1988] and interpreting the profile, or by similar investigation of the Raman spectrum [@Ferrari2013]. For hypothetical compounds in their pure quantum states, the exact structure can also be solved using ab initio quantum mechanical methods, such as Kohn-Sham density functional theory (DFT) [@Kohn1965], which are computationally expensive but can provide accurate results and continue to improve [@Kothakonda2023].
+The ability to determine atomic structure of existing or hypothetical solids formed by chemical elements is one of the fundamental challanges in theoritical crystallography and in materials science as a whole. For the last several decades [@Hawthorne1994], the two remaining challenges are predictions of (a) compositions forming compounds of interest and (b) candidate topologies or approximate atomic arrangements they can form. Given these, the exact structure can be solved experimentally, by matching X-ray diffraction profile to candidates using the method by [@LeBail1988] and interpreting the profile, or using deep learning [@Yue2024]. Similar analysis can be done, e.g., on the Raman spectrum [@Ferrari2013]. For hypothetical compounds in their pure states, the exact structure can also be solved using ab initio quantum mechanical methods, such as Kohn-Sham density functional theory (DFT) [@Kohn1965], which are computationally expensive but can provide accurate results and continue to improve [@Kothakonda2023].
 
 The latter problem of proposing the topologies has been traditionally approached by finding geometries satisfying constraints, like the principles systematized by [@Pauling1929], which included then-novel concepts like coördination. Over decades, this has evolved into automated computational tools like the `GRINSP` by [@LeBail2005] which can propose such structures. More recently, increasing computational power shifted focus towards testing many options, with some of the methods starting from random arrangements and collapsing them into local minima, like `AIRSS` by [@Pickard2011], or by evolutionary techniques, like `USPEX` [@Glass2006]. 
 
-Several efforts have been made to tackle both topological and compositional challenges simultaneously, such as high-throughput construction of the `AFLOW` [@Curtarolo2012] DFT Database [@Toher2018] (and others, see [Methods](#Methods) Section) built by systematicly populating the earlier, yet continously growing, library of prototype structures [@Mehl2016] with new chemistries based on the expert knowledge. However, even for a limited set of elements, this problem becomes combinatorically challenging [@Krajewski2024Nimplex]. This prompted recent efforts into (1) systematic similarity-driven prediction of substitutions which would result in finding new low-energy structures [@Wang2021]; (2) into brute-force substitutions filtered by machine learning models [@Schmidt2023]; and (3) the combination thereof [@Merchant2023], leading to rapid discovery of new structures stable at 0K temperature and 0Pa pressure against competing arrangements.
+Several efforts have been made to tackle both topological and compositional challenges simultaneously, such as high-throughput construction of the `AFLOW` [@Curtarolo2012] DFT Database [@Toher2018] (and others, see [Methods](#Methods) Section) built by systematicly populating the earlier, yet continously growing, library of prototype structures [@Mehl2016] with new chemistries based on the expert knowledge. However, even for a limited set of elements, this problem becomes combinatorically challenging [@Krajewski2024Nimplex]. This prompted recent efforts into (1) systematic similarity-driven prediction of substitutions which would result in finding new low-energy structures [@Wang2021]; (2) into brute-force substitutions filtered by machine learning (ML) models [@Schmidt2023]; and (3) the combination thereof in [@Ye2022] and [@Merchant2023], leading to rapid discovery of new structures stable at 0K temperature and 0Pa pressure against competing arrangements.
 
-While finding new candidates for zero-temperature zero-pressure hypothetical structures certainly opens the world for new discoveries, it warrants some key questions. Firstly, *"To what degree have we biased the discovery of new structures?"* through many iterations of biasing the search to our expectations, which is philosophically analogous to how retraining Large Language Models (LLMs) and other machine learnig (ML) models on generated data makes them underestimate improbable events causing, so called, *Model Collapse* [@Shumailov2023], and drift from the real distribution of the data [@Alemohammad2023]. 
+While finding new candidates for zero-temperature zero-pressure hypothetical structures certainly opens the world for new discoveries, it warrants some key questions. Firstly, *"To what degree have we biased the discovery of new structures?"* through many iterations of biasing the search to our expectations, which is philosophically analogous to how retraining Large Language Models (LLMs) and other ML models on generated data makes them underestimate improbable events causing, so called, *Model Collapse* [@Shumailov2023], and drift from the distribution of the real data [@Alemohammad2023]. In the context of materials, the latter is depicted well by Fig. 5 in [@Ye2022] showing relatively small overlap between experimentally known structures and new ones predicted to be stable.
 
 In case the data becomes biased towards low-energy solutions, one needs to ask *"Do we need the diverse energy landscapes to discover new materials?"* to which the answer is a multifaceted yes.
 
+- Metastable are critical to fitting thermodyamic models as protodata. At the same time, CALPHAD does not care and can model unknown *phases* [@Olson2023]
+- Going beyond stability. It is not enough [@Zunger2019] because of the complexities involved in the synthesis of new materials. Phase coexistance can take properties to extreme, e.g. infinitely negative thermal expansion [@Liu2022]. Superconductors [@Ferreira2023]
+- `AIRSS` generates polymorph populations like Fig. 6 in [@Pickard2011] providing a diverse set of many metastable structures.
 
 
 
@@ -55,14 +58,6 @@ In case the data becomes biased towards low-energy solutions, one needs to ask *
 
 `crystALL` is a concise computational tool which leverages millions of previously calculated structures from authors' [MPDD](#MPDD-Database) Database and other databases accessed through the OPTIMADE API [@Evans2024] to identify structures of target stoichiometry and perform all permutations of substitutions to arrive at a list of candidate structures. This list 
 
-
-
-- (2 sentences) Motivation for materials discovery
-    - CALPHAD [@Olson2023]
-    - Going beyond stability. It is not enough [@Zunger2019] because of the complexities involved in the synthesis of new materials. Phase coexistance can take properties to extreme, e.g. infinitely negative thermal expansion [@Liu2022]. Superconductors [@Ferreira2023]
-- Typically done through combinatoric search based on protoypes and DFT
-    - Similarity driven prediction of substitutions 
-    - Compositional complexity grows quickly with dimensionality, considering thhat substitutions 
 
 - (3 sentences) Past deployment on the Nd-Bi system [@Im2022] and Figure 7a of [@Im2022] showing excellent ordering of the candidates when evaluated vs different DFT methods. Past deployment in Al-Fe [@Shang2021].
 
@@ -77,6 +72,7 @@ To enhance nylon manufacturing efficiency, Ru-based catalysts are recognized as 
 
 The `MPDD` or Materials-Properties-Descriptors Database is an infrastructure combining a growing collection of millions of atomic structures with a number of optimizations for rapid featurization and deployment of ML models. It includes author's own DFT data, as well as a number of other databases, including the `OQMD` [@Shen2022], `AFLOW` [@Toher2018], `MP` or Materials Project [@Jain2013], `NIST-JARVIS` [@Choudhary2020], `COD` [@Grazulis2019], and `GNoME` [@Merchant2023]. The database is accessible through (a) a restricted high-throughput API serving enabling fetching of several thousand structures per second, and (b) a public OPTIMADE API [@Evans2024] with low-throughput access but compatibility with other databases. Internally, the data is largely handled using modified `pymatgen` [@Ong2013] kept up-to-date with upstream changes, to ensure wide compatibility with other tools in the field.
 
+- optimade-python-tools [@Evans2021]
 
 ## Predictive Modeling Pipeline
 
