@@ -661,10 +661,10 @@ class CrystALLSearch:
         
         # Internal parameters to use during the processing steps
         self.availableCollections: List[str] = None
+        self.availableObjectives: List[str] = []
         self.inputFiles: List[str] = None
         self.ks2022: np.ndarray = None
         self.figure: Figure = None
-        self.available_modes = []
         self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
         self.candidates: List[Dict[str, Union[str, float]]] = []
         self.finalCandidates: List[Dict[str, Union[str, float]]] = []
@@ -845,8 +845,8 @@ class CrystALLSearch:
 
         self.Calculator.loadModels(network = 'SIPFENN_Krajewski2022_NN30')
         for model in self.Calculator.loadedModels:
-            if model not in self.available_modes:
-                self.available_modes.append(model)
+            if model not in self.availableObjectives:
+                self.availableObjectives.append(model)
         
         self.Calculator.runFromDirectory(self.candidatePath, 'KS2022', mode='parallel', max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDicts(), np.array(self.Calculator.descriptorData)
@@ -872,8 +872,8 @@ class CrystALLSearch:
         assert self.alignn_models, "MPDD-ALIGNN models not found. Please run ``download_models`` first."
         
         for model_dict in pretrained.get_default_models():
-            if model_dict['name'] not in self.available_modes:
-                self.available_modes.append(model_dict['name'])
+            if model_dict['name'] not in self.availableObjectives:
+                self.availableObjectives.append(model_dict['name'])
         
         print('Importing structures...')
         resultDicts = pretrained.run_models_from_directory(self.candidatePath, mode='parallel')
@@ -904,12 +904,15 @@ class CrystALLSearch:
         assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
 
         # Calculate the average of the predictions
-        if len(self.available_modes) > 1:
-            self.available_modes += ['Avg of Predictions'] if 'Avg of Predictions' not in self.available_modes else []
-            for i, prediction in enumerate(self.candidates):
-                average_prediction = sum(prediction[mode] for mode in self.available_modes if mode != 'Avg of Predictions') / (len(self.available_modes) - 1)
-                self.candidates[i].update({'Avg of Predictions': average_prediction})
-
+        for property in self.properties:
+            equivalent_objectives = list(set(self.availableObjectives) & set(self.propertiesDict[property]))
+            if len(equivalent_objectives) > 1:
+                self.availableObjectives += [f'Avg of {property}'] if f'Avg of {property}' not in self.availableObjectives else []
+                for i, candidate in enumerate(self.candidates):
+                    average_prediction = sum(candidate[pred] for pred in equivalent_objectives) / len(equivalent_objectives)
+                    self.candidates[i].update({f'Avg of {property}': average_prediction})
+                print(f"Calculated average of {property} for {len(self.candidates)} candidates")
+        
     def embed_features(
             self,
             sameComposition: bool = False
