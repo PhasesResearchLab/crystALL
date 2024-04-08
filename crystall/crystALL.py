@@ -634,9 +634,18 @@ class CrystALLSearch:
             MPDD: Database = None,
             collections: List[str] = None,
             candidatePath: str = None,
-            calculator: Calculator = None
+            calculator: Calculator = None,
+            properties: List[str] = ['FormationEnergy']
     ) -> None:
         
+        self.propertiesDict = {
+            'FormationEnergy': ['SIPFENN_Krajewski2022_NN30', 'ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'],
+            'BandGap': ['ALIGNN-MP PBE Bandgap [eV]', 'ALIGNN-JARVIS MBJ Bandgap [eV]'],
+            'ShearModulus': ['ALIGNN-JARVIS Shear Modulus [GPa]'],
+            'BulkModulus': ['ALIGNN-JARVIS Bulk Modulus [GPa]'],
+            'ExfoliationEnergy': ['ALIGNN-JARVIS Exfoliation Energy [meV/atom]']
+        }
+
         # Defined at initialization
         self.MPDD = MPDD
         self.collections = collections
@@ -679,6 +688,60 @@ class CrystALLSearch:
         if not len(self.Calculator.network_list_available) > 0:
             self.pysipfenn_models = False
             print(f"pySIPFENN models not found. To use these models, you will need to download them using the `download_models` method.")
+
+        print(f"\nInitialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
+        self.properties, self.objectives = self.set_objectives(properties)
+
+    def set_objectives(
+            self,
+            properties: List[str] = ['FormationEnergy']
+    ) -> None:
+        """
+        Sets the properties to predict for the candidates.
+
+        Args:
+            properties: List of properties to predict. Defaults to ['FormationEnergy'].
+        """
+
+        assert isinstance(properties, list), "Properties must be a list of strings."
+        
+        self.properties = properties
+        self.objectives = [objective for property in properties for objective in self.propertiesDict[property]]
+        print(f"Set properties to: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.properties)}{Style.RESET_ALL}.")
+        print(f"\nTo select another set, use the `set_objectives` method. Available properties are: {', '.join(self.propertiesDict.keys())}.")
+
+        return self.properties, self.objectives
+
+    def check_objectives(
+            self
+    ) -> None:
+        """
+        Checks if the specified objectives are available and returns the common objectives.
+
+        Raises:
+            AssertionError: If no objectives are available.
+
+        Returns:
+            List[str]: List of common objectives between self.objectives and self.availableObjectives.
+        """
+
+        assert len(self.availableObjectives) > 0, "No objectives available. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert any(value in self.availableObjectives for value in self.objectives), "No objectives are available. Please run ``run_pysipfenn`` or ``run_alignn``."
+
+        if any(value not in self.availableObjectives for value in self.objectives):
+            existing_objectives = list(set(self.availableObjectives) & set(self.objectives))
+            print("Some objectives are not available: Please run ``run_pysipfenn`` or ``run_alignn`` to enable them.")
+            print("\nLimiting objectives to:")
+            for obj in self.objectives:
+                if obj not in existing_objectives:
+                    print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+            objectives = existing_objectives
+        else:
+            objectives = self.objectives
+        
+        return objectives
 
     def download_models(
             self
