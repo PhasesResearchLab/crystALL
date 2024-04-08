@@ -855,6 +855,10 @@ class CrystALLSearch:
         for i in range(len(resultDicts)):
             self.candidates[i].update(resultDicts[i])
 
+        # Update average of the predictions if more than one model is available
+        if len(self.availableObjectives) > 1:
+            self.calculate_average()
+        
         print(f"Predicted properties for {len(self.ks2022)} candidates using pySIPFENN")
     
     def run_alignn(
@@ -882,26 +886,24 @@ class CrystALLSearch:
         for i in range(len(resultDicts)):
             self.candidates[i].update(resultDicts[i])
         
+        # Update average of the predictions if more than one model is available
+        if len(self.availableObjectives) > 1:
+            self.calculate_average()
+        
         print(f"Predicted properties for {len(resultDicts)} candidates using ALIGNN")
 
-    def cluster_candidates_KMeans(
-            self,
-            n_clusters: int = None,
-            modes: List[str] = None
+    def calculate_average(
+            self
     ) -> None:
         """
-        Clusters the candidates in 2D t-SNE space and selects the best ones based on the predicted property.
-
-        Args:
-            n_clusters (int, optional): Number of clusters. If not provided, it's determined automatically.
-            modes (List[str], optional): List of modes to consider. If not provided, all allowed modes are used.
+        Calculates the average of the predicted properties for each candidate material.
 
         Raises:
-            AssertionError: If no features are identified, if the number of clusters is not an integer, or if any mode is not allowed.
+            AssertionError: If no features are identified or if less than two models are available for averaging.
         """
 
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
-        assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
+        assert self.availableObjectives, "No objectives identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
 
         # Calculate the average of the predictions
         for property in self.properties:
