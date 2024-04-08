@@ -11,11 +11,12 @@ import math
 import json
 from statistics import mean
 import csv
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 from pymongo.database import Database
 from pymongo import MongoClient
 from colorama import Fore, Style
 from pysipfenn import Calculator
+from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
 from alignn import pretrained
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
@@ -147,7 +148,6 @@ def run_local(
             print(str(allS) + ' substitutions complete.')
     print(f'\nGenerated {str(allS)} {targetFormula} candidates.')
     return finPath
-
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_MPDD(
@@ -283,14 +283,12 @@ def run_MPDD(
     print(f'\nGenerated {str(allS)} {targetFormula} candidates.')
     return finPath
 
-
 #Run candidate identification and elemental substitution for permutations within the anonymous composition fractions
 # E.g.
 #targetCompositionDict = {'Nd':338, 'Sn':215, 'Bi':447}
 #devs =  {'Nd':15, 'Sn':15, 'Bi':15}
 #MPDD = client['MPDD']
 #collections = ['community', 'curated']
-
 def run_compositional_MPDD(
         targetCompositionDict: Dict[str, int],
         devs: Dict[str, int],
@@ -501,7 +499,6 @@ def compositionalManhattanDistanceAdd(
         writer.writerow(row)
     newCSV.close()
 
-
 # For a given composition, returns elements grouped by their occurrence in the formula,
 # starting from the least common.
 # E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
@@ -547,7 +544,6 @@ def sortedElementsList(
 #  ['Gd', 'O', 'Bi', 'Al', 'Ni', 'As', 'I', 'U'],
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'U', 'I'],
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'I', 'U']]
-
 def elementPermutations(
         sEL: List[List[str]]
     ) -> List[List[str]]:
@@ -670,13 +666,13 @@ class CrystALLSearch:
         self.finalCandidates: List[Dict[str, Union[str, float]]] = []
         
         # Check if MPDD-ALIGNN default models are available
-        print(f"Checking for available models..")
+        print(f"Checking for available models on the computer..")
         self.alignn_models = True
         with resources.files('alignn') as alignn_dir:
             for model_dict in pretrained.get_default_models():
                 if not os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
                     self.alignn_models = False
-                    print(f"{Style.DIM}x {model_dict['name']}{Style.RESET_ALL}")
+                    print(f"{Style.DIM}✘ {model_dict['name']}{Style.RESET_ALL}")
                     print(f"MPDD-ALIGNN models not found. To use these models, you will need to download them using the `download_models` method.")
                     break
                 else:
@@ -766,8 +762,8 @@ class CrystALLSearch:
         Establishes a connection to the MPDD database and sets the collections to search in.
 
         Args:
-            MPDD (Database, optional): A pymongo Database object to connect to. If not provided, uses the existing connection.
-            collections (List[str], optional): List of collection names to search in. Defaults to ['curated'].
+            MPDD: A pymongo Database object to connect to. If not provided, uses the existing connection.
+            collections: List of collection names to search in. Defaults to ['curated'].
 
         Raises:
             AssertionError: If MPDD is not a pymongo Database object, if no collections are found in the database, if any specified collection is not in the database, or if no collections are specified.
@@ -818,7 +814,7 @@ class CrystALLSearch:
         Generates candidates from a local directory containing POSCAR or CIF files.
 
         Args:
-            candidatePath (str, optional): Path to the directory with candidate files. If not provided, uses the existing path.
+            candidatePath: Path to the directory with candidate files. If not provided, uses the existing path.
 
         Raises:
             AssertionError: If no candidate directory is specified.
@@ -834,7 +830,7 @@ class CrystALLSearch:
             self
     ) -> None:
         """
-        Uses pySIPFENN models to predict properties for the candidate materials.
+        Predicts properties for the candidate materials using pySIPFENN models and updates the candidates with the predictions.
 
         Raises:
             AssertionError: If no candidate directory is specified, if the candidate directory path is not a string, if no pySIPFENN models are found, or if the number of candidates does not match the number of property predictions.
@@ -866,7 +862,7 @@ class CrystALLSearch:
             self
     ) -> None:
         """
-        Uses MPDD-ALIGNN models to predict properties for the candidate materials.
+        Predicts properties for the candidate materials using MPDD-ALIGNN models and updates the candidates with the predictions.
 
         Raises:
             AssertionError: If no candidate directory is specified, if the candidate directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of candidates does not match the number of property predictions.
@@ -939,10 +935,9 @@ class CrystALLSearch:
 
         # Select, Scale and Embed features in 2D t-SNE space
         scaler = MinMaxScaler()
-        scaledks2022 = scaler.fit_transform(features2use)
+        self.scaledks2022 = scaler.fit_transform(features2use)
         tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
-        self.embeddedks2022 = tsne.fit_transform(scaledks2022)
-        print("Embedded features in 2D t-SNE space.")
+        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
         
     def cluster_candidates_KMeans(
             self,
@@ -997,37 +992,29 @@ class CrystALLSearch:
     def cluster_candidates_DBSCAN(
             self,
             eps: float = 0.3,
-            min_samples: int = 2,
+            min_samples: int = 1,
             p: int = 1,
-            modes: List[str] = None
+            sameComposition: bool = False
     ) -> None:
         """
-        Clusters the candidates using DBSCAN and selects the best ones based on the predicted property.
-        The function also scales the features and assigns each data point to its cluster.
+        Clusters the candidates using DBSCAN, assigns each data point to its cluster, and selects the best candidates.
 
         Args:
-            eps (float, optional): The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
-            min_samples (int, optional): The number of samples in a neighborhood for a point to be considered as a core point. Defaults to 2.
-            modes (List[str], optional): List of modes to consider. If not provided, all allowed modes are used.
+            eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
+            min_samples: The number of samples in a neighborhood for a point to be considered as a core point. Defaults to 1.
+            p: The power parameter for the Minkowski metric. Defaults to 1.
+            sameComposition: If True, only candidates with the same composition are considered. Defaults to False.
 
         Raises:
-            AssertionError: If no features are identified, if eps is not a float, if min_samples is not an integer, or if any mode is not allowed.
+            AssertionError: If no features are identified, if eps is not a float, if min_samples is not an integer, or if any objective is not allowed.
         """
 
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
         assert isinstance(eps, float), "eps must be a float"
         assert isinstance(min_samples, int), "min_samples must be an integer"
 
-        # Calculate the average of the predictions
-        if len(self.available_modes) > 1:
-            self.available_modes += ['Avg of Predictions'] if 'Avg of Predictions' not in self.available_modes else []
-            for i, prediction in enumerate(self.candidates):
-                average_prediction = sum(prediction[mode] for mode in self.available_modes if mode != 'Avg of Predictions') / (len(self.available_modes) - 1)
-                self.candidates[i].update({'Avg of Predictions': average_prediction})
+        objectives = self.check_objectives()
 
-        modes = modes if modes is not None else self.available_modes
-        assert not any(value not in self.available_modes for value in modes), "Modes should contain only models with calculated results and/or their average: " + ', '.join(self.available_modes)
-        
         # Select, Scale and Embed features in 2D t-SNE space
         self.embed_features(sameComposition)
 
@@ -1125,30 +1112,29 @@ class CrystALLSearch:
   
     def make_plot(
             self,
-            mode: str = 'Avg of Predictions'
+            objective: str = 'SIPFENN_Krajewski2022_NN30'
     ) -> None:
         """
-        Creates a scatter plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
+        Creates a scatter plot of clustered candidates in 2D t-SNE space.
 
         Args:
-            mode (str, optional): The mode to consider for the plot. Must be a key in self.clusterAffiliation. Defaults to 'Avg of Predictions'.
-            save (bool, optional): If True, the plot is saved as an HTML file. Defaults to False.
+            objective: The objective to consider for the plot. Must be a key in self.availableObjectives. Defaults to 'SIPFENN_Krajewski2022_NN30'.
 
         Raises:
-            AssertionError: If no clusters are identified or if the mode is not in self.clusterAffiliation.
+            AssertionError: If no clusters are identified or if the objective is not in self.availableObjectives.
         """
         
-        assert self.clusterAffiliation, "No clusters identified. Please run ``cluster_candidates_TSNE`` first."
-        assert mode in self.clusterAffiliation.keys(), "Mode should be one of the calculated results and/or their average: " + ', '.join(self.clusterAffiliation.keys())
+        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
+        assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
         
         fig = px.scatter(
             x=np.transpose(self.embeddedks2022)[0],
             y=np.transpose(self.embeddedks2022)[1],
-            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['-'.join([n[0]] + n[1:3] + [n[6]])] + ['-'.join(n[3:5])] + [mode + ': '] + [str(round(p, 4))]) 
+            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['-'.join([n[0]] + n[1:3] + [n[6]])] + ['-'.join(n[3:5])] + [objective + ': '] + [str(round(p, 4))]) 
                         for c in self.candidates 
-                        for cl, n, p in [(c['cluster'], c['name'].replace('permutation_', 'P').replace('.POSCAR', '').split('-'), c[mode])]],
+                        for cl, n, p in [(c['cluster'], c['name'].replace('permutation_', 'P').replace('.POSCAR', '').split('-'), c[objective])]],
             color=[
-                'Top Candidate' if i in self.clusterAffiliation[mode].values() else 
+                'Top Candidate' if i in self.clusterAffiliation[objective].values() else 
                 'Other Cluster Members' 
                 for i in range(len(self.embeddedks2022))
                 ],
@@ -1180,6 +1166,7 @@ class CrystALLSearch:
         Args:
             save: If True, the plot is saved as an HTML file. Defaults to False.
             file_name: The file name of the file to be saved. Defaults to 'clusterCandidates'.
+        
         Raises:
             AssertionError: If no plot is identified. Please run ``make_plot`` first.
         """
