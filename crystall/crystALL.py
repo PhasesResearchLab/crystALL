@@ -985,33 +985,14 @@ class CrystALLSearch:
 
         print(f"\nClustered candidates into {clusterData.n_clusters} clusters using KMeans in 2D t-SNE embedded space.\n")
 
-        # Create a list of lists for the clusters
-        clusters = [[] for _ in range(clusterData.n_clusters)]
-
         # Assign each data point to its cluster
+        clusters = {}
         for i, label in enumerate(clusterData.labels_):
             self.candidates[i].update({'cluster': label})
-            clusters[label].append(self.candidates[i])
+            clusters.setdefault(label, []).append(self.candidates[i])
 
-        print(f"List of candidates selected per energy of each cluster:")
-    
-        # Select the best candidate per cluster based on the minimum predicted property
-        self.clusterAffiliation = {}
-        for mode in modes:
-            print(f"\nMode: {mode}")
-            self.clusterAffiliation[mode] = {}
-            for label, cluster in enumerate(clusters):
-                candidate = min(cluster, key=lambda x: x[mode])
-                self.clusterAffiliation[mode].update({candidate['cluster']: candidate['index']})
-                print(f"      Cluster {label + 1}: {candidate['name']}")
-        
-        # Create a list of final candidates
-        self.finalCandidates, i = [], 0
-        for mode in modes:
-            for index in self.clusterAffiliation[mode].values():
-                self.finalCandidates.append(self.candidates[index].copy())
-                self.finalCandidates[i].update({'mode': mode})
-                i += 1
+        # Select the best candidate per cluster and Create a list of final candidates
+        self.select_candidates(clusters, objectives)
 
     def cluster_candidates_DBSCAN(
             self,
@@ -1063,26 +1044,47 @@ class CrystALLSearch:
         for i, label in enumerate(dbscan.labels_):
             self.candidates[i].update({'cluster': label})
             clusters.setdefault(label, []).append(self.candidates[i])
+      
+        # Select the best candidate per cluster and Create a list of final candidates
+        self.select_candidates(clusters, objectives)
+
+    def select_candidates(
+            self,
+            clusters: dict,
+            objectives: List[str],
+    ) -> None:
+        """
+        Selects the best candidate per cluster for each objective and stores them in self.finalCandidates.
+
+        Args:
+            clusters: A dictionary mapping cluster labels to lists of candidate dictionaries.
+            objectives: A list of objectives to consider when selecting candidates.
+
+        Returns:
+            List[dict]: A list of dictionaries representing the selected candidates.
+        """
 
         print(f"List of candidates selected per energy of each cluster:")
         
         # Select the best candidate per cluster based on the minimum predicted property
         self.clusterAffiliation = {}
-        for mode in modes:
-            print(f"\nMode: {mode}")
-            self.clusterAffiliation[mode] = {}
-            for label, cluster in clusters.items():
-                candidate = min(cluster, key=lambda x: x[mode])
-                self.clusterAffiliation[mode].update({candidate['cluster']: candidate['index']})
-                print(f"      Cluster {label + 1}: {candidate['name']}")
+        for objective in objectives:
+            print(f"\nObjective: {objective}")
+            self.clusterAffiliation[objective] = {}
+            for label, cluster in sorted(clusters.items()):
+                candidate = min(cluster, key=lambda x: x[objective])
+                self.clusterAffiliation[objective].update({candidate['cluster']: candidate['index']})
+                print(f"           Cluster {label + 1}: {candidate['name']}")
         
         # Create a list of final candidates
         self.finalCandidates, i = [], 0
-        for mode in modes:
-            for index in self.clusterAffiliation[mode].values():
+        for objective in objectives:
+            for index in self.clusterAffiliation[objective].values():
                 self.finalCandidates.append(self.candidates[index].copy())
-                self.finalCandidates[i].update({'mode': mode})
+                self.finalCandidates[i].update({'objective': objective})
                 i += 1
+
+        return self.finalCandidates
 
     def export_table(
             self,
