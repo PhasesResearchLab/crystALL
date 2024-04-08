@@ -1048,7 +1048,8 @@ class CrystALLSearch:
 
     def plot(
             self,
-            save: bool = False
+            save: bool = False,
+            file_name: str = 'clusterCandidates'
     ) -> None:
         """
         Displays the plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
@@ -1063,7 +1064,7 @@ class CrystALLSearch:
         assert self.figure is not None, "No plot identified. Please run ``export_plot`` first."
 
         if save:
-            self.figure.write_html('clusterCandidates.html')
+            self.figure.write_html(file_name + '.html')
 
         else:
             self.figure.show()
