@@ -647,7 +647,7 @@ class CrystALLSearch:
             self.targetFormula = targetFormula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
-        self.targetCompositionDict = {el: amt * self.targetFormula.num_atoms 
+        self.targetCompositionDict = {el: round(amt / self.targetFormula.num_atoms * 1000, 0)
                                       for el, amt in self.targetFormula.as_dict().items()}
         
         # Internal parameters to use during the processing steps
