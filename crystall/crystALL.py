@@ -295,7 +295,8 @@ def run_compositional_MPDD(
         targetCompositionDict: Dict[str, int],
         devs: Dict[str, int],
         MPDD: Database,
-        collections: List[str]
+        collections: List[str],
+        limit: int = 0 #No limit
     ) -> str:
 
     # Target formula
@@ -396,7 +397,7 @@ def run_compositional_MPDD(
             ('material.sortedFractionsDict.c6', 1),
             ('material.sortedFractionsDict.c7', 1),
             ('material.sortedFractionsDict.c8', 1)
-        ]):
+        ]).limit(limit):
 
             s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
             c = mg.Composition(s.formula)
@@ -720,7 +721,8 @@ class CrystALLSearch:
         
     def generate_MPDD(
             self,
-            limit: int = 1000
+            limit: int = 1000,
+            devs: Dict[str, int] = None
     ) -> None:
         """
         Generates candidate materials from the Material-Property-Descriptor Database (MPDD) based on the target formula specified in the `targetFormula` attribute of the class.
@@ -731,7 +733,7 @@ class CrystALLSearch:
             AssertionError: If no connection to the MPDD has been established, or if no collections have been specified.
 
         Args:
-            limit (int, optional): The maximum number of candidates to generate. Defaults to 1000.
+            limit: The maximum number of candidates to generate. Defaults to 1000.
         """
         assert self.MPDD is not None, "No database connection identified. Please run ``connect_MPDD`` first."
         assert self.collections, "No collections identified. Please provide a list of collections to search in."
