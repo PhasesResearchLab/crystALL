@@ -1037,8 +1037,8 @@ class CrystALLSearch:
             opacity=0.85,
             color_discrete_sequence=px.colors.qualitative.Dark24,
             template='plotly_white',
-            labels={'x': '256D->2D TSNE1',
-                    'y': '256D->2D TSNE2',
+            labels={'x': f'{len(self.embeddedks2022[0])}D->2D TSNE1',
+                    'y': f'{len(self.embeddedks2022[0])}D->2D TSNE2',
                     'color': f'Embedded Candidates'},
             height=400,
             width=800
