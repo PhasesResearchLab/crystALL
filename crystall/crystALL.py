@@ -972,10 +972,10 @@ class CrystALLSearch:
         
         # Determine the optimal number of clusters using silhouette score
         sil_dict = {}
-        k_range = [n_clusters] if n_clusters is not None else np.geomspace(2, len(self.ks2022) - 1, 20).astype(int)
-        for i, k in enumerate(np.unique(k_range)):
-            print(f"Processing.. {100*i/20} %") if i != 0 else None
-            kmeans = KMeans(n_clusters=k, n_init=500, max_iter=1000, random_state=580)
+        k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(self.embeddedks2022) - 1, 40).astype(int))
+        for i, k in enumerate(k_range):
+            print(f"Processing.. {100*i/len(k_range)} %") if i != 0 else None
+            kmeans = KMeans(n_clusters=k, n_init=500, max_iter=500, random_state=580)
             clusterData = kmeans.fit(self.embeddedks2022)
             sil_score = silhouette_score(self.embeddedks2022, kmeans.labels_)
             sil_dict[sil_score] = clusterData
