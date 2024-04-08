@@ -1167,6 +1167,7 @@ class CrystALLSearch:
             )
         
         self.figure = fig
+        print(f"Plot created for `{objective}` objective. Run ``plot`` to display the plot.")
 
     def plot(
             self,
@@ -1187,6 +1188,7 @@ class CrystALLSearch:
 
         if save:
             self.figure.write_html(file_name + '.html')
+            print(f"Plot saved as {file_name}.html")
 
         else:
             self.figure.show()
