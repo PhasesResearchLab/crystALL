@@ -932,7 +932,7 @@ class CrystALLSearch:
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
 
         if sameComposition:
-            features2use = np.array([v.onlyStructural for v in self.ks2022])
+            features2use = np.array([onlyStructural(v) for v in self.ks2022])
         else:
             features2use = self.ks2022
 
