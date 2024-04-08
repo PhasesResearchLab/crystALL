@@ -1088,38 +1088,40 @@ class CrystALLSearch:
 
     def export_table(
             self,
-            content: List[str] = ['candidates', 'finalCandidates'],
-            modes: List[str] = None
+            content: List[str] = ['candidates', 'finalCandidates']
     ) -> None:
         """
-        Exports a CSV file containing the candidates and/or final candidates with predicted properties.
+        Exports a CSV file with the specified content.
 
         Args:
-            content (List[str], optional): List of content types to export. Defaults to ['candidates', 'finalCandidates'].
-            modes (List[str], optional): Modes to select 'finalCandidates'. Defaults to all models (``self.available_modes``).
+            content: Specifies the type of data to export. Can be 'candidates' and/or 'finalCandidates'. Defaults to ['candidates', 'finalCandidates'].
 
         Raises:
-            AssertionError: If no clusters are identified or if any content type is not allowed.
+            AssertionError: If no final candidates are identified or if an invalid content type is provided.
         """
 
-        assert self.clusterAffiliation, "No clusters identified. Please run ``cluster_candidates_TSNE`` first."
+        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
         assert not any(value not in ['candidates', 'finalCandidates'] for value in content), "Content should contain only 'candidates' and/or 'finalCandidates'"
 
-        modes = modes if modes is not None else self.available_modes
-        
+        objectives = self.check_objectives()
+
         if 'candidates' in content:
             with open('candidates.csv', 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, self.candidates[0].keys())
                 dict_writer.writeheader()
                 dict_writer.writerows(self.candidates)
+            
+            print(f"\nExported {len(self.candidates)} candidates to candidates.csv")
         
         if 'finalCandidates' in content:
-            finalCandidates_exported = [d for d in self.finalCandidates if d['mode'] in modes]
+            finalCandidates_exported = [d for d in self.finalCandidates if d['objective'] in objectives]
             
             with open('finalCandidates.csv', 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, finalCandidates_exported[0].keys())
                 dict_writer.writeheader()
                 dict_writer.writerows(finalCandidates_exported)
+            
+            print(f"Exported {len(finalCandidates_exported)} final candidates to finalCandidates.csv")
   
     def make_plot(
             self,
