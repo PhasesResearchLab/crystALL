@@ -690,12 +690,13 @@ class CrystALLSearch:
             print(f"pySIPFENN models not found. To use these models, you will need to download them using the `download_models` method.")
 
         print(f"\nInitialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
-        self.properties, self.objectives = self.set_objectives(properties)
+        self.set_objectives(properties)
 
     def set_objectives(
             self,
-            properties: List[str] = ['FormationEnergy']
-    ) -> None:
+            properties: List[str] = ['FormationEnergy'],
+            avg: bool = False
+    ) -> Tuple[List[str], List[str]]:
         """
         Sets the properties to predict for the candidates.
 
@@ -707,10 +708,10 @@ class CrystALLSearch:
         
         self.properties = properties
         self.objectives = [objective for property in properties for objective in self.propertiesDict[property]]
+        if avg:
+            self.objectives += [f'Avg of {property}' for property in self.properties]
         print(f"Set properties to: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.properties)}{Style.RESET_ALL}.")
-        print(f"\nTo select another set, use the `set_objectives` method. Available properties are: {', '.join(self.propertiesDict.keys())}.")
-
-        return self.properties, self.objectives
+        print(f"\nTo select another property set, use `set_objectives`. Available properties are: {Fore.LIGHTYELLOW_EX}{', '.join(self.propertiesDict.keys())}{Style.RESET_ALL}.")
 
     def check_objectives(
             self
