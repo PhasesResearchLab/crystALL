@@ -994,12 +994,12 @@ class CrystALLSearch:
                 dict_writer.writerows(self.candidates)
         
         if 'finalCandidates' in content:
-            self.finalCandidates = [d for d in self.finalCandidates if d['mode'] in modes]
+            finalCandidates_exported = [d for d in self.finalCandidates if d['mode'] in modes]
             
             with open('finalCandidates.csv', 'w', newline='') as output_file:
-                dict_writer = csv.DictWriter(output_file, self.finalCandidates[0].keys())
+                dict_writer = csv.DictWriter(output_file, finalCandidates_exported[0].keys())
                 dict_writer.writeheader()
-                dict_writer.writerows(self.finalCandidates)
+                dict_writer.writerows(finalCandidates_exported)
   
     def make_plot(
             self,
@@ -1054,8 +1054,8 @@ class CrystALLSearch:
         Displays the plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
 
         Args:
-            save (bool, optional): If True, the plot is saved as an HTML file. Defaults to False.
-        
+            save: If True, the plot is saved as an HTML file. Defaults to False.
+            file_name: The file name of the file to be saved. Defaults to 'clusterCandidates'.
         Raises:
             AssertionError: If no plot is identified. Please run ``make_plot`` first.
         """
