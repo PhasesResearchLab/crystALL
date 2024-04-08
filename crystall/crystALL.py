@@ -847,14 +847,57 @@ class CrystALLSearch:
                 average_prediction = sum(prediction[mode] for mode in self.available_modes if mode != 'Avg of Predictions') / (len(self.available_modes) - 1)
                 self.candidates[i].update({'Avg of Predictions': average_prediction})
 
-        modes = modes if modes is not None else self.available_modes
-        assert not any(value not in self.available_modes for value in modes), "Modes should contain only models with calculated results and/or their average: " + ', '.join(self.available_modes)
-        
-        # Scale the features and embed them in 2D t-SNE space
+    def embed_features(
+            self,
+            sameComposition: bool = False
+    ) -> None:
+        """
+        Embeds the features in 2D t-SNE space.
+
+        Args:
+            sameComposition: If True, only structural features are used. Defaults to False.
+
+        Raises:
+            AssertionError: If no features are identified.
+        """
+
+        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+
+        if sameComposition:
+            features2use = np.array([v.onlyStructural for v in self.ks2022])
+        else:
+            features2use = self.ks2022
+
+        # Select, Scale and Embed features in 2D t-SNE space
         scaler = MinMaxScaler()
-        self.scaledks2022 = scaler.fit_transform(self.ks2022)
+        scaledks2022 = scaler.fit_transform(features2use)
         tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
-        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+        self.embeddedks2022 = tsne.fit_transform(scaledks2022)
+        print("Embedded features in 2D t-SNE space.")
+        
+    def cluster_candidates_KMeans(
+            self,
+            n_clusters: int = None,
+            sameComposition: bool = False
+    ) -> None:
+        """
+        Clusters the candidates using KMeans, assigns each data point to its cluster, and selects the best candidates.
+
+        Args:
+            n_clusters: Number of clusters. If not provided, the optimal number is determined automatically using silhouette score.
+            sameComposition: If True, only candidates with the same composition are considered. Defaults to False.
+
+        Raises:
+            AssertionError: If no features are identified, if the number of clusters is not an integer, or if any objective is not allowed.
+        """
+
+        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+        assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
+
+        objectives = self.check_objectives()
+
+        # Select, Scale and Embed features in 2D t-SNE space
+        self.embed_features(sameComposition)
 
         print("This may take a few minutes.. Determining the optimal number of clusters..\n") if n_clusters is None else None
         
@@ -935,11 +978,8 @@ class CrystALLSearch:
         modes = modes if modes is not None else self.available_modes
         assert not any(value not in self.available_modes for value in modes), "Modes should contain only models with calculated results and/or their average: " + ', '.join(self.available_modes)
         
-        # Scale the features
-        scaler = MinMaxScaler()
-        self.scaledks2022 = scaler.fit_transform(self.ks2022)
-        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
-        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+        # Select, Scale and Embed features in 2D t-SNE space
+        self.embed_features(sameComposition)
 
         # Cluster the candidates using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
