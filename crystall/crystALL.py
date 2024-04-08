@@ -646,6 +646,8 @@ class CrystALLSearch:
             self.targetFormula = targetFormula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
+        self.targetCompositionDict = {el: amt * self.targetFormula.num_atoms 
+                                      for el, amt in self.targetFormula.as_dict().items()}
         
         # Internal parameters to use during the processing steps
         self.availableCollections: List[str] = None
@@ -733,7 +735,12 @@ class CrystALLSearch:
         """
         assert self.MPDD is not None, "No database connection identified. Please run ``connect_MPDD`` first."
         assert self.collections, "No collections identified. Please provide a list of collections to search in."
-        self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, limit)
+        assert devs is None or isinstance(devs, dict), "Deviations must be a dictionary with element symbols as keys and integer values as deviations"
+
+        if devs is None:
+            self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, limit)
+        else:
+            self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, limit)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
         self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
 
