@@ -1077,7 +1077,8 @@ class CrystALLSearch:
 
     def export_table(
             self,
-            content: List[str] = ['candidates', 'finalCandidates']
+            content: List[str] = ['allCandidates', 'finalCandidates'],
+            file_prefix: str = ''
     ) -> None:
         """
         Exports a CSV file with the specified content.
@@ -1090,19 +1091,21 @@ class CrystALLSearch:
         """
 
         assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
-        assert not any(value not in ['candidates', 'finalCandidates'] for value in content), "Content should contain only 'candidates' and/or 'finalCandidates'"
+        assert not any(value not in ['allCandidates', 'finalCandidates'] for value in content), "Content should contain only 'candidates' and/or 'finalCandidates'"
 
         objectives = self.check_objectives()
 
-        if 'candidates' in content:
-            with open('candidates.csv', 'w', newline='') as output_file:
+        if 'allCandidates' in content:
+            file_name = 'allCandidates.csv' if file_prefix == '' else file_prefix + '_allCandidates.csv'
+            with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, self.candidates[0].keys())
                 dict_writer.writeheader()
                 dict_writer.writerows(self.candidates)
             
-            print(f"\nExported {len(self.candidates)} candidates to candidates.csv")
+            print(f"\nExported {len(self.candidates)} candidates to {file_name}")
         
         if 'finalCandidates' in content:
+            file_name = 'finalCandidates.csv' if file_prefix == '' else file_prefix + '_finalCandidates.csv'
             finalCandidates_exported = [d for d in self.finalCandidates if d['objective'] in objectives]
             
             with open('finalCandidates.csv', 'w', newline='') as output_file:
@@ -1110,7 +1113,7 @@ class CrystALLSearch:
                 dict_writer.writeheader()
                 dict_writer.writerows(finalCandidates_exported)
             
-            print(f"Exported {len(finalCandidates_exported)} final candidates to finalCandidates.csv")
+            print(f"Exported {len(finalCandidates_exported)} final candidates to {file_name}")
   
     def make_plot(
             self,
