@@ -631,17 +631,9 @@ class CrystALLSearch:
             collections: List[str] = None,
             candidatePath: str = None,
             calculator: Calculator = None,
-            properties: List[str] = ['FormationEnergy']
+            objectives: List[str] = None
     ) -> None:
         
-        self.propertiesDict = {
-            'FormationEnergy': ['SIPFENN_Krajewski2022_NN30', 'ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'],
-            'BandGap': ['ALIGNN-MP PBE Bandgap [eV]', 'ALIGNN-JARVIS MBJ Bandgap [eV]'],
-            'ShearModulus': ['ALIGNN-JARVIS Shear Modulus [GPa]'],
-            'BulkModulus': ['ALIGNN-JARVIS Bulk Modulus [GPa]'],
-            'ExfoliationEnergy': ['ALIGNN-JARVIS Exfoliation Energy [meV/atom]']
-        }
-
         # Defined at initialization
         self.MPDD = MPDD
         self.collections = collections
@@ -686,28 +678,22 @@ class CrystALLSearch:
             print(f"pySIPFENN models not found. To use these models, you will need to download them using the `download_models` method.")
 
         print(f"\nInitialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
-        self.set_objectives(properties)
+        self.set_objectives(objectives)
 
     def set_objectives(
             self,
-            properties: List[str] = ['FormationEnergy'],
-            avg: bool = False
-    ) -> Tuple[List[str], List[str]]:
-        """
-        Sets the properties to predict for the candidates.
+            objectives: List[str]
+    ) -> None:
 
-        Args:
-            properties: List of properties to predict. Defaults to ['FormationEnergy'].
-        """
+        allowedObjectives = ['SIPFENN_Krajewski2022_NN30', 'ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']
+        self.objectives = objectives if objectives is not None else ['SIPFENN_Krajewski2022_NN30']
 
-        assert isinstance(properties, list), "Properties must be a list of strings."
-        
-        self.properties = properties
-        self.objectives = [objective for property in properties for objective in self.propertiesDict[property]]
-        if avg:
-            self.objectives += [f'Avg of {property}' for property in self.properties]
-        print(f"Set properties to: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.properties)}{Style.RESET_ALL}.")
-        print(f"\nTo select another property set, use `set_objectives`. Available properties are: {Fore.LIGHTYELLOW_EX}{', '.join(self.propertiesDict.keys())}{Style.RESET_ALL}.")
+        assert isinstance(self.objectives, list) and len(self.objectives) >= 1, "Objectives must be a list of strings with at least one objective."
+        assert any(value in allowedObjectives for value in self.objectives), f"Some of your objectives are not valid, please choose from the following: {', '.join(allowedObjectives)}"
+        assert self.objectives != ['Avg of Formation Energy'], "Objectives cannot be set ONLY to 'Avg of Formation Energy'."
+
+        print(f"\nObjectives set for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.objectives)}{Style.RESET_ALL}")
+        print(f"\nTo select another set, use `set_objectives`. Available objectives are: {Fore.LIGHTYELLOW_EX}{', '.join(allowedObjectives)}{Style.RESET_ALL}.")
 
     def check_objectives(
             self
@@ -722,13 +708,11 @@ class CrystALLSearch:
             List[str]: List of common objectives between self.objectives and self.availableObjectives.
         """
 
-        assert len(self.availableObjectives) > 0, "No objectives available. Please run ``run_pysipfenn`` or ``run_alignn`` first."
-        assert any(value in self.availableObjectives for value in self.objectives), "No objectives are available. Please run ``run_pysipfenn`` or ``run_alignn``."
-
+        assert isinstance(self.objectives, list) and len(self.objectives) >= 1, "Objectives must be a list of strings with at least one objective."
+        
         if any(value not in self.availableObjectives for value in self.objectives):
             existing_objectives = list(set(self.availableObjectives) & set(self.objectives))
-            print("Some objectives are not available: Please run ``run_pysipfenn`` or ``run_alignn`` to enable them.")
-            print("\nLimiting objectives to:")
+            print("\nThe objectives below are set for calculation. Grayed-out ones does not have predictions calculated: please run ``run_pysipfenn`` or ``run_alignn``.")
             for obj in self.objectives:
                 if obj not in existing_objectives:
                     print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
@@ -737,7 +721,7 @@ class CrystALLSearch:
             objectives = existing_objectives
         else:
             objectives = self.objectives
-        
+       
         return objectives
 
     def download_models(
