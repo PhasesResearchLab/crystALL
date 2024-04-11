@@ -989,7 +989,7 @@ class CrystALLSearch:
             clusters.setdefault(label, []).append(self.candidates[i])
 
         # Select the best candidate per cluster and Create a list of final candidates
-        self.select_candidates(clusters, objectives)
+        self.__select_candidates(clusters, objectives)
 
     def cluster_candidates_DBSCAN(
             self,
@@ -1035,9 +1035,9 @@ class CrystALLSearch:
             clusters.setdefault(label, []).append(self.candidates[i])
       
         # Select the best candidate per cluster and Create a list of final candidates
-        self.select_candidates(clusters, objectives)
+        self.__select_candidates(clusters, objectives)
 
-    def select_candidates(
+    def __select_candidates(
             self,
             clusters: dict,
             objectives: List[str],
