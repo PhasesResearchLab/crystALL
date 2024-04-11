@@ -758,7 +758,7 @@ class CrystALLSearch:
         self.availableCollections = self.MPDD.list_collection_names()
         assert len(self.availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
         assert set(collections).issubset(self.availableCollections), 'At least one of the specified collections is not available in the database'
-        print(f"Connected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.availableCollections)}{Style.RESET_ALL}")
+        print(f"\nConnected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.availableCollections)}{Style.RESET_ALL}")
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
@@ -856,7 +856,7 @@ class CrystALLSearch:
         assert self.alignn_models, "MPDD-ALIGNN models not found. Please run ``download_models`` first."
         
         for model_dict in pretrained.get_default_models():
-            if model_dict['name'] not in self.availableObjectives:
+            if model_dict['name'] in self.objectives and model_dict['name'] not in self.availableObjectives:
                 self.availableObjectives.append(model_dict['name'])
         
         print('Importing structures...')
@@ -959,6 +959,7 @@ class CrystALLSearch:
 
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
         assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
+        assert n_clusters <= len(self.candidates), "Number of clusters must be less or equal than the number of candidates"
 
         objectives = self.check_objectives()
 
@@ -1117,7 +1118,7 @@ class CrystALLSearch:
   
     def make_plot(
             self,
-            objective: str = 'SIPFENN_Krajewski2022_NN30'
+            objective: Union[str, List[str]] = 'SIPFENN_Krajewski2022_NN30'
     ) -> None:
         """
         Creates a scatter plot of clustered candidates in 2D t-SNE space.
@@ -1131,7 +1132,9 @@ class CrystALLSearch:
         
         assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
         assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
-        
+        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
+        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+
         fig = px.scatter(
             x=np.transpose(self.embeddedks2022)[0],
             y=np.transpose(self.embeddedks2022)[1],
