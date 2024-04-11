@@ -888,8 +888,32 @@ class CrystALLSearch:
         for i, candidate in enumerate(self.candidates):
             average_prediction = sum(candidate[pred] for pred in self.availableObjectives) / len(self.availableObjectives)
             self.candidates[i].update({f'Avg of Formation Energy': average_prediction})
-                print(f"Calculated average of {property} for {len(self.candidates)} candidates")
+
+    def filter_candidates(
+            self,
+            max_candidates: int,
+            cutoff: float = 0.5
+    ) -> None:
+        """
+        Filters the candidates based on the cutoff value provided.
+        """
+        assert len(self.candidates) > 0, "No candidates identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
         
+        if max_candidates:
+            self.candidates.sort(key=lambda candidate: candidate['Avg of Formation Energy'])
+            self.candidates = self.candidates[:max_candidates]
+        else:
+            min_energy = min(candidate['Avg of Formation Energy'] for candidate in self.candidates)
+            self.candidates = [candidate for candidate in self.candidates if candidate['Avg of Formation Energy'] < cutoff + min_energy]
+
+        # Update the 'index' key of each dictionary in self.candidates to its position in the list
+        for i, candidate in enumerate(self.candidates):
+            candidate['index'] = i
+
+        # Update self.ks2022 to only include the values at the positions specified by the "index" key in the filtered self.candidates
+        indices = [candidate['index'] for candidate in self.candidates]
+        self.ks2022 = self.ks2022[indices]
+
     def embed_features(
             self,
             sameComposition: bool = False
