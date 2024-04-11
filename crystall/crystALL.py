@@ -836,9 +836,8 @@ class CrystALLSearch:
         for i in range(len(resultDicts)):
             self.candidates[i].update(resultDicts[i])
 
-        # Update average of the predictions if more than one model is available
-        if len(self.availableObjectives) > 1:
-            self.calculate_average()
+        # Update average of the predictions
+        self.calculate_average()
         
         print(f"Predicted properties for {len(self.ks2022)} candidates using pySIPFENN")
     
@@ -867,9 +866,8 @@ class CrystALLSearch:
         for i in range(len(resultDicts)):
             self.candidates[i].update(resultDicts[i])
         
-        # Update average of the predictions if more than one model is available
-        if len(self.availableObjectives) > 1:
-            self.calculate_average()
+        # Update average of the predictions
+        self.calculate_average()
         
         print(f"Predicted properties for {len(resultDicts)} candidates using ALIGNN")
 
@@ -883,17 +881,13 @@ class CrystALLSearch:
             AssertionError: If no features are identified or if less than two models are available for averaging.
         """
 
-        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
-        assert self.availableObjectives, "No objectives identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert len(self.candidates) > 0, "No candidates identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert self.availableObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
 
         # Calculate the average of the predictions
-        for property in self.properties:
-            equivalent_objectives = list(set(self.availableObjectives) & set(self.propertiesDict[property]))
-            if len(equivalent_objectives) > 1:
-                self.availableObjectives += [f'Avg of {property}'] if f'Avg of {property}' not in self.availableObjectives else []
-                for i, candidate in enumerate(self.candidates):
-                    average_prediction = sum(candidate[pred] for pred in equivalent_objectives) / len(equivalent_objectives)
-                    self.candidates[i].update({f'Avg of {property}': average_prediction})
+        for i, candidate in enumerate(self.candidates):
+            average_prediction = sum(candidate[pred] for pred in self.availableObjectives) / len(self.availableObjectives)
+            self.candidates[i].update({f'Avg of Formation Energy': average_prediction})
                 print(f"Calculated average of {property} for {len(self.candidates)} candidates")
         
     def embed_features(
