@@ -11,21 +11,30 @@ import math
 import json
 from statistics import mean
 import csv
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 from pymongo.database import Database
 from pymongo import MongoClient
 from colorama import Fore, Style
 from pysipfenn import Calculator
+from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
+from alignn import pretrained
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import KMeans, DBSCAN
 import numpy as np
+import plotly.express as px
+from plotly.graph_objs import Figure
+from importlib import resources
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_local(
-        targetFormula: Union[str, mg.Composition], 
+        targetFormula: Union[str, mg.Composition],
         candidatePath: str
     ) -> str:
     
-    print('\nSearching for structure candidates for: '+targetFormula)
+    print(f'\nSearching for structure candidates for: {targetFormula}')
     print('Structure candidate dataset:\n' + candidatePath)
 
     if isinstance(targetFormula, str):
@@ -83,7 +92,7 @@ def run_local(
 
     #Substitution elements combination.
     print('{0:*^80}'.format('Substituting elements in the candidates.'))
-    sEL = sortedElementsList(mg.Composition(targetFormula))
+    sEL = sortedElementsList(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
     print('\nTarget Element Combination: ' + str(sELtarget))
 
@@ -99,9 +108,9 @@ def run_local(
     else:
         print('\nTarget composition indicates discrete element substitution.')
 
-    intPath = os.path.split(candidatePath)[1] + '-' + aFormula
+    intPath = f"{os.path.split(candidatePath)[1]}-{aFormula}"
     print('Intermediate Directory: ' + intPath)
-    finPath = os.path.split(candidatePath)[1] + '-' + targetFormula
+    finPath = f"{os.path.split(candidatePath)[1]}-{targetFormula}"
     print('Final Directory: ' + finPath)
     try:
         os.mkdir(finPath)
@@ -133,22 +142,22 @@ def run_local(
             else:
                 newName = newNameRoot + str.replace(st.formula, ' ', '') + '.POSCAR'
             sP = Poscar(st)
-            sP.write_file(finPath + '/' + newName)
+            sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
-    print('\nGenerated ' + str(allS) + ' ' + targetFormula + ' candidates.')
+    print(f'\nGenerated {str(allS)} {targetFormula} candidates.')
     return finPath
-
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_MPDD(
         targetFormula: Union[str, mg.Composition],
         MPDD: Database,
-        collections: List[str]
+        collections: List[str],
+        limit: int = 0 #No limit
     ) -> str:
 
-    print('\nSearching for structure candidates for: '+targetFormula)
+    print(f'\nSearching for structure candidates for: {targetFormula}')
     print('Using MPDD Database with collections: '+', '.join(collections))
 
     if isinstance(targetFormula, str):
@@ -164,9 +173,9 @@ def run_MPDD(
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
 
-    print('\nLooking for ' + targetFormula + ' in MPDD database collections.')
+    print(f'\nLooking for {targetFormula} in MPDD database collections.')
 
-    natPath = '_'.join(collections) + '-native-' + targetFormula
+    natPath = f"{'_'.join(collections)}-native-{targetFormula}"
 
     try:
         os.mkdir(natPath)
@@ -196,7 +205,7 @@ def run_MPDD(
 
             print(namePrint)
             p = Poscar(s)
-            p.write_file(natPath + '/' + name + '.POSCAR')
+            p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
     print('Done.\n')
 
     print('\nDetecting Candidates:')
@@ -210,7 +219,7 @@ def run_MPDD(
 
     #Substitution elements combination.
     print('{0:*^80}'.format('Substituting elements in the candidates.'))
-    sEL = sortedElementsList(mg.Composition(targetFormula))
+    sEL = sortedElementsList(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
     print('\nTarget Element Combination: ' + str(sELtarget))
 
@@ -226,7 +235,7 @@ def run_MPDD(
     else:
         print('\nTarget composition indicates discrete element substitution.')
 
-    finPath = '_'.join(collections) + '-' + targetFormula
+    finPath = f"{'_'.join(collections)}-{targetFormula}"
     print('Final Candidate Directory: ' + finPath)
 
     try:
@@ -240,7 +249,7 @@ def run_MPDD(
     for col in collections:
         for candidate in MPDD[col].find(
                 {'material.anonymizedFormula' : aFormula}
-                ).hint([('material.anonymizedFormula', 1)]):
+                ).hint([('material.anonymizedFormula', 1)]).limit(limit):
 
             s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
 
@@ -256,7 +265,7 @@ def run_MPDD(
             p = 0
             for permut in permuts:
                 d = {}
-                p = p + 1
+                p += 1
                 st = s.copy()
                 for e in range(permut.__len__()):
                     d.update({mg.Element(permut[e]): mg.Element(sELtarget[e])})
@@ -266,14 +275,13 @@ def run_MPDD(
                 else:
                     name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
                 sP = Poscar(st)
-                sP.write_file(finPath + '/' + name)
+                sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
             allS = allS + p
             if allS % 1000 == 0:
                 print(str(allS) + ' substitutions complete.')
 
-    print('\nGenerated ' + str(allS) + ' ' + targetFormula + ' candidates.')
+    print(f'\nGenerated {str(allS)} {targetFormula} candidates.')
     return finPath
-
 
 #Run candidate identification and elemental substitution for permutations within the anonymous composition fractions
 # E.g.
@@ -281,12 +289,12 @@ def run_MPDD(
 #devs =  {'Nd':15, 'Sn':15, 'Bi':15}
 #MPDD = client['MPDD']
 #collections = ['community', 'curated']
-
 def run_compositional_MPDD(
         targetCompositionDict: Dict[str, int],
         devs: Dict[str, int],
         MPDD: Database,
-        collections: List[str]
+        collections: List[str],
+        limit: int = 0 #No limit
     ) -> str:
 
     # Target formula
@@ -334,7 +342,7 @@ def run_compositional_MPDD(
 
             print(namePrint)
             p = Poscar(s)
-            p.write_file(natPath + '/' + name + '.POSCAR')
+            p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
             targetPresent += 1
 
     print('Done.')
@@ -387,7 +395,7 @@ def run_compositional_MPDD(
             ('material.sortedFractionsDict.c6', 1),
             ('material.sortedFractionsDict.c7', 1),
             ('material.sortedFractionsDict.c8', 1)
-        ]):
+        ]).limit(limit):
 
             s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
             c = mg.Composition(s.formula)
@@ -425,7 +433,7 @@ def run_compositional_MPDD(
                 else:
                     name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
                 sP = Poscar(st)
-                sP.write_file(finPath + '/' + name)
+                sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
             allS = allS + p
             if allS % 50 == 0:
                 print(str(allS) + ' substitutions complete.')
@@ -491,7 +499,6 @@ def compositionalManhattanDistanceAdd(
         writer.writerow(row)
     newCSV.close()
 
-
 # For a given composition, returns elements grouped by their occurrence in the formula,
 # starting from the least common.
 # E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
@@ -537,11 +544,9 @@ def sortedElementsList(
 #  ['Gd', 'O', 'Bi', 'Al', 'Ni', 'As', 'I', 'U'],
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'U', 'I'],
 #  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'I', 'U']]
-
 def elementPermutations(
         sEL: List[List[str]]
     ) -> List[List[str]]:
-
     generatingList = [[list(i) for i in permutations(lev)] for lev in sEL]
     outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
     return outList
@@ -614,17 +619,19 @@ def orderedAllowedSubstitutions(
 class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` candidates from either MPDD or a local 
-    dataset of POSCAR files, (2) featurizing the prospects with KS2022 or future ``pySIPFENN`` descriptor calculators,
-    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the prospects in ``KS2022`` 
-    feature space, and (5) selecting prospects based on desired property and cluster affiliation.
+    dataset of POSCAR files, (2) featurizing the candidates with KS2022 or future ``pySIPFENN`` descriptor calculators,
+    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the candidates in ``KS2022`` 
+    feature space, and (5) selecting candidates based on desired property and cluster affiliation.
     """
-
+    
     def __init__(
             self,
             targetFormula: Union[str, mg.Composition],
             MPDD: Database = None,
             collections: List[str] = None,
-            candidatePath: str = None
+            candidatePath: str = None,
+            calculator: Calculator = None,
+            objectives: List[str] = None
     ) -> None:
         
         # Defined at initialization
@@ -637,46 +644,546 @@ class CrystALLSearch:
             self.targetFormula = targetFormula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
+        self.targetCompositionDict = {el: round(amt / self.targetFormula.num_atoms * 1000, 0)
+                                      for el, amt in self.targetFormula.as_dict().items()}
         
         # Internal parameters to use during the processing steps
-        self.prospectPath: str = None
         self.availableCollections: List[str] = None
-
+        self.availableObjectives: List[str] = []
+        self.inputFiles: List[str] = None
         self.ks2022: np.ndarray = None
-        self.clusterAffiliation: np.ndarray = None
-        self.propertyPredictions: List[Dict[str, float]] = None
+        self.figure: Figure = None
+        self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
+        self.candidates: List[Dict[str, Union[str, float]]] = []
+        self.finalCandidates: List[Dict[str, Union[str, float]]] = []
+        
+        # Check if MPDD-ALIGNN default models are available
+        print(f"Checking for available models on the computer..")
+        self.alignn_models = True
+        with resources.files('alignn') as alignn_dir:
+            for model_dict in pretrained.get_default_models():
+                if not os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
+                    self.alignn_models = False
+                    print(f"{Style.DIM}✘ {model_dict['name']}{Style.RESET_ALL}")
+                    print(f"MPDD-ALIGNN models not found. To use these models, you will need to download them using the `download_models` method.")
+                    break
+                else:
+                    print(f"{Fore.GREEN}✔ {model_dict['name']}{Style.RESET_ALL}")
 
+        # Check if pySIPFENN models are available
+        self.pysipfenn_models = True
+        self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
+        if not len(self.Calculator.network_list_available) > 0:
+            self.pysipfenn_models = False
+            print(f"pySIPFENN models not found. To use these models, you will need to download them using the `download_models` method.")
+
+        print(f"\nInitialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
+        self.set_objectives(objectives)
+
+    def set_objectives(
+            self,
+            objectives: List[str]
+    ) -> None:
+
+        allowedObjectives = ['SIPFENN_Krajewski2022_NN30', 'ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']
+        self.objectives = objectives if objectives is not None else ['SIPFENN_Krajewski2022_NN30']
+
+        assert isinstance(self.objectives, list) and len(self.objectives) >= 1, "Objectives must be a list of strings with at least one objective."
+        assert any(value in allowedObjectives for value in self.objectives), f"Some of your objectives are not valid, please choose from the following: {', '.join(allowedObjectives)}"
+        assert self.objectives != ['Avg of Formation Energy'], "Objectives cannot be set ONLY to 'Avg of Formation Energy'."
+
+        print(f"\nObjectives set for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.objectives)}{Style.RESET_ALL}")
+        print(f"\nTo select another set, use `set_objectives`. Available objectives are: {Fore.LIGHTYELLOW_EX}{', '.join(allowedObjectives)}{Style.RESET_ALL}.")
+
+    def check_objectives(
+            self
+    ) -> None:
+        """
+        Checks if the specified objectives are available and returns the common objectives.
+
+        Raises:
+            AssertionError: If no objectives are available.
+
+        Returns:
+            List[str]: List of common objectives between self.objectives and self.availableObjectives.
+        """
+
+        assert isinstance(self.objectives, list) and len(self.objectives) >= 1, "Objectives must be a list of strings with at least one objective."
+        
+        if any(value not in self.availableObjectives for value in self.objectives):
+            existing_objectives = list(set(self.availableObjectives) & set(self.objectives))
+            print("\nThe objectives below are set for calculation. Grayed-out ones does not have predictions calculated: please run ``run_pysipfenn`` or ``run_alignn``.")
+            for obj in self.objectives:
+                if obj not in existing_objectives:
+                    print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+            objectives = existing_objectives
+        else:
+            objectives = self.objectives
+       
+        return objectives
+
+    def download_models(
+            self
+    ) -> None:
+        """
+        Downloads the default models for both pySIPFENN and MPDD-ALIGNN.
+        """        
+        
+        print(f"Downloading models for pysipfenn..")
+        self.Calculator.downloadModels()
+        print(f"Downloading models for MPDD-alignn..")
+        pretrained.download_default_models()
+        print(f"Done! Models are ready to use.")
 
     def connect_MPDD(
             self,
-            uri: str,
-            db: str,
-            collections: List[str]
+            MPDD: Database = None,
+            collections: List[str] = ['curated']
     ) -> None:
-        self.MPDD = MongoClient(uri)[db]
+        """
+        Establishes a connection to the MPDD database and sets the collections to search in.
+
+        Args:
+            MPDD: A pymongo Database object to connect to. If not provided, uses the existing connection.
+            collections: List of collection names to search in. Defaults to ['curated'].
+
+        Raises:
+            AssertionError: If MPDD is not a pymongo Database object, if no collections are found in the database, if any specified collection is not in the database, or if no collections are specified.
+        """
+
+        self.MPDD = MPDD if MPDD is not None else self.MPDD
+        assert isinstance(self.MPDD, Database), 'MPDD must be a pymongo Database object'
         self.availableCollections = self.MPDD.list_collection_names()
         assert len(self.availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
-        print(f"Connected to database {Fore.MAGENTA}{Style.BRIGHT}{db}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.availableCollections)}{Style.RESET_ALL}")
         assert set(collections).issubset(self.availableCollections), 'At least one of the specified collections is not available in the database'
+        print(f"\nConnected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.availableCollections)}{Style.RESET_ALL}")
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
+        
+    def generate_MPDD(
+            self,
+            limit: int = 1000,
+            devs: Dict[str, int] = None
+    ) -> None:
+        """
+        Generates candidate materials from the Material-Property-Descriptor Database (MPDD) based on the target formula specified in the `targetFormula` attribute of the class.
 
+        Before calling this method, a connection to the MPDD must be established using the `connect_MPDD` method.
 
+        Raises:
+            AssertionError: If no connection to the MPDD has been established, or if no collections have been specified.
 
+        Args:
+            limit: The maximum number of candidates to generate. Defaults to 1000.
+        """
+        assert self.MPDD is not None, "No database connection identified. Please run ``connect_MPDD`` first."
+        assert self.collections, "No collections identified. Please provide a list of collections to search in."
+        assert devs is None or isinstance(devs, dict), "Deviations must be a dictionary with element symbols as keys and integer values as deviations"
 
+        if devs is None:
+            self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, limit)
+        else:
+            self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, limit)
+        self.inputFiles = natsorted(os.listdir(self.candidatePath))
+        self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
 
+    def generate_local(
+            self,
+            candidatePath: str = None
+    ) -> None:
+        """
+        Generates candidates from a local directory containing POSCAR or CIF files.
 
+        Args:
+            candidatePath: Path to the directory with candidate files. If not provided, uses the existing path.
 
+        Raises:
+            AssertionError: If no candidate directory is specified.
+        """
 
+        self.candidatePath = candidatePath if candidatePath is not None else self.candidatePath
+        assert self.candidatePath, "No candidates folder identified. Please provide a path to the candidates folder."
+        self.candidatePath = run_local(self.targetFormula, self.candidatePath)
+        self.inputFiles = natsorted(os.listdir(self.candidatePath))
+        self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
 
     def run_pysipfenn(
-            self,
-            calculator: Calculator
+            self
     ) -> None:
-        calculator.run_fromDirectory(self.prospectPath, 'KS2022', mode='parallel', max_workers=8)
-        self.ks2022 = calculator.descriptorData
-        print(f"Featurized {len(self.ks2022)} prospects with KS2022 using pySIPFENN")
-        resultDict = calculator.get_resultDicts()
-        for i in range(len(resultDict)):
-            self.propertyPredictions[i].update(resultDict[i])
+        """
+        Predicts properties for the candidate materials using pySIPFENN models and updates the candidates with the predictions.
+
+        Raises:
+            AssertionError: If no candidate directory is specified, if the candidate directory path is not a string, if no pySIPFENN models are found, or if the number of candidates does not match the number of property predictions.
+        """
+
+        assert self.candidatePath is not None, "No candidates folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
+        assert isinstance(self.candidatePath, str), "Candidates folder path must be a string"
+        assert self.pysipfenn_models, "pySIPFENN models not found. Please run ``download_models`` first."
+
+        self.Calculator.loadModels(network = 'SIPFENN_Krajewski2022_NN30')
+        for model in self.Calculator.loadedModels:
+            if model not in self.availableObjectives:
+                self.availableObjectives.append(model)
+        
+        self.Calculator.runFromDirectory(self.candidatePath, 'KS2022', mode='parallel', max_workers=8)
+        resultDicts, self.ks2022 = self.Calculator.get_resultDicts(), np.array(self.Calculator.descriptorData)
+        assert len(self.candidates) == len(resultDicts), "Number of candidates does not match number of property predictions"
+        
+        for i in range(len(resultDicts)):
+            self.candidates[i].update(resultDicts[i])
+
+        # Update average of the predictions
+        self.calculate_average()
+        
+        print(f"Predicted properties for {len(self.ks2022)} candidates using pySIPFENN")
+    
+    def run_alignn(
+            self
+    ) -> None:
+        """
+        Predicts properties for the candidate materials using MPDD-ALIGNN models and updates the candidates with the predictions.
+
+        Raises:
+            AssertionError: If no candidate directory is specified, if the candidate directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of candidates does not match the number of property predictions.
+        """
+
+        assert self.candidatePath is not None, "No candidates folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
+        assert isinstance(self.candidatePath, str), "Candidates folder path must be a string"
+        assert self.alignn_models, "MPDD-ALIGNN models not found. Please run ``download_models`` first."
+        
+        for model_dict in pretrained.get_default_models():
+            if model_dict['name'] in self.objectives and model_dict['name'] not in self.availableObjectives:
+                self.availableObjectives.append(model_dict['name'])
+        
+        print('Importing structures...')
+        resultDicts = pretrained.run_models_from_directory(self.candidatePath, mode='parallel')
+        assert len(self.candidates) == len(resultDicts), "Number of candidates does not match number of property predictions"
+
+        for i in range(len(resultDicts)):
+            self.candidates[i].update(resultDicts[i])
+        
+        # Update average of the predictions
+        self.calculate_average()
+        
+        print(f"Predicted properties for {len(resultDicts)} candidates using ALIGNN")
+
+    def calculate_average(
+            self
+    ) -> None:
+        """
+        Calculates the average of the predicted properties for each candidate material.
+
+        Raises:
+            AssertionError: If no features are identified or if less than two models are available for averaging.
+        """
+
+        assert len(self.candidates) > 0, "No candidates identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert self.availableObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+
+        # Calculate the average of the predictions
+        for i, candidate in enumerate(self.candidates):
+            average_prediction = sum(candidate[pred] for pred in self.availableObjectives) / len(self.availableObjectives)
+            self.candidates[i].update({f'Avg of Formation Energy': average_prediction})
+
+    def filter_candidates(
+            self,
+            max_candidates: int,
+            cutoff: float = 0.5
+    ) -> None:
+        """
+        Filters the candidates based on the cutoff value provided.
+        """
+        assert len(self.candidates) > 0, "No candidates identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        
+        if max_candidates:
+            self.candidates.sort(key=lambda candidate: candidate['Avg of Formation Energy'])
+            self.candidates = self.candidates[:max_candidates]
+        else:
+            min_energy = min(candidate['Avg of Formation Energy'] for candidate in self.candidates)
+            self.candidates = [candidate for candidate in self.candidates if candidate['Avg of Formation Energy'] < cutoff + min_energy]
+
+        # Update the 'index' key of each dictionary in self.candidates to its position in the list
+        for i, candidate in enumerate(self.candidates):
+            candidate['index'] = i
+
+        # Update self.ks2022 to only include the values at the positions specified by the "index" key in the filtered self.candidates
+        indices = [candidate['index'] for candidate in self.candidates]
+        self.ks2022 = self.ks2022[indices]
+
+    def embed_features(
+            self,
+            sameComposition: bool = False
+    ) -> None:
+        """
+        Embeds the features in 2D t-SNE space.
+
+        Args:
+            sameComposition: If True, only structural features are used. Defaults to False.
+
+        Raises:
+            AssertionError: If no features are identified.
+        """
+
+        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+
+        if sameComposition:
+            features2use = np.array([onlyStructural(v) for v in self.ks2022])
+        else:
+            features2use = self.ks2022
+
+        # Select, Scale and Embed features in 2D t-SNE space
+        scaler = MinMaxScaler()
+        self.scaledks2022 = scaler.fit_transform(features2use)
+        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
+        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+        
+    def cluster_candidates_KMeans(
+            self,
+            n_clusters: int = None,
+            sameComposition: bool = False
+    ) -> None:
+        """
+        Clusters the candidates using KMeans, assigns each data point to its cluster, and selects the best candidates.
+
+        Args:
+            n_clusters: Number of clusters. If not provided, the optimal number is determined automatically using silhouette score.
+            sameComposition: If True, only candidates with the same composition are considered. Defaults to False.
+
+        Raises:
+            AssertionError: If no features are identified, if the number of clusters is not an integer, or if any objective is not allowed.
+        """
+
+        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+        assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
+        assert n_clusters <= len(self.candidates), "Number of clusters must be less or equal than the number of candidates"
+
+        objectives = self.check_objectives()
+
+        # Select, Scale and Embed features in 2D t-SNE space
+        self.embed_features(sameComposition)
+
+        print("This may take a few minutes.. Determining the optimal number of clusters..\n") if n_clusters is None else None
+        
+        # Determine the optimal number of clusters using silhouette score
+        sil_dict = {}
+        k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(self.embeddedks2022) - 1, 40).astype(int))
+        for i, k in enumerate(k_range):
+            print(f"Processing.. {100*i/len(k_range)} %") if i != 0 else None
+            kmeans = KMeans(n_clusters=k, n_init=500, max_iter=500, random_state=580)
+            clusterData = kmeans.fit(self.embeddedks2022)
+            sil_score = silhouette_score(self.embeddedks2022, kmeans.labels_)
+            sil_dict[sil_score] = clusterData
+
+        # Determine the optimal number of clusters as the one with the highest silhouette score
+        clusterData = sil_dict[max(sil_dict.keys())]
+
+        print(f"\nClustered candidates into {clusterData.n_clusters} clusters using KMeans in 2D t-SNE embedded space.\n")
+
+        # Assign each data point to its cluster
+        clusters = {}
+        for i, label in enumerate(clusterData.labels_):
+            self.candidates[i].update({'cluster': label})
+            clusters.setdefault(label, []).append(self.candidates[i])
+
+        # Select the best candidate per cluster and Create a list of final candidates
+        self.__select_candidates(clusters, objectives)
+
+    def cluster_candidates_DBSCAN(
+            self,
+            eps: float = 0.3,
+            min_samples: int = 1,
+            p: int = 1,
+            sameComposition: bool = False
+    ) -> None:
+        """
+        Clusters the candidates using DBSCAN, assigns each data point to its cluster, and selects the best candidates.
+
+        Args:
+            eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
+            min_samples: The number of samples in a neighborhood for a point to be considered as a core point. Defaults to 1.
+            p: The power parameter for the Minkowski metric. Defaults to 1.
+            sameComposition: If True, only candidates with the same composition are considered. Defaults to False.
+
+        Raises:
+            AssertionError: If no features are identified, if eps is not a float, if min_samples is not an integer, or if any objective is not allowed.
+        """
+
+        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+        assert isinstance(eps, float), "eps must be a float"
+        assert isinstance(min_samples, int), "min_samples must be an integer"
+
+        objectives = self.check_objectives()
+
+        # Select, Scale and Embed features in 2D t-SNE space
+        self.embed_features(sameComposition)
+
+        # Cluster the candidates using DBSCAN
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
+        dbscan.fit(self.scaledks2022)
+
+        # Determine the number of clusters identified by DBSCAN
+        n_clusters = len(set(dbscan.labels_)) - (1 if -1 in dbscan.labels_ else 0)
+        print(f"\nClustered candidates into {n_clusters} clusters using DBSCAN.\n")
+        
+        # Assign each data point to its cluster
+        clusters = {}
+        for i, label in enumerate(dbscan.labels_):
+            self.candidates[i].update({'cluster': label})
+            clusters.setdefault(label, []).append(self.candidates[i])
+      
+        # Select the best candidate per cluster and Create a list of final candidates
+        self.__select_candidates(clusters, objectives)
+
+    def __select_candidates(
+            self,
+            clusters: dict,
+            objectives: List[str],
+    ) -> None:
+        """
+        Selects the best candidate per cluster for each objective and stores them in self.finalCandidates.
+
+        Args:
+            clusters: A dictionary mapping cluster labels to lists of candidate dictionaries.
+            objectives: A list of objectives to consider when selecting candidates.
+
+        Returns:
+            List[dict]: A list of dictionaries representing the selected candidates.
+        """
+
+        print(f"List of candidates selected per energy of each cluster:")
+        
+        # Select the best candidate per cluster based on the minimum predicted property
+        self.clusterAffiliation = {}
+        for objective in objectives:
+            print(f"\nObjective: {objective}")
+            self.clusterAffiliation[objective] = {}
+            for label, cluster in sorted(clusters.items()):
+                candidate = min(cluster, key=lambda x: x[objective])
+                self.clusterAffiliation[objective].update({candidate['cluster']: candidate['index']})
+                print(f"           Cluster {label + 1}: {candidate['name']}")
+        
+        # Create a list of final candidates
+        self.finalCandidates, i = [], 0
+        for objective in objectives:
+            for index in self.clusterAffiliation[objective].values():
+                self.finalCandidates.append(self.candidates[index].copy())
+                self.finalCandidates[i].update({'objective': objective})
+                i += 1
+
+        return self.finalCandidates
+
+    def export_table(
+            self,
+            content: List[str] = ['allCandidates', 'finalCandidates'],
+            file_prefix: str = ''
+    ) -> None:
+        """
+        Exports a CSV file with the specified content.
+
+        Args:
+            content: Specifies the type of data to export. Can be 'candidates' and/or 'finalCandidates'. Defaults to ['candidates', 'finalCandidates'].
+
+        Raises:
+            AssertionError: If no final candidates are identified or if an invalid content type is provided.
+        """
+
+        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
+        assert not any(value not in ['allCandidates', 'finalCandidates'] for value in content), "Content should contain only 'candidates' and/or 'finalCandidates'"
+
+        objectives = self.check_objectives()
+
+        if 'allCandidates' in content:
+            file_name = 'allCandidates.csv' if file_prefix == '' else file_prefix + '_allCandidates.csv'
+            with open(file_name, 'w', newline='') as output_file:
+                dict_writer = csv.DictWriter(output_file, self.candidates[0].keys())
+                dict_writer.writeheader()
+                dict_writer.writerows(self.candidates)
+            
+            print(f"\nExported {len(self.candidates)} candidates to {file_name}")
+        
+        if 'finalCandidates' in content:
+            file_name = 'finalCandidates.csv' if file_prefix == '' else file_prefix + '_finalCandidates.csv'
+            finalCandidates_exported = [d for d in self.finalCandidates if d['objective'] in objectives]
+            
+            with open('finalCandidates.csv', 'w', newline='') as output_file:
+                dict_writer = csv.DictWriter(output_file, finalCandidates_exported[0].keys())
+                dict_writer.writeheader()
+                dict_writer.writerows(finalCandidates_exported)
+            
+            print(f"Exported {len(finalCandidates_exported)} final candidates to {file_name}")
+  
+    def make_plot(
+            self,
+            objective: Union[str, List[str]] = 'SIPFENN_Krajewski2022_NN30'
+    ) -> None:
+        """
+        Creates a scatter plot of clustered candidates in 2D t-SNE space.
+
+        Args:
+            objective: The objective to consider for the plot. Must be a key in self.availableObjectives. Defaults to 'SIPFENN_Krajewski2022_NN30'.
+
+        Raises:
+            AssertionError: If no clusters are identified or if the objective is not in self.availableObjectives.
+        """
+        
+        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
+        assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
+        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+
+        fig = px.scatter(
+            x=np.transpose(self.embeddedks2022)[0],
+            y=np.transpose(self.embeddedks2022)[1],
+            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['-'.join([n[0]] + n[1:3] + [n[6]])] + ['-'.join(n[3:5])] + [objective + ': '] + [str(round(p, 4))]) 
+                        for c in self.candidates 
+                        for cl, n, p in [(c['cluster'], c['name'].replace('permutation_', 'P').replace('.POSCAR', '').split('-'), c[objective])]],
+            color=[
+                'Top Candidate' if i in self.clusterAffiliation[objective].values() else 
+                'Other Cluster Members' 
+                for i in range(len(self.embeddedks2022))
+                ],
+            color_discrete_map={
+                'Top Candidate': '#ff7f0e',
+                'Other Cluster Members': '#1f77b4'
+            },
+            opacity=0.85,
+            color_discrete_sequence=px.colors.qualitative.Dark24,
+            template='plotly_white',
+            labels={'x': f'{len(self.scaledks2022[0])}D->2D TSNE1',
+                    'y': f'{len(self.scaledks2022[0])}D->2D TSNE2',
+                    'color': f'Embedded Candidates'},
+            height=400,
+            width=800
+            )
+        
+        self.figure = fig
+        print(f"Plot created for `{objective}` objective. Run ``plot`` to display the plot.")
+
+    def plot(
+            self,
+            save: bool = False,
+            file_name: str = 'clusterCandidates'
+    ) -> None:
+        """
+        Displays the plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
+
+        Args:
+            save: If True, the plot is saved as an HTML file. Defaults to False.
+            file_name: The file name of the file to be saved. Defaults to 'clusterCandidates'.
+        
+        Raises:
+            AssertionError: If no plot is identified. Please run ``make_plot`` first.
+        """
+        
+        assert self.figure is not None, "No plot identified. Please run ``export_plot`` first."
+
+        if save:
+            self.figure.write_html(file_name + '.html')
+            print(f"Plot saved as {file_name}.html")
+
+        else:
+            self.figure.show()
