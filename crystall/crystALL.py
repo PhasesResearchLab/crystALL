@@ -706,7 +706,7 @@ class CrystALLSearch:
             self
     ) -> None:
         """
-        Checks if the specified objectives are available and returns the common objectives.
+        Checks and returns the available objectives.
 
         Raises:
             AssertionError: If no objectives are available.
@@ -719,7 +719,7 @@ class CrystALLSearch:
         
         if any(value not in self.availableObjectives for value in self.objectives):
             existing_objectives = list(set(self.availableObjectives) & set(self.objectives))
-            print("\nThe objectives below are set for calculation. Grayed-out ones does not have predictions calculated: please run ``run_pysipfenn`` or ``run_alignn``.")
+            print("\nSome objectives do not have predictions calculated and will not be considered for clustering.")
             for obj in self.objectives:
                 if obj not in existing_objectives:
                     print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
