@@ -1133,18 +1133,20 @@ class CrystALLSearch:
   
     def make_plot(
             self,
-            objective: Union[str, List[str]] = 'SIPFENN_Krajewski2022_NN30'
+            objective: Union[str, List[str]] = None
     ) -> None:
         """
         Creates a scatter plot of clustered candidates in 2D t-SNE space.
 
         Args:
-            objective: The objective to consider for the plot. Must be a key in self.availableObjectives. Defaults to 'SIPFENN_Krajewski2022_NN30'.
+            objective: The objective to consider for the plot. Must be a key in self.availableObjectives. Defaults to ``self.objectives[0]``.
 
         Raises:
             AssertionError: If no clusters are identified or if the objective is not in self.availableObjectives.
         """
         
+        objective = objective if objective is not None else self.objectives[0]
+
         assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
         assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
