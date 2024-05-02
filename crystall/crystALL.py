@@ -1155,7 +1155,7 @@ class CrystALLSearch:
         fig = px.scatter(
             x=np.transpose(self.embeddedks2022)[0],
             y=np.transpose(self.embeddedks2022)[1],
-            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['-'.join([n[0]] + n[1:3] + [n[6]])] + ['-'.join(n[3:5])] + [objective + ': '] + [str(round(p, 4))]) 
+            hover_name=['<br>'.join(['Cluster: ' + str(cl)] + ['-'.join(n[0:3])] + ['-'.join(n[3:5])] + [objective + ': '] + [str(round(p, 4))]) 
                         for c in self.candidates 
                         for cl, n, p in [(c['cluster'], c['name'].replace('permutation_', 'P').replace('.POSCAR', '').split('-'), c[objective])]],
             color=[
