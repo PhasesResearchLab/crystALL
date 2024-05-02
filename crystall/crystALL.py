@@ -655,9 +655,11 @@ class CrystALLSearch:
         self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
         self.candidates: List[Dict[str, Union[str, float]]] = []
         self.finalCandidates: List[Dict[str, Union[str, float]]] = []
-        
+
+        print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
+
+        print(f"\nChecking for available models on the computer..")
         # Check if MPDD-ALIGNN default models are available
-        print(f"Checking for available models on the computer..")
         self.alignn_models = True
         with resources.files('alignn') as alignn_dir:
             for model_dict in pretrained.get_default_models():
