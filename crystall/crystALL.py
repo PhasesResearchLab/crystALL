@@ -921,6 +921,8 @@ class CrystALLSearch:
         indices = [candidate['index'] for candidate in self.candidates]
         self.ks2022 = self.ks2022[indices]
 
+        print(f"Filtered candidates to {len(self.candidates)} based on the maximum number of candidates") if max_candidates else print(f"Filtered candidates to {len(self.candidates)} based on the cutoff value of {cutoff}")
+
     def embed_features(
             self,
             sameComposition: bool = False
