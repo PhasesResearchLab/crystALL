@@ -673,12 +673,15 @@ class CrystALLSearch:
         # Check if pySIPFENN models are available
         self.pysipfenn_models = True
         self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
-        if not len(self.Calculator.network_list_available) > 0:
+        
+        existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
+        
+        if not len(existingCompatibleModels) > 0:
             self.pysipfenn_models = False
-            print(f"pySIPFENN models not found. To use these models, you will need to download them using the `download_models` method.")
-
-        print(f"\nInitialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
-        self.set_objectives(objectives)
+            print(f"{Style.DIM}✘ No pySIPFENN models compatible with 'KS2022' descriptor found. Please run `download_models`.{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}✔ pySIPFENN models found.{Style.RESET_ALL}")
+            self.update_objectives(self.Calculator)
 
     def update_objectives(
             self,
