@@ -865,7 +865,8 @@ class CrystALLSearch:
             if model_dict['name'] in self.objectives and model_dict['name'] not in self.availableObjectives:
                 self.availableObjectives.append(model_dict['name'])
         
-        print('Importing structures...')
+        print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
+        print('Calculating descriptors...')
         resultDicts = pretrained.run_models_from_directory(self.candidatePath, mode='parallel')
         assert len(self.candidates) == len(resultDicts), "Number of candidates does not match number of property predictions"
 
