@@ -1094,10 +1094,16 @@ class CrystALLSearch:
         Exports a CSV file with the specified content.
 
         Args:
-            content: Specifies the type of data to export. Can be 'candidates' and/or 'finalCandidates'. Defaults to ['candidates', 'finalCandidates'].
+            content: Specifies the type of data to export. Can be 'allCandidates' and/or 'finalCandidates'. 
+                                        Defaults to ['allCandidates', 'finalCandidates'].
+            file_prefix: A prefix that will be added to the file name. Defaults to ''.
 
         Raises:
             AssertionError: If no final candidates are identified or if an invalid content type is provided.
+
+        Outputs:
+            CSV files: Writes CSV files for 'allCandidates' and/or 'finalCandidates' depending on the content argument. 
+                        The files are named based on the content type and the file_prefix (if provided).
         """
 
         assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
