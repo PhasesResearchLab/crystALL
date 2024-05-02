@@ -831,8 +831,7 @@ class CrystALLSearch:
         assert isinstance(self.candidatePath, str), "Candidates folder path must be a string"
         assert self.pysipfenn_models, "pySIPFENN models not found. Please run ``download_models`` first."
 
-        self.Calculator.loadModels(network = 'SIPFENN_Krajewski2022_NN30')
-        for model in self.Calculator.loadedModels:
+        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.objectives)):
             if model not in self.availableObjectives:
                 self.availableObjectives.append(model)
         
