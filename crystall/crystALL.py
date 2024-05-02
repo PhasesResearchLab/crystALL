@@ -630,8 +630,7 @@ class CrystALLSearch:
             MPDD: Database = None,
             collections: List[str] = None,
             candidatePath: str = None,
-            calculator: Calculator = None,
-            objectives: List[str] = None
+            calculator: Calculator = None
     ) -> None:
         
         # Defined at initialization
@@ -680,20 +679,24 @@ class CrystALLSearch:
         print(f"\nInitialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
         self.set_objectives(objectives)
 
-    def set_objectives(
+    def update_objectives(
             self,
-            objectives: List[str]
+            calculator: Calculator
     ) -> None:
 
-        allowedObjectives = ['SIPFENN_Krajewski2022_NN30', 'ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']
-        self.objectives = objectives if objectives is not None else ['SIPFENN_Krajewski2022_NN30']
+        assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
+        
+        loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
 
-        assert isinstance(self.objectives, list) and len(self.objectives) >= 1, "Objectives must be a list of strings with at least one objective."
-        assert any(value in allowedObjectives for value in self.objectives), f"Some of your objectives are not valid, please choose from the following: {', '.join(allowedObjectives)}"
-        assert self.objectives != ['Avg of Formation Energy'], "Objectives cannot be set ONLY to 'Avg of Formation Energy'."
+        if not len(loadedCompatibleModels) > 0:
+            alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
+            print(f"\nNo pySIPFENN models compatible with 'KS2022' were specified in the Calculator. Loading available model: {alternative_model}.")
+            self.Calculator.loadModels(network = alternative_model)
+        
+        self.objectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
+        self.objectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.alignn_models else []
 
-        print(f"\nObjectives set for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.objectives)}{Style.RESET_ALL}")
-        print(f"\nTo select another set, use `set_objectives`. Available objectives are: {Fore.LIGHTYELLOW_EX}{', '.join(allowedObjectives)}{Style.RESET_ALL}.")
+        print(f"\nObjectives set for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.objectives)}{Style.RESET_ALL}\nTo select another set, use `update_objectives`.")
 
     def check_objectives(
             self
