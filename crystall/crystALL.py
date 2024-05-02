@@ -665,11 +665,10 @@ class CrystALLSearch:
             for model_dict in pretrained.get_default_models():
                 if not os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
                     self.alignn_models = False
-                    print(f"{Style.DIM}✘ {model_dict['name']}{Style.RESET_ALL}")
-                    print(f"MPDD-ALIGNN models not found. To use these models, you will need to download them using the `download_models` method.")
+                    print(f"{Style.DIM}✘ MPDD-ALIGNN models not found. Please run `download_models`.{Style.RESET_ALL}")
                     break
-                else:
-                    print(f"{Fore.GREEN}✔ {model_dict['name']}{Style.RESET_ALL}")
+            if self.alignn_models:
+                print(f"{Fore.GREEN}✔ MPDD-ALIGNN models found.{Style.RESET_ALL}")
 
         # Check if pySIPFENN models are available
         self.pysipfenn_models = True
