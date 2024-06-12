@@ -1368,7 +1368,9 @@ class CrystALLSearch:
 
     def make_plot(
             self,
-            objective: Union[str, List[str]] = None
+            objective: Union[str, List[str]] = None,
+            save: bool = False,
+            file_name: str = 'clusterCandidates'
     ) -> None:
         """
         Creates a scatter plot of clustered candidates in 2D t-SNE space.
@@ -1413,26 +1415,7 @@ class CrystALLSearch:
             )
         
         self.figure = fig
-        print(f"Plot created for `{objective}` objective. Run ``plot`` to display the plot.")
-
-    def plot(
-            self,
-            save: bool = False,
-            file_name: str = 'clusterCandidates'
-    ) -> None:
-        """
-        Displays the plot of clustered candidates in 2D t-SNE space and optionally saves it as an HTML file.
-
-        Args:
-            save: If True, the plot is saved as an HTML file. Defaults to False.
-            file_name: The file name of the file to be saved. Defaults to 'clusterCandidates'.
         
-        Raises:
-            AssertionError: If no plot is identified. Please run ``make_plot`` first.
-        """
-        
-        assert self.figure is not None, "No plot identified. Please run ``export_plot`` first."
-
         if save:
             self.figure.write_html(file_name + '.html')
             print(f"Plot saved as {file_name}.html")
