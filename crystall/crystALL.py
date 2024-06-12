@@ -979,7 +979,7 @@ class CrystALLSearch:
         # Select, Scale and Embed features in 2D t-SNE space
         self.embed_features(sameComposition)
 
-        print("This may take a few minutes.. Determining the optimal number of clusters..\n") if n_clusters is None else None
+        print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
         # Determine the optimal number of clusters using silhouette score
         sil_dict = {}
