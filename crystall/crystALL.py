@@ -23,7 +23,11 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans, DBSCAN
 import numpy as np
+import pandas as pd
 import plotly.express as px
+from plotly.offline import plot, iplot
+from scipy.spatial import ConvexHull
+import distinctipy
 from plotly.graph_objs import Figure
 from importlib import resources
 
