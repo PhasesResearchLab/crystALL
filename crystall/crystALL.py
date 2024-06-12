@@ -951,6 +951,8 @@ class CrystALLSearch:
         self.scaledks2022 = scaler.fit_transform(features2use)
         tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
         self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+        tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
+        self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
         
     def cluster_candidates_KMeans(
             self,
