@@ -999,8 +999,8 @@ class CrystALLSearch:
         # Assign each data point to its cluster
         clusters = {}
         for i, label in enumerate(clusterData.labels_):
-            self.candidates[i].update({'cluster': label})
-            clusters.setdefault(label, []).append(self.candidates[i])
+            self.candidates[i].update({'cluster': label + 1})
+            clusters.setdefault(label + 1, []).append(self.candidates[i])
 
         # Select the best candidate per cluster and Create a list of final candidates
         self.__select_candidates(clusters, objectives)
@@ -1045,8 +1045,8 @@ class CrystALLSearch:
         # Assign each data point to its cluster
         clusters = {}
         for i, label in enumerate(dbscan.labels_):
-            self.candidates[i].update({'cluster': label})
-            clusters.setdefault(label, []).append(self.candidates[i])
+            self.candidates[i].update({'cluster': label + 1})
+            clusters.setdefault(label + 1, []).append(self.candidates[i])
       
         # Select the best candidate per cluster and Create a list of final candidates
         self.__select_candidates(clusters, objectives)
