@@ -972,7 +972,7 @@ class CrystALLSearch:
 
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
         assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
-        assert n_clusters <= len(self.candidates), "Number of clusters must be less or equal than the number of candidates"
+        assert n_clusters is None or n_clusters <= len(self.candidates), "Number of clusters must be less or equal than the number of candidates"
 
         objectives = self.check_objectives()
 
