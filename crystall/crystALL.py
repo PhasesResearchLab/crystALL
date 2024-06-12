@@ -1077,7 +1077,7 @@ class CrystALLSearch:
             for label, cluster in sorted(clusters.items()):
                 candidate = min(cluster, key=lambda x: x[objective])
                 self.clusterAffiliation[objective].update({candidate['cluster']: candidate['index']})
-                print(f"           Cluster {label + 1}: {candidate['name']}")
+                print(f"           Cluster {label}: {candidate['name']}")
         
         # Create a list of final candidates
         self.finalCandidates, i = [], 0
