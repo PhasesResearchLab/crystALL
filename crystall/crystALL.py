@@ -902,10 +902,12 @@ class CrystALLSearch:
             cutoff: float = 0.5
     ) -> None:
         """
-        Filters the candidates based on the cutoff value provided.
+        Filters the candidates based on the Formation Energy cutoff value provided. Must be run AFTER featurizarion / property prediction by ``run_pysipfenn``.
         """
-        assert len(self.candidates) > 0, "No candidates identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
-        
+
+        assert len(self.candidates) > 0, "No candidates identified. Please run ``generate_MPDD`` or ``generate_local`` first."
+        assert len(self.ks2022) > 0, "No features identified. Please run ``run_pysipfenn`` first."
+
         if max_candidates:
             self.candidates.sort(key=lambda candidate: candidate['Avg of Formation Energy'])
             self.candidates = self.candidates[:max_candidates]
