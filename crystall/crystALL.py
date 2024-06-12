@@ -1135,6 +1135,237 @@ class CrystALLSearch:
             
             print(f"Exported {len(finalCandidates_exported)} final candidates to {file_name}")
   
+    def plot_2D(
+            self,
+            objective: Union[str, List[str]] = None,
+            save: bool = False,
+            file_name: str = 'clusterCandidates'
+    ) -> None:
+        
+        objective = objective if objective is not None else self.objectives[0]
+
+        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
+        assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
+        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+
+        # Create a DataFrame from the data
+        df = pd.DataFrame({
+            'x': np.transpose(self.embeddedks2022)[0],
+            'y': np.transpose(self.embeddedks2022)[1],
+            'cluster': [c['cluster'] for c in self.candidates],
+            'name': [c['name'].replace('permutation_', 'P').replace('.POSCAR', '') for c in self.candidates],
+            'objective': [c[objective] for c in self.candidates],
+            'index': [c['index'] for c in self.candidates]
+        })
+        
+        df = df.sort_values('cluster')
+
+        # Define a color for each cluster
+        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type="Protanopia")
+
+        # Create a scatter plot for each cluster
+        data = []
+        for i, cluster in enumerate(df['cluster'].unique()):
+            df_cluster = df[df['cluster'] == cluster]
+            hovertext = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:3])] + 
+                                    ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
+                                    ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
+                        for _, c in df_cluster.iterrows()]
+            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': 'rgb'+str(colors[i]).replace(' ', '')}
+
+            # Separate the data into top candidates and other cluster members
+            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+            df_other_members = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+
+            # Create scatter plot for other cluster members
+            scatter_other_members = dict(
+                mode = "markers",
+                name = f"Cluster {cluster}",
+                type = "scatter",
+                x = df_other_members['x'], 
+                y = df_other_members['y'],
+                hovertext = hovertext,  # set the hover name
+                hoverinfo = 'text+name',  # only show the hovertext
+                marker = dict(
+                    size=4, 
+                    color=color_discrete_map['Other Cluster Members']  # set the color for other cluster members
+                )
+            )
+            data.append(scatter_other_members)
+
+            # Create scatter plot for top candidates
+            scatter_top_candidates = dict(
+                mode = "markers",
+                name = f"Cluster {cluster}",
+                showlegend = False,  # don't show this in the legend
+                type = "scatter",
+                x = df_top_candidates['x'], 
+                y = df_top_candidates['y'],
+                hovertext = hovertext,  # set the hover name
+                hoverinfo = 'text+name',  # only show the hovertext
+                marker = dict(
+                    size=4, 
+                    color=color_discrete_map['Top Candidate']  # set the color for top candidates
+                )
+            )
+            data.append(scatter_top_candidates)
+
+        # Create a shape for each cluster
+        shapes = []
+        for i, cluster in enumerate(df['cluster'].unique()):
+            df_cluster = df[df['cluster'] == cluster]
+            if len(df_cluster) >= 3:  # ConvexHull requires at least 3 points
+                hull = ConvexHull(df_cluster[['x', 'y']])
+                polygon = {
+                    'type': 'path',
+                    'path': 'M ' + ' L '.join(f"{p[0]} {p[1]}" for p in df_cluster.iloc[hull.vertices][['x', 'y']].values) + ' Z',
+                    'line': {
+                        'color': 'rgb'+str(colors[i]).replace(' ', ''),  # use the color defined for this cluster
+                        'width': 1
+                    },
+                    'fillcolor': 'rgb'+str(colors[i]).replace(' ', ''),  # use the color defined for this cluster
+                    'opacity': 0.2
+                }
+                shapes.append(polygon)
+
+        layout = dict(
+            shapes=shapes,
+            template='plotly_white',  # use the plotly_white template
+            xaxis=dict(
+                title=f'{len(self.scaledks2022[0])}D->2D TSNE3',
+            ),
+            yaxis=dict(
+                title=f'{len(self.scaledks2022[0])}D->2D TSNE3'
+            ),
+            height=500,  # set the height of the plot
+            width=500,  # set the width of the plot
+            title='Embedded Candidates<br><sub>🟠 Top Candidates</sub>'  # add the title here
+        )
+
+        self.figure = dict(data=data, layout=layout)
+        
+        if save:
+            plot(self.figure, filename='2d_point_clustering.html')
+            print(f"Plot saved as {file_name}.html")
+
+        else:
+            iplot(self.figure, filename='2d point clustering')
+
+    def plot_3D(
+            self,
+            objective: Union[str, List[str]] = None,
+            save: bool = False,
+            file_name: str = 'clusterCandidates'
+    ) -> None:
+
+        objective = objective if objective is not None else self.objectives[0]
+
+        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
+        assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
+        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+
+        # Create a DataFrame from the data
+        df = pd.DataFrame({
+            'x': np.transpose(self.embeddedks2022_3d)[0],
+            'y': np.transpose(self.embeddedks2022_3d)[1],
+            'z': np.transpose(self.embeddedks2022_3d)[2],
+            'cluster': [c['cluster'] for c in self.candidates],
+            'name': [c['name'].replace('permutation_', 'P').replace('.POSCAR', '') for c in self.candidates],
+            'objective': [c[objective] for c in self.candidates],
+            'index': [c['index'] for c in self.candidates]
+        })
+
+        df = df.sort_values('cluster')
+
+        # Define a color for each cluster
+        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type="Protanopia")
+
+        # Create a scatter plot and a mesh for each cluster
+        data = []
+        for i, cluster in enumerate(df['cluster'].unique()):
+            df_cluster = df[df['cluster'] == cluster]
+            hovertext = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:3])] + 
+                                    ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
+                                    ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
+                        for _, c in df_cluster.iterrows()]
+            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': 'rgb'+str(colors[i]).replace(' ', '')}
+
+            # Separate the data into top candidates and other cluster members
+            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+            df_other_members = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+
+            # Create scatter plot for other cluster members
+            scatter_other_members = dict(
+                mode = "markers",
+                name = f"Cluster {cluster}",
+                type = "scatter3d",
+                x = df_other_members['x'], 
+                y = df_other_members['y'],
+                z = df_other_members['z'],
+                hovertext = hovertext,  # set the hover name
+                hoverinfo = 'text+name',  # only show the hovertext
+                marker = dict(
+                    size=2, 
+                    color=color_discrete_map['Other Cluster Members']  # set the color for other cluster members
+                )
+            )
+            data.append(scatter_other_members)
+
+            # Create scatter plot for top candidates
+            scatter_top_candidates = dict(
+                mode = "markers",
+                name = f"Cluster {cluster}",
+                showlegend = False,  # don't show this in the legend
+                type = "scatter3d",
+                x = df_top_candidates['x'], 
+                y = df_top_candidates['y'],
+                z = df_top_candidates['z'],
+                hovertext = hovertext,  # set the hover name
+                hoverinfo = 'text+name',  # only show the hovertext
+                marker = dict(
+                    size=2, 
+                    color=color_discrete_map['Top Candidate']  # set the color for top candidates
+                )
+            )
+            data.append(scatter_top_candidates)
+
+            # Create mesh for the cluster
+            mesh = dict(
+                alphahull = 0,
+                name = f"Cluster {cluster}",
+                opacity = 0.1,
+                type = "mesh3d", 
+                x = df_cluster['x'], 
+                y = df_cluster['y'],
+                z = df_cluster['z'],
+                color='rgb'+str(colors[i]).replace(' ', ''),  # set the color of the mesh
+                hoverinfo = 'text+name'  # don't show any hover information for the mesh
+            )
+            data.append(mesh)
+
+        layout = dict(
+            template='plotly_white',  # use the plotly_white template
+            scene=dict(
+                xaxis_title=f'{len(self.scaledks2022[0])}D->3D TSNE3',
+                yaxis_title=f'{len(self.scaledks2022[0])}D->3D TSNE3',
+                zaxis_title=f'{len(self.scaledks2022[0])}D->3D TSNE3'
+            ),
+            height=500,  # set the height of the plot
+            width=500,  # set the width of the plot
+            title='Embedded Candidates<br><sub>🟠 Top Candidates</sub>'  # add the title here
+        )
+
+        self.figure = dict(data=data, layout=layout)
+
+        if save:
+            plot(self.figure, filename='3d_point_clustering.html')
+            print(f"Plot saved as {file_name}.html")
+
+        else:
+            iplot(self.figure, filename='3d point clustering')
+
     def make_plot(
             self,
             objective: Union[str, List[str]] = None
