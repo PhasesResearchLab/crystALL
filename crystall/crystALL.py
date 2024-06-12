@@ -244,7 +244,7 @@ def run_MPDD(
     except FileExistsError:
         print('Final directory already exist.\nCandidates will be overwritten/updated.')
 
-    #Substitute over all condidates over all of their permutations
+    #Substitute over all candidates over all of their permutations
     allS = 0
     for col in collections:
         for candidate in MPDD[col].find(
