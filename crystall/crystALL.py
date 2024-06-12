@@ -888,7 +888,7 @@ class CrystALLSearch:
             AssertionError: If no features are identified or if less than two models are available for averaging.
         """
 
-        assert len(self.candidates) > 0, "No candidates identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert len(self.candidates) > 0, "No candidates identified. Please run ``generate_MPDD`` or ``generate_local`` first."
         assert self.availableObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
 
         # Calculate the average of the predictions
