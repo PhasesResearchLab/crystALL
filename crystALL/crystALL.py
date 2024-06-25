@@ -964,6 +964,11 @@ class CrystALLSearch:
             min_energy = min(candidate['Avg of Formation Energy'] for candidate in self.candidates)
             self.candidates = [candidate for candidate in self.candidates if candidate['Avg of Formation Energy'] < cutoff + min_energy]
 
+        # Delete files not in filtered self.candidates
+        for filename in os.listdir(self.candidatePath):
+            if filename not in {candidate['name'] for candidate in self.candidates}:
+                os.remove(os.path.join(self.candidatePath, filename))
+
         # Update the 'index' key of each dictionary in self.candidates to its position in the list
         for i, candidate in enumerate(self.candidates):
             candidate['index'] = i + 1
