@@ -1321,7 +1321,7 @@ class CrystALLSearch:
             ),
             height=500,  # set the height of the plot
             width=500,  # set the width of the plot
-            title='Embedded Candidates<br><sub>🟠 Top Candidates</sub>'  # add the title here
+            title=f'Embedded Candidates<br><sub>🟠 Top Candidates ({objective})</sub>'  # add the title here
         )
 
         self.figure = dict(data=data, layout=layout)
@@ -1451,7 +1451,7 @@ class CrystALLSearch:
             ),
             height=500,  # set the height of the plot
             width=500,  # set the width of the plot
-            title='Embedded Candidates<br><sub>🟠 Top Candidates</sub>'  # add the title here
+            title=f'Embedded Candidates<br><sub>🟠 Top Candidates ({objective})</sub>'  # add the title here
         )
 
         self.figure = dict(data=data, layout=layout)
