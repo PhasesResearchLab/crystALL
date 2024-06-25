@@ -671,7 +671,7 @@ class CrystALLSearch:
         self.figure: Figure = None
         self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
         self.candidates: List[Dict[str, Union[str, float]]] = []
-        self.finalCandidates: List[Dict[str, Union[str, float]]] = []
+        self.topCandidates: List[Dict[str, Union[str, float]]] = []
 
         print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
 
@@ -1056,7 +1056,7 @@ class CrystALLSearch:
             self.candidates[i].update({'cluster': label + 1})
             clusters.setdefault(label + 1, []).append(self.candidates[i])
 
-        # Select the best candidate per cluster and Create a list of final candidates
+        # Select the best candidate per cluster and Create a list of top candidates
         self.__select_candidates(clusters, objectives)
 
     def cluster_candidates_DBSCAN(
@@ -1107,7 +1107,7 @@ class CrystALLSearch:
             self.candidates[i].update({'cluster': label + 1})
             clusters.setdefault(label + 1, []).append(self.candidates[i])
       
-        # Select the best candidate per cluster and Create a list of final candidates
+        # Select the best candidate per cluster and Create a list of top candidates
         self.__select_candidates(clusters, objectives)
 
     def __select_candidates(
@@ -1116,7 +1116,7 @@ class CrystALLSearch:
             objectives: List[str],
     ) -> None:
         """
-        Selects the best candidate per cluster for each objective and stores them in self.finalCandidates.
+        Selects the best candidate per cluster for each objective and stores them in self.topCandidates.
 
         Args:
             clusters: A dictionary mapping cluster labels to lists of candidate dictionaries.
@@ -1138,42 +1138,42 @@ class CrystALLSearch:
                 self.clusterAffiliation[objective].update({candidate['cluster']: candidate['index']})
                 print(f"           Cluster {label}: {candidate['name']}")
         
-        # Create a list of final candidates
-        self.finalCandidates, i = [], 0
+        # Create a list of top candidates
+        self.topCandidates, i = [], 0
         for objective in objectives:
             for index in self.clusterAffiliation[objective].values():
-                self.finalCandidates.append(self.candidates[index].copy())
-                self.finalCandidates[i].update({'objective': objective})
+                self.topCandidates.append(self.candidates[index].copy())
+                self.topCandidates[i].update({'objective': objective})
                 i += 1
 
-        return self.finalCandidates
+        return self.topCandidates
 
     def export_table(
             self,
-            content: List[str] = ['allCandidates', 'finalCandidates'],
+            content: List[str] = ['allCandidates', 'topCandidates'],
             file_prefix: str = ''
     ) -> None:
         """
         Exports a CSV file with the specified content.
 
         Args:
-            content: Specifies the type of data to export. Can be 'allCandidates' and/or 'finalCandidates'. 
-                                        Defaults to ['allCandidates', 'finalCandidates'].
+            content: Specifies the type of data to export. Can be 'allCandidates' and/or 'topCandidates'. 
+                                        Defaults to ['allCandidates', 'topCandidates'].
             file_prefix: A prefix that will be added to the file name. Defaults to ''.
 
         Raises:
-            AssertionError: If no final candidates are identified or if an invalid content type is provided.
+            AssertionError: If no candidates are identified or if an invalid content type is provided.
 
         Outputs:
-            CSV files: Writes CSV files for 'allCandidates' and/or 'finalCandidates' depending on the content argument. 
+            CSV files: Writes CSV files for 'allCandidates' and/or 'topCandidates' depending on the content argument. 
                         The files are named based on the content type and the file_prefix (if provided).
         """
 
         assert len(self.candidates) > 0, "No candidates identified. Please run `generate_MPDD` or `generate_local` first."
-        assert not any(value not in ['allCandidates', 'finalCandidates'] for value in content), "Content should contain only 'allCandidates' and/or 'finalCandidates'"
+        assert not any(value not in ['allCandidates', 'topCandidates'] for value in content), "Content should contain only 'allCandidates' and/or 'topCandidates'"
 
-        if 'finalCandidates' in content and not self.finalCandidates:
-            print(f"No clustered candidates identified. Please run `cluster_candidates` first. Changing content to 'allCandidates' only.")
+        if 'topCandidates' in content and not self.topCandidates:
+            print(f"No clustered candidates identified. Please run `cluster_candidates` first. \nChanging content to 'allCandidates' only.")
             content = ['allCandidates']
 
         objectives = self.check_objectives()
@@ -1187,16 +1187,16 @@ class CrystALLSearch:
             
             print(f"\nExported {len(self.candidates)} candidates to {file_name}")
         
-        if 'finalCandidates' in content:
-            file_name = 'finalCandidates.csv' if file_prefix == '' else file_prefix + '_finalCandidates.csv'
-            finalCandidates_exported = [d for d in self.finalCandidates if d['objective'] in objectives]
+        if 'topCandidates' in content:
+            file_name = 'topCandidates.csv' if file_prefix == '' else file_prefix + '_topCandidates.csv'
+            topCandidates_exported = [d for d in self.topCandidates if d['objective'] in self.objectives]
             
             with open(file_name, 'w', newline='') as output_file:
-                dict_writer = csv.DictWriter(output_file, finalCandidates_exported[0].keys())
+                dict_writer = csv.DictWriter(output_file, topCandidates_exported[0].keys())
                 dict_writer.writeheader()
-                dict_writer.writerows(finalCandidates_exported)
+                dict_writer.writerows(topCandidates_exported)
             
-            print(f"Exported {len(finalCandidates_exported)} final candidates to {file_name}")
+            print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.objectives)} objectives to {file_name}")
   
     def plot_2D(
             self,
@@ -1213,7 +1213,7 @@ class CrystALLSearch:
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
         assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
 
-        if not self.finalCandidates:
+        if not self.topCandidates:
             print(f"No clustered candidates identified. Please run `cluster_candidates` first. Aborting 2D plot generation.")
             return
         
@@ -1346,7 +1346,7 @@ class CrystALLSearch:
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
         assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
 
-        if not self.finalCandidates:
+        if not self.topCandidates:
             print(f"No clustered candidates identified. Please run `cluster_candidates` first. Aborting 3D plot generation.")
             return
 
