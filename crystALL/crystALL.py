@@ -865,7 +865,7 @@ class CrystALLSearch:
         # Update average of the predictions
         self.calculate_average()
         
-        print(f"Predicted properties for {len(self.ks2022)} candidates using pySIPFENN")
+        print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} candidates using pySIPFENN")
     
     def run_alignn(
             self
