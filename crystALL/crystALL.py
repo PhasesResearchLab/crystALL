@@ -150,7 +150,7 @@ def run_local(
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
-    print(f'\nGenerated {str(allS)} {targetFormula} candidates.')
+    print(f'\nGenerated {Fore.YELLOW}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} candidates.')
     return finPath
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
@@ -284,7 +284,7 @@ def run_MPDD(
             if allS % 1000 == 0:
                 print(str(allS) + ' substitutions complete.')
 
-    print(f'\nGenerated {str(allS)} {targetFormula} candidates.')
+    print(f'\nGenerated {Fore.YELLOW}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} candidates.')
     return finPath
 
 #Run candidate identification and elemental substitution for permutations within the anonymous composition fractions
@@ -443,7 +443,7 @@ def run_compositional_MPDD(
                 print(str(allS) + ' substitutions complete.')
 
     if allS>0:
-        print('\nGenerated ' + str(allS) + ' ' + meanFormula + ' candidates.')
+        print(f'\nGenerated {Fore.YELLOW}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {meanFormula} candidates.')
         print(f'Mean number of permutations: {mean(permutNList)}')
         print(f'Min / Max number of permutations: {min(permutNList)} / {max(permutNList)}')
     else:
