@@ -942,7 +942,7 @@ class CrystALLSearch:
         Raises:
             AssertionError: If no features are identified.
         """
-
+        assert len(self.candidates) >= 5, "At least 5 candidates are required to run `cluster_candidates`."
         assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
 
         if sameComposition:
@@ -950,7 +950,7 @@ class CrystALLSearch:
         else:
             features2use = self.ks2022
 
-        # Select, Scale and Embed features in 2D t-SNE space
+        # Select, Scale and Embed features in 2D and 3D t-SNE space
         scaler = MinMaxScaler()
         self.scaledks2022 = scaler.fit_transform(features2use)
         tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
@@ -978,9 +978,14 @@ class CrystALLSearch:
         assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
         assert n_clusters is None or n_clusters <= len(self.candidates), "Number of clusters must be less or equal than the number of candidates"
 
+        # Check if the number of candidates is sufficient for clustering
+        if len(self.candidates) < 5:
+            print(f"At least 5 candidates are required to run `cluster_candidates`. {len(self.candidates)} found.")
+            return
+
         objectives = self.check_objectives()
 
-        # Select, Scale and Embed features in 2D t-SNE space
+        # Select, Scale and Embed features in 2D and 3D t-SNE space
         self.embed_features(sameComposition)
 
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
@@ -1033,9 +1038,14 @@ class CrystALLSearch:
         assert isinstance(eps, float), "eps must be a float"
         assert isinstance(min_samples, int), "min_samples must be an integer"
 
+        # Check if the number of candidates is sufficient for clustering
+        if len(self.candidates) < 5:
+            print(f"At least 5 candidates are required to run `cluster_candidates`. {len(self.candidates)} found.")
+            return
+
         objectives = self.check_objectives()
 
-        # Select, Scale and Embed features in 2D t-SNE space
+        # Select, Scale and Embed features in 2D and 3D t-SNE space
         self.embed_features(sameComposition)
 
         # Cluster the candidates using DBSCAN
@@ -1114,8 +1124,12 @@ class CrystALLSearch:
                         The files are named based on the content type and the file_prefix (if provided).
         """
 
-        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
-        assert not any(value not in ['allCandidates', 'finalCandidates'] for value in content), "Content should contain only 'candidates' and/or 'finalCandidates'"
+        assert len(self.candidates) > 0, "No candidates identified. Please run `generate_MPDD` or `generate_local` first."
+        assert not any(value not in ['allCandidates', 'finalCandidates'] for value in content), "Content should contain only 'allCandidates' and/or 'finalCandidates'"
+
+        if 'finalCandidates' in content and not self.finalCandidates:
+            print(f"No clustered candidates identified. Please run `cluster_candidates` first. Changing content to 'allCandidates' only.")
+            content = ['allCandidates']
 
         objectives = self.check_objectives()
 
@@ -1150,11 +1164,14 @@ class CrystALLSearch:
         
         objective = objective if objective is not None else self.objectives[0]
 
-        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
         assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
         assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
 
+        if not self.finalCandidates:
+            print(f"No clustered candidates identified. Please run `cluster_candidates` first. Aborting 2D plot generation.")
+            return
+        
         # Create a DataFrame from the data
         df = pd.DataFrame({
             'x': np.transpose(self.embeddedks2022)[0],
@@ -1280,10 +1297,13 @@ class CrystALLSearch:
 
         objective = objective if objective is not None else self.objectives[0]
 
-        assert self.finalCandidates, "No final candidates identified. Please run ``cluster_candidates_KMeans`` or ``cluster_candidates_DBSCAN`` first."
         assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
         assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+
+        if not self.finalCandidates:
+            print(f"No clustered candidates identified. Please run `cluster_candidates` first. Aborting 3D plot generation.")
+            return
 
         # Create a DataFrame from the data
         df = pd.DataFrame({
