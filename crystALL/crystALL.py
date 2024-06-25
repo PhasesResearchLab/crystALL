@@ -1146,7 +1146,7 @@ class CrystALLSearch:
             file_name = 'finalCandidates.csv' if file_prefix == '' else file_prefix + '_finalCandidates.csv'
             finalCandidates_exported = [d for d in self.finalCandidates if d['objective'] in objectives]
             
-            with open('finalCandidates.csv', 'w', newline='') as output_file:
+            with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, finalCandidates_exported[0].keys())
                 dict_writer.writeheader()
                 dict_writer.writerows(finalCandidates_exported)
