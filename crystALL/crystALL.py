@@ -1176,8 +1176,6 @@ class CrystALLSearch:
             print(f"No clustered candidates identified. Please run `cluster_candidates` first. \nChanging content to 'allCandidates' only.")
             content = ['allCandidates']
 
-        objectives = self.check_objectives()
-
         if 'allCandidates' in content:
             file_name = 'allCandidates.csv' if file_prefix == '' else file_prefix + '_allCandidates.csv'
             with open(file_name, 'w', newline='') as output_file:
