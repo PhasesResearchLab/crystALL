@@ -713,7 +713,7 @@ class CrystALLSearch:
 
         if not len(loadedCompatibleModels) > 0:
             alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
-            print(f"\nNo pySIPFENN models compatible with 'KS2022' were specified in the Calculator. Loading available model: {alternative_model}.")
+            print(f"\nNo models compatible with 'KS2022' were specified in the Calculator.")
             self.Calculator.loadModels(network = alternative_model)
         
         self.objectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
