@@ -966,7 +966,7 @@ class CrystALLSearch:
 
         # Update the 'index' key of each dictionary in self.candidates to its position in the list
         for i, candidate in enumerate(self.candidates):
-            candidate['index'] = i
+            candidate['index'] = i + 1
 
         # Update self.ks2022 to only include the values at the positions specified by the "index" key in the filtered self.candidates
         indices = [candidate['index'] for candidate in self.candidates]
