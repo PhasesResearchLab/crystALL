@@ -1157,7 +1157,7 @@ class CrystALLSearch:
             self,
             objective: Union[str, List[str]] = None,
             save: bool = False,
-            file_name: str = 'clusterCandidates',
+            file_name: str = '2D_clusterCandidates',
             markerSymbol: bool = False,
             colorBlind: bool = False
     ) -> None:
@@ -1290,7 +1290,7 @@ class CrystALLSearch:
             self,
             objective: Union[str, List[str]] = None,
             save: bool = False,
-            file_name: str = 'clusterCandidates',
+            file_name: str = '3D_clusterCandidates',
             markerSymbol: bool = False,
             colorBlind: bool = False
     ) -> None:
