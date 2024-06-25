@@ -1,6 +1,6 @@
 #Import libraries
 import pymatgen.core as mg
-import os
+import sys, os, io
 from natsort import natsorted
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -689,7 +689,9 @@ class CrystALLSearch:
 
         # Check if pySIPFENN models are available
         self.pysipfenn_models = True
+        stdout, sys.stdout = sys.stdout, io.StringIO()
         self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
+        sys.stdout = stdout
         
         existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
         
