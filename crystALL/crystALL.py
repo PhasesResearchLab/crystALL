@@ -1182,7 +1182,12 @@ class CrystALLSearch:
                                     ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
                                     ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
-            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': 'rgb'+str(colors[i]).replace(' ', '')}
+            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
+            
+            if markerSymbol and len(df['cluster'].unique()) <= 8:
+                symbol = symbols[i]
+            else: 
+                symbol = symbols[0]
 
             # Separate the data into top candidates and other cluster members
             df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
@@ -1200,6 +1205,7 @@ class CrystALLSearch:
                 marker = dict(
                     size=4, 
                     color=color_discrete_map['Other Cluster Members']  # set the color for other cluster members
+                    symbol=symbol
                 )
             )
             data.append(scatter_other_members)
@@ -1217,6 +1223,7 @@ class CrystALLSearch:
                 marker = dict(
                     size=4, 
                     color=color_discrete_map['Top Candidate']  # set the color for top candidates
+                    symbol=symbol
                 )
             )
             data.append(scatter_top_candidates)
@@ -1306,8 +1313,13 @@ class CrystALLSearch:
                                     ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
                                     ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
-            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': 'rgb'+str(colors[i]).replace(' ', '')}
+            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
 
+            if markerSymbol and len(df['cluster'].unique()) <= 8:
+                symbol = symbols[i]
+            else: 
+                symbol = symbols[0]
+            
             # Separate the data into top candidates and other cluster members
             df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
             df_other_members = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
@@ -1325,6 +1337,7 @@ class CrystALLSearch:
                 marker = dict(
                     size=2, 
                     color=color_discrete_map['Other Cluster Members']  # set the color for other cluster members
+                    symbol=symbol
                 )
             )
             data.append(scatter_other_members)
@@ -1343,6 +1356,7 @@ class CrystALLSearch:
                 marker = dict(
                     size=2, 
                     color=color_discrete_map['Top Candidate']  # set the color for top candidates
+                    symbol=symbol
                 )
             )
             data.append(scatter_top_candidates)
