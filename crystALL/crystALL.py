@@ -11,7 +11,7 @@ import math
 import json
 from statistics import mean
 import csv
-from typing import List, Dict, Union, Tuple
+from typing import List, Dict, Union, Tuple, Literal
 from pymongo.database import Database
 from pymongo import MongoClient
 from colorama import Fore, Style
@@ -151,7 +151,7 @@ def run_local(
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
-    print(f'\nGenerated {Fore.YELLOW}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} candidates.')
+    print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} candidates.')
     return finPath
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
@@ -159,7 +159,8 @@ def run_MPDD(
         targetFormula: Union[str, mg.Composition],
         MPDD: Database,
         collections: List[str],
-        limit: int = 0 #No limit
+        targetPrototypes: Literal['Native', 'Anonymized'],
+        limit: int
     ) -> str:
 
     print(f'\nSearching for structure candidates for: {targetFormula}')
@@ -180,113 +181,119 @@ def run_MPDD(
 
     print(f'\nLooking for {targetFormula} in MPDD database collections.')
 
-    natPath = f"{'_'.join(collections)}-native-{targetFormula}"
+    if targetPrototypes == 'Native':
 
-    try:
-        os.mkdir(natPath)
-        print('Directory created for MPDD candidates: '+natPath )
-    except FileExistsError:
-        print('Directory for MPDD candidates already exist.\nCandidates will be overwritten/updated.')
+        natPath = f"{'_'.join(collections)}-native-{targetFormula}"
 
-    for col in collections:
-        print('Looking through: ' + col)
-        for e in MPDD[col].find({'material.reducedFormula' : rFormula}):
+        try:
+            os.mkdir(natPath)
+            print('Directory created for MPDD candidates: '+natPath )
+        except FileExistsError:
+            print('Directory for MPDD candidates already exist.\nCandidates will be overwritten/updated.')
 
-            s = mg.Structure.from_dict(json.loads(e['material']['mgJSON']))
-            spGroupA = SpacegroupAnalyzer(s)
+        for col in collections:
+            print('Looking through: ' + col)
+            for e in MPDD[col].find({'material.reducedFormula' : rFormula}).limit(limit):
 
-            name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
-                spGroupA.get_space_group_number())
+                s = mg.Structure.from_dict(json.loads(e['material']['mgJSON']))
+                spGroupA = SpacegroupAnalyzer(s)
 
-            if 'parentDatabaseID' in e['metadata']:
-                name = name + '-' + e['metadata']['parentDatabaseID']
-                if 'parentDatabaseURL' in e['metadata']:
-                    namePrint = name + '-' + e['metadata']['parentDatabaseURL']
+                name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
+                    spGroupA.get_space_group_number())
+
+                if 'parentDatabaseID' in e['metadata']:
+                    name = name + '-' + e['metadata']['parentDatabaseID']
+                    if 'parentDatabaseURL' in e['metadata']:
+                        namePrint = name + '-' + e['metadata']['parentDatabaseURL']
+                    else:
+                        namePrint = name
                 else:
+                    name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
                     namePrint = name
-            else:
-                name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
-                namePrint = name
 
-            print(namePrint)
-            p = Poscar(s)
-            p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
-    print('Done.\n')
+                p = Poscar(s)
+                p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
+        print('Done.\n')
 
-    print('\nDetecting Candidates:')
-    foundTotal = 0
-    for col in collections:
-        foundN = MPDD[col].count_documents({'material.anonymizedFormula' : aFormula})
-        foundTotal += foundN
-        print('Found ' + str(foundN) + ' in ' + col)
+        return natPath
 
-    print('\nTotal of '+str(foundTotal) + ' candidates found.\n')
+    elif targetPrototypes == 'Anonymized':
 
-    #Substitution elements combination.
-    print('{0:*^80}'.format('Substituting elements in the candidates.'))
-    sEL = sortedElementsList(composition)
-    sELtarget = [item for sublist in sEL for item in sublist]
-    print('\nTarget Element Combination: ' + str(sELtarget))
+        print('\nDetecting Candidates:')
+        foundTotal = 0
+        for col in collections:
+            foundN = MPDD[col].count_documents({'material.anonymizedFormula' : aFormula})
+            foundTotal += foundN
+            print('Found ' + str(foundN) + ' in ' + col)
 
-    #Verify need for permutations
-    permN = 1
-    for multiples in sEL:
-        permN = permN * math.factorial(multiples.__len__())
+        print('\nTotal of '+str(foundTotal) + ' candidates found.\n')
 
-    if permN > 1:
-        print('\nTarget composition has degenerate anonymous formula thus requires permutations.')
-        print('Up to ' + str(permN) + ' per structure.')
-        print('Total number of candidates increased up to: ' + str(foundTotal * permN) + '\n')
-    else:
-        print('\nTarget composition indicates discrete element substitution.')
+        #Substitution elements combination.
+        print('{0:*^80}'.format('Substituting elements in the candidates.'))
+        sEL = sortedElementsList(composition)
+        sELtarget = [item for sublist in sEL for item in sublist]
+        print('\nTarget Element Combination: ' + str(sELtarget))
 
-    finPath = f"{'_'.join(collections)}-{targetFormula}"
-    print('Final Candidate Directory: ' + finPath)
+        #Verify need for permutations
+        permN = 1
+        for multiples in sEL:
+            permN = permN * math.factorial(multiples.__len__())
 
-    try:
-        os.mkdir(finPath)
-        print('Final directory created.')
-    except FileExistsError:
-        print('Final directory already exist.\nCandidates will be overwritten/updated.')
+        if permN > 1:
+            print('\nTarget composition has degenerate anonymous formula thus requires permutations.')
+            print('Up to ' + str(permN) + ' per structure.')
+            print('Total number of candidates increased up to: ' + str(foundTotal * permN) + '\n')
+        else:
+            print('\nTarget composition indicates discrete element substitution.')
 
-    #Substitute over all candidates over all of their permutations
-    allS = 0
-    for col in collections:
-        for candidate in MPDD[col].find(
-                {'material.anonymizedFormula' : aFormula}
-                ).hint([('material.anonymizedFormula', 1)]).limit(limit):
+        finPath = f"{'_'.join(collections)}-{targetFormula}"
+        print('Final Candidate Directory: ' + finPath)
 
-            s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
+        try:
+            os.mkdir(finPath)
+            print('Final directory created.')
+        except FileExistsError:
+            print('Final directory already exist.\nCandidates will be overwritten/updated.')
 
-            permuts = elementPermutations(sortedElementsList(mg.Composition(s.formula)))
-            spGroupA = SpacegroupAnalyzer(s)
+        #Substitute over all candidates over all of their permutations
+        allS = 0
+        for col in collections:
+            for candidate in MPDD[col].find(
+                    {'material.anonymizedFormula' : aFormula}
+                    ).hint([('material.anonymizedFormula', 1)]).limit(limit):
 
-            nameRoot = candidate['material']['reducedFormula'] + '-' + spGroupA.get_crystal_system() + '-' + str(
-                spGroupA.get_space_group_number())
+                s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
 
-            if 'parentDatabaseID' in candidate['metadata']:
-                nameRoot = nameRoot + '-' + candidate['metadata']['parentDatabaseID'].replace('/','-').replace(':','-')
+                permuts = elementPermutations(sortedElementsList(mg.Composition(s.formula)))
+                spGroupA = SpacegroupAnalyzer(s)
 
-            p = 0
-            for permut in permuts:
-                d = {}
-                p += 1
-                st = s.copy()
-                for e in range(permut.__len__()):
-                    d.update({mg.Element(permut[e]): mg.Element(sELtarget[e])})
-                st.replace_species(d)
-                if permuts.__len__() > 1:
-                    name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
-                else:
-                    name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
-                sP = Poscar(st)
-                sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
-            allS = allS + p
-            if allS % 1000 == 0:
-                print(str(allS) + ' substitutions complete.')
+                nameRoot = candidate['material']['reducedFormula'] + '-' + spGroupA.get_crystal_system() + '-' + str(
+                    spGroupA.get_space_group_number())
 
-    print(f'\nGenerated {Fore.YELLOW}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} candidates.')
-    return finPath
+                if 'parentDatabaseID' in candidate['metadata']:
+                    nameRoot = nameRoot + '-' + candidate['metadata']['parentDatabaseID'].replace('/','-').replace(':','-')
+
+                p = 0
+                for permut in permuts:
+                    d = {}
+                    p += 1
+                    st = s.copy()
+                    for e in range(permut.__len__()):
+                        d.update({mg.Element(permut[e]): mg.Element(sELtarget[e])})
+                    st.replace_species(d)
+                    if permuts.__len__() > 1:
+                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
+                    else:
+                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
+                    sP = Poscar(st)
+                    sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
+                allS = allS + p
+                if allS % 1000 == 0:
+                    print(str(allS) + ' substitutions complete.')
+
+        print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} candidates.')
+        
+        return finPath
 
 #Run candidate identification and elemental substitution for permutations within the anonymous composition fractions
 # E.g.
@@ -299,7 +306,8 @@ def run_compositional_MPDD(
         devs: Dict[str, int],
         MPDD: Database,
         collections: List[str],
-        limit: int = 0 #No limit
+        targetPrototypes: Literal['Native', 'Anonymized'],
+        limit: int
     ) -> str:
 
     # Target formula
@@ -309,148 +317,152 @@ def run_compositional_MPDD(
     print('\nSearching for structure candidates for: ' + meanFormula + ' ' + rangesStr)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
 
-    # ************************* Try to find materials already in the MPDD database **********************************
+    if targetPrototypes == 'Native':
 
-    print('\nLooking for ' + meanFormula + ' in MPDD database collections.')
+        # ************************* Try to find materials already in the MPDD database **********************************
 
-    natPath = '_'.join(collections) + '-native-' + meanFormula + rangesStr
+        print('\nLooking for ' + meanFormula + ' in MPDD database collections.')
 
-    try:
-        os.mkdir(natPath)
-        print('Directory created for MPDD candidates: ' + natPath)
-    except FileExistsError:
-        print('Directory for MPDD candidates already exist.\nCandidates will be overwritten/updated.')
+        natPath = '_'.join(collections) + '-native-' + meanFormula + rangesStr
 
-    # Query for matching MPDD entries
-    nativeQuery = comp2compQ(targetCompositionDict, devs)
+        try:
+            os.mkdir(natPath)
+            print('Directory created for MPDD candidates: ' + natPath)
+        except FileExistsError:
+            print('Directory for MPDD candidates already exist.\nCandidates will be overwritten/updated.')
 
-    targetPresent = 0
-    for col in collections:
-        print('Looking through: ' + col)
-        for e in MPDD[col].find(nativeQuery):
+        # Query for matching MPDD entries
+        nativeQuery = comp2compQ(targetCompositionDict, devs)
 
-            s = mg.Structure.from_dict(json.loads(e['material']['mgJSON']))
-            spGroupA = SpacegroupAnalyzer(s)
+        targetPresent = 0
+        for col in collections:
+            print('Looking through: ' + col)
+            for e in MPDD[col].find(nativeQuery).limit(limit):
 
-            name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
-                spGroupA.get_space_group_number())
+                s = mg.Structure.from_dict(json.loads(e['material']['mgJSON']))
+                spGroupA = SpacegroupAnalyzer(s)
 
-            if 'parentDatabaseID' in e['metadata']:
-                name = name + '-' + e['metadata']['parentDatabaseID']
-                if 'parentDatabaseURL' in e['metadata']:
-                    namePrint = name + '-' + e['metadata']['parentDatabaseURL']
+                name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
+                    spGroupA.get_space_group_number())
+
+                if 'parentDatabaseID' in e['metadata']:
+                    name = name + '-' + e['metadata']['parentDatabaseID']
+                    if 'parentDatabaseURL' in e['metadata']:
+                        namePrint = name + '-' + e['metadata']['parentDatabaseURL']
+                    else:
+                        namePrint = name
                 else:
+                    name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
                     namePrint = name
-            else:
-                name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
-                namePrint = name
 
-            print(namePrint)
-            p = Poscar(s)
-            p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
-            targetPresent += 1
+                p = Poscar(s)
+                p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
+                targetPresent += 1
 
-    print('Done.')
-    print(f'{targetPresent} target materials found in MPDD.\n')
+        print('Done.')
+        print(f'{targetPresent} target materials found in MPDD.\n')
 
-    # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
+        return natPath
 
-    # Sorted fractions dictionary query
-    sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
+    elif targetPrototypes == 'Anonymized':
+        # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
 
-    # ************************************** Count candidates ********************************************************
+        # Sorted fractions dictionary query
+        sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
 
-    print('\nDetecting Candidates:')
-    foundTotal = 0
-    for col in collections:
-        foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
-        foundTotal += foundN
-        print('Found ' + str(foundN) + ' in ' + col)
+        # ************************************** Count candidates ********************************************************
 
-    print('\nTotal of ' + str(foundTotal) + ' candidates available.\n')
+        print('\nDetecting Candidates:')
+        foundTotal = 0
+        for col in collections:
+            foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
+            foundTotal += foundN
+            print('Found ' + str(foundN) + ' in ' + col)
 
-    # ********************************* Substitution elements combination ********************************************
+        print('\nTotal of ' + str(foundTotal) + ' candidates available.\n')
 
-    print('{0:*^80}'.format('Substituting elements in the candidates.'))
+        # ********************************* Substitution elements combination ********************************************
 
-    finPath = '_'.join(collections) + '-' + meanFormula + rangesStr
-    print('Final Candidate Directory: ' + finPath)
+        print('{0:*^80}'.format('Substituting elements in the candidates.'))
 
-    try:
-        os.mkdir(finPath)
-        print('Final directory created.')
-    except FileExistsError:
-        print('Final directory already exist.\nCandidates will be overwritten/updated.')
+        finPath = '_'.join(collections) + '-' + meanFormula + rangesStr
+        print('Final Candidate Directory: ' + finPath)
 
-    # All generated candidates
-    allS = 0
-    # List of permutation numbers
-    permutNList = []
+        try:
+            os.mkdir(finPath)
+            print('Final directory created.')
+        except FileExistsError:
+            print('Final directory already exist.\nCandidates will be overwritten/updated.')
 
-    # Search all collections using the compound index for the first 8 components
-    for col in collections:
-        for candidate in MPDD[col].find(
-                sortedFractionsDictQuery
-        ).hint([
-            ('material.sortedFractionsDict.c1', 1),
-            ('material.sortedFractionsDict.c2', 1),
-            ('material.sortedFractionsDict.c3', 1),
-            ('material.sortedFractionsDict.c4', 1),
-            ('material.sortedFractionsDict.c5', 1),
-            ('material.sortedFractionsDict.c6', 1),
-            ('material.sortedFractionsDict.c7', 1),
-            ('material.sortedFractionsDict.c8', 1)
-        ]).limit(limit):
+        # All generated candidates
+        allS = 0
+        # List of permutation numbers
+        permutNList = []
 
-            s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
-            c = mg.Composition(s.formula)
+        # Search all collections using the compound index for the first 8 components
+        for col in collections:
+            for candidate in MPDD[col].find(
+                    sortedFractionsDictQuery
+            ).hint([
+                ('material.sortedFractionsDict.c1', 1),
+                ('material.sortedFractionsDict.c2', 1),
+                ('material.sortedFractionsDict.c3', 1),
+                ('material.sortedFractionsDict.c4', 1),
+                ('material.sortedFractionsDict.c5', 1),
+                ('material.sortedFractionsDict.c6', 1),
+                ('material.sortedFractionsDict.c7', 1),
+                ('material.sortedFractionsDict.c8', 1)
+            ]).limit(limit):
 
-            cDict = dict(c.fractional_composition.as_dict())
-            for e in cDict:
-                cDict[e] = int(cDict[e] * 1000)
+                s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
+                c = mg.Composition(s.formula)
 
-            elements = [element for element in cDict]
+                cDict = dict(c.fractional_composition.as_dict())
+                for e in cDict:
+                    cDict[e] = int(cDict[e] * 1000)
 
-            oAS = orderedAllowedSubstitutions(targetCompositionDict, devs, cDict)
+                elements = [element for element in cDict]
 
-            permutNList += [len(oAS)]
+                oAS = orderedAllowedSubstitutions(targetCompositionDict, devs, cDict)
 
-            spGroupA = SpacegroupAnalyzer(s)
+                permutNList += [len(oAS)]
 
-            nameRoot = candidate['material']['reducedFormula'] + '-' + spGroupA.get_crystal_system() + '-' + \
-                       str(spGroupA.get_space_group_number())
+                spGroupA = SpacegroupAnalyzer(s)
 
-            if 'parentDatabaseID' in candidate['metadata']:
-                nameRoot = nameRoot + '-' + candidate['metadata']['parentDatabaseID'].replace('/', '-').replace(':',
-                                                                                                                '-')
+                nameRoot = candidate['material']['reducedFormula'] + '-' + spGroupA.get_crystal_system() + '-' + \
+                        str(spGroupA.get_space_group_number())
 
-            p = 1
-            for substitutions in oAS:
-                d = {}
-                st = s.copy()
-                for o, r in zip(elements, substitutions):
-                    d.update({mg.Element(o): mg.Element(r)})
-                st.replace_species(d)
+                if 'parentDatabaseID' in candidate['metadata']:
+                    nameRoot = nameRoot + '-' + candidate['metadata']['parentDatabaseID'].replace('/', '-').replace(':',
+                                                                                                                    '-')
 
-                if len(oAS) > 1:
-                    name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
-                    p += 1
-                else:
-                    name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
-                sP = Poscar(st)
-                sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
-            allS = allS + p
-            if allS % 50 == 0:
-                print(str(allS) + ' substitutions complete.')
+                p = 1
+                for substitutions in oAS:
+                    d = {}
+                    st = s.copy()
+                    for o, r in zip(elements, substitutions):
+                        d.update({mg.Element(o): mg.Element(r)})
+                    st.replace_species(d)
 
-    if allS>0:
-        print(f'\nGenerated {Fore.YELLOW}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {meanFormula} candidates.')
-        print(f'Mean number of permutations: {mean(permutNList)}')
-        print(f'Min / Max number of permutations: {min(permutNList)} / {max(permutNList)}')
-    else:
-        print('No candidates were generated.')
+                    if len(oAS) > 1:
+                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
+                        p += 1
+                    else:
+                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
+                    sP = Poscar(st)
+                    sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
+                allS = allS + p
+                if allS % 50 == 0:
+                    print(str(allS) + ' substitutions complete.')
 
-    return finPath
+        if allS>0:
+            print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {meanFormula} candidates.')
+            print(f'Mean number of permutations: {mean(permutNList)}')
+            print(f'Min / Max number of permutations: {min(permutNList)} / {max(permutNList)}')
+        else:
+            print('No candidates were generated.')
+
+        return finPath
 
 def estimate_compositional_MPDD(
         targetCompositionDict: Dict[str, int],
@@ -777,6 +789,7 @@ class CrystALLSearch:
         
     def generate_MPDD(
             self,
+            targetPrototypes: Literal['Native', 'Anonymized'] = 'Anonymized',
             limit: int = 1000,
             devs: Dict[str, int] = None
     ) -> None:
@@ -796,9 +809,9 @@ class CrystALLSearch:
         assert devs is None or isinstance(devs, dict), "Deviations must be a dictionary with element symbols as keys and integer values as deviations"
 
         if devs is None:
-            self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, limit)
+            self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, targetPrototypes, limit)
         else:
-            self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, limit)
+            self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, limit)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
         self.candidates = [{"index": i + 1, "name": file, "hash": structureHashes(mg.Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
 
