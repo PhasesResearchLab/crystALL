@@ -1143,7 +1143,9 @@ class CrystALLSearch:
             self,
             objective: Union[str, List[str]] = None,
             save: bool = False,
-            file_name: str = 'clusterCandidates'
+            file_name: str = 'clusterCandidates',
+            markerSymbol: bool = False,
+            colorBlind: bool = False
     ) -> None:
         
         objective = objective if objective is not None else self.objectives[0]
@@ -1166,7 +1168,11 @@ class CrystALLSearch:
         df = df.sort_values('cluster')
 
         # Define a color for each cluster
-        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type="Protanopia")
+        colorblind_type = "Protanopia" if colorBlind else None
+        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+
+        # Define a symbol for each cluster (up to 8)
+        symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
 
         # Create a scatter plot for each cluster
         data = []
@@ -1260,7 +1266,9 @@ class CrystALLSearch:
             self,
             objective: Union[str, List[str]] = None,
             save: bool = False,
-            file_name: str = 'clusterCandidates'
+            file_name: str = 'clusterCandidates',
+            markerSymbol: bool = False,
+            colorBlind: bool = False
     ) -> None:
 
         objective = objective if objective is not None else self.objectives[0]
@@ -1284,7 +1292,11 @@ class CrystALLSearch:
         df = df.sort_values('cluster')
 
         # Define a color for each cluster
-        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type="Protanopia")
+        colorblind_type = "Protanopia" if colorBlind else None
+        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+
+        # Define a symbol for each cluster (up to 8)
+        symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
 
         # Create a scatter plot and a mesh for each cluster
         data = []
