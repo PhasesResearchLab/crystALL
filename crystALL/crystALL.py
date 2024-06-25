@@ -30,6 +30,7 @@ from scipy.spatial import ConvexHull
 import distinctipy
 from plotly.graph_objs import Figure
 from importlib import resources
+from crystALL.structureHash import structureHashes
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
@@ -799,7 +800,7 @@ class CrystALLSearch:
         else:
             self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, limit)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
-        self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
+        self.candidates = [{"index": i + 1, "name": file, "hash": structureHashes(mg.Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
 
     def generate_local(
             self,
@@ -819,7 +820,7 @@ class CrystALLSearch:
         assert self.candidatePath, "No candidates folder identified. Please provide a path to the candidates folder."
         self.candidatePath = run_local(self.targetFormula, self.candidatePath)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
-        self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
+        self.candidates = [{"index": i, "name": file, "hash": structureHashes(mg.Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
 
     def run_pysipfenn(
             self
@@ -899,6 +900,35 @@ class CrystALLSearch:
         for i, candidate in enumerate(self.candidates):
             average_prediction = sum(candidate[pred] for pred in self.availableObjectives) / len(self.availableObjectives)
             self.candidates[i].update({f'Avg of Formation Energy': average_prediction})
+
+    def filter_prototypes(
+            self,
+            hashID: str,
+            typeID: str = 'structID'
+    ) -> None:
+        """
+        Filters prototypes based on either ``structID`` or ``volNormStructID``. Must be run BEFORE featurizarion by ``run_pysipfenn``.
+        """
+
+        assert self.candidatePath is not None, "No candidates folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
+        assert typeID in ['structID', 'volNormStructID'], 'typeID must be either ``structID`` or ``volNormStructID``.'
+
+        if typeID == 'structID':
+            self.candidates = [candidate for candidate in self.candidates if candidate['hash']['material.structID'] == hashID]
+        
+        elif typeID == 'volNormStructID':
+            self.candidates = [candidate for candidate in self.candidates if candidate['hash']['material.volNormStructID'] == hashID]
+
+        # Delete files not in filtered self.candidates
+        for filename in os.listdir(self.candidatePath):
+            if filename not in {candidate['name'] for candidate in self.candidates}:
+                os.remove(os.path.join(self.candidatePath, filename))
+
+        # Update the 'index' key of each dictionary in self.candidates to its position in the list
+        for i, candidate in enumerate(self.candidates):
+            candidate['index'] = i + 1
+
+        print(f"Filtered candidates to {Fore.GREEN}{Style.BRIGHT}{len(self.candidates)}{Style.RESET_ALL} based on prototypes with {typeID} = {hashID}")
 
     def filter_candidates(
             self,
