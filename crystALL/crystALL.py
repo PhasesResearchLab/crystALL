@@ -1203,8 +1203,8 @@ class CrystALLSearch:
                 hovertext = hovertext,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
-                    size=4, 
-                    color=color_discrete_map['Other Cluster Members']  # set the color for other cluster members
+                    size=5, 
+                    color=color_discrete_map['Other Cluster Members'],  # set the color for other cluster members
                     symbol=symbol
                 )
             )
@@ -1221,8 +1221,8 @@ class CrystALLSearch:
                 hovertext = hovertext,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
-                    size=4, 
-                    color=color_discrete_map['Top Candidate']  # set the color for top candidates
+                    size=5, 
+                    color=color_discrete_map['Top Candidate'],  # set the color for top candidates
                     symbol=symbol
                 )
             )
@@ -1335,8 +1335,8 @@ class CrystALLSearch:
                 hovertext = hovertext,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
-                    size=2, 
-                    color=color_discrete_map['Other Cluster Members']  # set the color for other cluster members
+                    size=3, 
+                    color=color_discrete_map['Other Cluster Members'],  # set the color for other cluster members
                     symbol=symbol
                 )
             )
@@ -1354,8 +1354,8 @@ class CrystALLSearch:
                 hovertext = hovertext,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
-                    size=2, 
-                    color=color_discrete_map['Top Candidate']  # set the color for top candidates
+                    size=3, 
+                    color=color_discrete_map['Top Candidate'],  # set the color for top candidates
                     symbol=symbol
                 )
             )
@@ -1370,7 +1370,7 @@ class CrystALLSearch:
                 x = df_cluster['x'], 
                 y = df_cluster['y'],
                 z = df_cluster['z'],
-                color='rgb'+str(colors[i]).replace(' ', ''),  # set the color of the mesh
+                color=color_discrete_map['Other Cluster Members'],  # set the color of the mesh
                 hoverinfo = 'text+name'  # don't show any hover information for the mesh
             )
             data.append(mesh)
