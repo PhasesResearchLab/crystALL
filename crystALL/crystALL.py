@@ -896,7 +896,7 @@ class CrystALLSearch:
         # Update average of the predictions
         self.calculate_average()
         
-        print(f"Predicted properties for {len(resultDicts)} candidates using ALIGNN")
+        print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(resultDicts)}{Style.RESET_ALL} candidates using ALIGNN")
 
     def calculate_average(
             self
@@ -972,7 +972,11 @@ class CrystALLSearch:
         indices = [candidate['index'] for candidate in self.candidates]
         self.ks2022 = self.ks2022[indices]
 
-        print(f"Filtered candidates to {len(self.candidates)} based on the maximum number of candidates") if max_candidates else print(f"Filtered candidates to {len(self.candidates)} based on the cutoff value of {cutoff}")
+        if max_candidates:
+            print(f"Filtered candidates to {Fore.GREEN}{Style.BRIGHT}{len(self.candidates)}{Style.RESET_ALL} based on the maximum number of candidates of {max_candidates}")
+        
+        else:
+            print(f"Filtered candidates to {Fore.GREEN}{Style.BRIGHT}{len(self.candidates)}{Style.RESET_ALL} based on the cutoff value of {cutoff}")
 
     def embed_features(
             self,
@@ -1183,7 +1187,7 @@ class CrystALLSearch:
                 dict_writer.writeheader()
                 dict_writer.writerows(self.candidates)
             
-            print(f"\nExported {len(self.candidates)} candidates to {file_name}")
+            print(f"\nExported {Fore.GREEN}{Style.BRIGHT}{len(self.candidates)}{Style.RESET_ALL} candidates to {file_name}")
         
         if 'topCandidates' in content:
             file_name = 'topCandidates.csv' if file_prefix == '' else file_prefix + '_topCandidates.csv'
