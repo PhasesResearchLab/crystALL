@@ -1,41 +1,39 @@
 #Import libraries
-import pymatgen.core as mg
 import sys, os, io
+import math, re, json, csv
+import numpy as np
+import pandas as pd
+
+from typing import List, Dict, Union, Literal
 from natsort import natsorted
-from pymatgen.io.vasp.inputs import Poscar
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-import re
 from itertools import groupby, permutations, product
 from operator import itemgetter
-import math
-import json
+from importlib import resources
 from statistics import mean
-import csv
-from typing import List, Dict, Union, Tuple, Literal
-from pymongo.database import Database
-from pymongo import MongoClient
 from colorama import Fore, Style
+from distinctipy import get_colors
+from alignn import pretrained
+from pymongo.database import Database
+from scipy.spatial import ConvexHull
+from crystALL.structureHash import structureHashes
+
+from pymatgen.core import Structure, Composition, Element
+from pymatgen.io.vasp.inputs import Poscar
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pysipfenn import Calculator
 from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
-from alignn import pretrained
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans, DBSCAN
-import numpy as np
-import pandas as pd
-import plotly.express as px
 from plotly.offline import plot, iplot
-from scipy.spatial import ConvexHull
-import distinctipy
 from plotly.graph_objs import Figure
-from importlib import resources
-from crystALL.structureHash import structureHashes
+
 
 # *********** Top-Level Functions ***********
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_local(
-        targetFormula: Union[str, mg.Composition],
+        targetFormula: Union[str, Composition],
         candidatePath: str
     ) -> str:
     
@@ -44,8 +42,8 @@ def run_local(
 
     if isinstance(targetFormula, str):
         #Formula to pymatgen Composition
-        composition = mg.Composition(targetFormula)
-    elif isinstance(targetFormula, mg.Composition):
+        composition = Composition(targetFormula)
+    elif isinstance(targetFormula, Composition):
         composition = targetFormula
     else:
         raise ValueError('Target formula must be a string or a pymatgen Composition object')
@@ -74,10 +72,10 @@ def run_local(
     for file in fileList:
         allS = allS + 1
         if os.path.splitext(file)[1] == '.POSCAR':
-            s = mg.Structure.from_file(candidatePath +'/'+ file)
+            s = Structure.from_file(candidatePath +'/'+ file)
             if s.ntypesp == nElements:
                 nEl = nEl + 1
-                if mg.Composition(s.formula).anonymized_formula == aFormula:
+                if Composition(s.formula).anonymized_formula == aFormula:
                     sP = Poscar(s)
                     sP.write_file(os.path.split(candidatePath)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
                     aF = aF + 1
@@ -126,9 +124,9 @@ def run_local(
     #Substitute over all condidates over all of their permutations
     allS = 0
     for candidate in candidateList:
-        s = mg.Structure.from_file(intPath + '/' + candidate)
+        s = Structure.from_file(intPath + '/' + candidate)
 
-        permuts = elementPermutations(sortedElementsList(mg.Composition(s.formula)))
+        permuts = elementPermutations(sortedElementsList(Composition(s.formula)))
         spGroupA = SpacegroupAnalyzer(s)
         fileSplit = candidate.split('.')
         newNameRoot = fileSplit[0] + '-' + spGroupA.get_crystal_system() + '-' + str(
@@ -140,7 +138,7 @@ def run_local(
             p = p + 1
             st = s.copy()
             for e in range(permut.__len__()):
-                d.update({mg.Element(permut[e]): mg.Element(sELtarget[e])})
+                d.update({Element(permut[e]): Element(sELtarget[e])})
             st.replace_species(d)
             if permuts.__len__() > 1:
                 newName = newNameRoot + str.replace(st.formula, ' ', '') + '-permutation' + str(p) + '.POSCAR'
@@ -156,7 +154,7 @@ def run_local(
 
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_MPDD(
-        targetFormula: Union[str, mg.Composition],
+        targetFormula: Union[str, Composition],
         MPDD: Database,
         collections: List[str],
         targetPrototypes: Literal['Native', 'Anonymized'],
@@ -168,8 +166,8 @@ def run_MPDD(
 
     if isinstance(targetFormula, str):
         #Formula to pymatgen Composition
-        composition = mg.Composition(targetFormula)
-    elif isinstance(targetFormula, mg.Composition):
+        composition = Composition(targetFormula)
+    elif isinstance(targetFormula, Composition):
         composition = targetFormula
     else:
         raise ValueError('Target formula must be a string or a pymatgen Composition object')
@@ -195,7 +193,7 @@ def run_MPDD(
             print('Looking through: ' + col)
             for e in MPDD[col].find({'material.reducedFormula' : rFormula}).limit(limit):
 
-                s = mg.Structure.from_dict(json.loads(e['material']['mgJSON']))
+                s = Structure.from_dict(json.loads(e['material']['mgJSON']))
                 spGroupA = SpacegroupAnalyzer(s)
 
                 name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
@@ -262,9 +260,9 @@ def run_MPDD(
                     {'material.anonymizedFormula' : aFormula}
                     ).hint([('material.anonymizedFormula', 1)]).limit(limit):
 
-                s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
+                s = Structure.from_dict(json.loads(candidate['material']['mgJSON']))
 
-                permuts = elementPermutations(sortedElementsList(mg.Composition(s.formula)))
+                permuts = elementPermutations(sortedElementsList(Composition(s.formula)))
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = candidate['material']['reducedFormula'] + '-' + spGroupA.get_crystal_system() + '-' + str(
@@ -279,7 +277,7 @@ def run_MPDD(
                     p += 1
                     st = s.copy()
                     for e in range(permut.__len__()):
-                        d.update({mg.Element(permut[e]): mg.Element(sELtarget[e])})
+                        d.update({Element(permut[e]): Element(sELtarget[e])})
                     st.replace_species(d)
                     if permuts.__len__() > 1:
                         name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
@@ -339,7 +337,7 @@ def run_compositional_MPDD(
             print('Looking through: ' + col)
             for e in MPDD[col].find(nativeQuery).limit(limit):
 
-                s = mg.Structure.from_dict(json.loads(e['material']['mgJSON']))
+                s = Structure.from_dict(json.loads(e['material']['mgJSON']))
                 spGroupA = SpacegroupAnalyzer(s)
 
                 name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
@@ -414,8 +412,8 @@ def run_compositional_MPDD(
                 ('material.sortedFractionsDict.c8', 1)
             ]).limit(limit):
 
-                s = mg.Structure.from_dict(json.loads(candidate['material']['mgJSON']))
-                c = mg.Composition(s.formula)
+                s = Structure.from_dict(json.loads(candidate['material']['mgJSON']))
+                c = Composition(s.formula)
 
                 cDict = dict(c.fractional_composition.as_dict())
                 for e in cDict:
@@ -441,7 +439,7 @@ def run_compositional_MPDD(
                     d = {}
                     st = s.copy()
                     for o, r in zip(elements, substitutions):
-                        d.update({mg.Element(o): mg.Element(r)})
+                        d.update({Element(o): Element(r)})
                     st.replace_species(d)
 
                     if len(oAS) > 1:
@@ -506,8 +504,8 @@ def compositionalManhattanDistanceAdd(
     writer.writerow(headers)
 
     for row in reader:
-        s = mg.Structure.from_file(structureFiles + '/' + row[0])
-        c = mg.Composition(s.formula)
+        s = Structure.from_file(structureFiles + '/' + row[0])
+        c = Composition(s.formula)
         cDict = dict(c.fractional_composition.as_dict())
         d = 0
         for e in targetCompositionDict:
@@ -520,7 +518,7 @@ def compositionalManhattanDistanceAdd(
 # starting from the least common.
 # E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
 def sortedElementsList(
-        comp: mg.Composition
+        comp: Composition
     ) -> List[List[str]]:
 
     fractions = re.sub(r'[A-z]+', '', comp.formula).split()
@@ -593,7 +591,7 @@ def comp2compQ(
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
 
-    meanComposition = mg.Composition(' '.join(''.join((key, str(val))) for (key, val) in compDict.items()))
+    meanComposition = Composition(' '.join(''.join((key, str(val))) for (key, val) in compDict.items()))
     mpddQuery = dict()
     mpddQuery.update({'material.system': meanComposition.chemical_system})
     for e in compDict:
@@ -643,7 +641,7 @@ class CrystALLSearch:
     
     def __init__(
             self,
-            targetFormula: Union[str, mg.Composition],
+            targetFormula: Union[str, Composition],
             MPDD: Database = None,
             collections: List[str] = None,
             candidatePath: str = None,
@@ -655,8 +653,8 @@ class CrystALLSearch:
         self.collections = collections
         self.candidatePath = candidatePath
         if isinstance(targetFormula, str):
-            self.targetFormula = mg.Composition(targetFormula)
-        elif isinstance(targetFormula, mg.Composition):
+            self.targetFormula = Composition(targetFormula)
+        elif isinstance(targetFormula, Composition):
             self.targetFormula = targetFormula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
@@ -815,7 +813,7 @@ class CrystALLSearch:
         else:
             self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, limit)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
-        self.candidates = [{"index": i + 1, "name": file, "hash": structureHashes(mg.Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
+        self.candidates = [{"index": i + 1, "name": file, "hash": structureHashes(Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
 
     def generate_local(
             self,
@@ -835,7 +833,7 @@ class CrystALLSearch:
         assert self.candidatePath, "No candidates folder identified. Please provide a path to the candidates folder."
         self.candidatePath = run_local(self.targetFormula, self.candidatePath)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
-        self.candidates = [{"index": i, "name": file, "hash": structureHashes(mg.Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
+        self.candidates = [{"index": i, "name": file, "hash": structureHashes(Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
 
     def run_pysipfenn(
             self
@@ -1238,7 +1236,7 @@ class CrystALLSearch:
 
         # Define a color for each cluster
         colorblind_type = "Protanopia" if colorBlind else None
-        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
         symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
@@ -1372,7 +1370,7 @@ class CrystALLSearch:
 
         # Define a color for each cluster
         colorblind_type = "Protanopia" if colorBlind else None
-        colors = distinctipy.get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
         symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
