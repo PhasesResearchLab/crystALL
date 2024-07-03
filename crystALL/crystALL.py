@@ -774,26 +774,25 @@ class CrystALLSearch:
 
         print(f"\nObjectives set for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.objectives)}{Style.RESET_ALL}\nTo select another set, use `update_objectives`.")
 
-    def check_objectives(
+    def __check_objectives(
             self
     ) -> None:
         """
-        Checks and returns the available objectives.
+        Checks available objectives with predictions.
 
         Raises:
             AssertionError: If no objectives are available.
 
         Returns:
-            List[str]: List of common objectives between self.objectives and self.availableObjectives.
+            List[str]: List of common objectives between self.availableObjectives and self.predictedObjectives.
         """
 
-        assert isinstance(self.objectives, list) and len(self.objectives) >= 1, "Objectives must be a list of strings with at least one objective."
+        assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "Objectives must be a list of strings with at least one objective."
         
-        if any(value not in self.availableObjectives for value in self.objectives):
-            existing_objectives = list(set(self.availableObjectives) & set(self.objectives))
+        if any(value not in self.predictedObjectives for value in self.availableObjectives):
             print("\nSome objectives do not have predictions calculated and will not be considered for clustering.")
-            for obj in self.objectives:
-                if obj not in existing_objectives:
+            for obj in self.availableObjectives:
+                if obj not in self.predictedObjectives:
                     print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                 else:
                     print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
@@ -869,7 +868,7 @@ class CrystALLSearch:
         else:
             self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, limit)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
-        self.candidates = [{"index": i + 1, "name": file, "hash": structureHashes(Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
+        self.candidates = [{"index": i + 1, "name": file} for i, file in enumerate(self.inputFiles)]
 
     def generate_local(
             self,
@@ -889,7 +888,7 @@ class CrystALLSearch:
         assert self.candidatePath, "No candidates folder identified. Please provide a path to the candidates folder."
         self.candidatePath = run_local(self.targetFormula, self.candidatePath)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
-        self.candidates = [{"index": i, "name": file, "hash": structureHashes(Structure.from_file(self.candidatePath + '/' + file))} for i, file in enumerate(self.inputFiles)]
+        self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
 
     def run_pysipfenn(
             self
@@ -999,7 +998,7 @@ class CrystALLSearch:
             candidate['index'] = i + 1
 
         # Update self.ks2022 to only include the values at the positions specified by the "index" key in the filtered self.candidates
-        indices = [candidate['index'] for candidate in self.candidates]
+        indices = [candidate['index'] - 1 for candidate in self.candidates]
         self.ks2022 = self.ks2022[indices]
 
         if max_candidates:
@@ -1146,8 +1145,7 @@ class CrystALLSearch:
 
     def __select_candidates(
             self,
-            clusters: dict,
-            objectives: List[str],
+            clusters: dict
     ) -> None:
         """
         Selects the best candidate per cluster for each objective and stores them in self.topCandidates.
@@ -1176,7 +1174,7 @@ class CrystALLSearch:
         self.topCandidates, i = [], 0
         for objective in objectives:
             for index in self.clusterAffiliation[objective].values():
-                self.topCandidates.append(self.candidates[index].copy())
+                self.topCandidates.append(self.candidates[index - 1].copy())
                 self.topCandidates[i].update({'objective': objective})
                 i += 1
 
