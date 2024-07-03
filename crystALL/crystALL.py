@@ -15,7 +15,6 @@ from distinctipy import get_colors
 from alignn import pretrained
 from pymongo.database import Database
 from scipy.spatial import ConvexHull
-from crystALL.structureHash import structureHashes
 
 from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
@@ -158,6 +157,7 @@ def run_MPDD(
         MPDD: Database,
         collections: List[str],
         targetPrototypes: Literal['Native', 'Anonymized'],
+        filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
 
@@ -191,7 +191,21 @@ def run_MPDD(
 
         for col in collections:
             print('Looking through: ' + col)
-            for e in MPDD[col].find({'material.reducedFormula' : rFormula}).limit(limit):
+
+            pipeline = [
+                {"$match": {"material.reducedFormula": rFormula}},
+                {"$group": {
+                    "_id": "$" + filterPrototypes,
+                    "document": {"$first": "$$ROOT"}
+                }},
+                {"$limit": limit}
+            ]
+
+            aggregated_data = list(MPDD[col].aggregate(pipeline))
+
+            for entry in aggregated_data:
+
+                e = entry['document']
 
                 s = Structure.from_dict(json.loads(e['material']['mgJSON']))
                 spGroupA = SpacegroupAnalyzer(s)
@@ -256,9 +270,22 @@ def run_MPDD(
         #Substitute over all candidates over all of their permutations
         allS = 0
         for col in collections:
-            for candidate in MPDD[col].find(
-                    {'material.anonymizedFormula' : aFormula}
-                    ).hint([('material.anonymizedFormula', 1)]).limit(limit):
+            print('Looking through: ' + col)
+
+            pipeline = [
+                {"$match": {"material.anonymizedFormula": aFormula}},
+                {"$group": {
+                    "_id": "$" + filterPrototypes,
+                    "document": {"$first": "$$ROOT"}
+                }},
+                {"$limit": limit}
+            ]
+
+            aggregated_data = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}))
+
+            for entry in aggregated_data:
+
+                candidate = entry['document']
 
                 s = Structure.from_dict(json.loads(candidate['material']['mgJSON']))
 
@@ -305,6 +332,7 @@ def run_compositional_MPDD(
         MPDD: Database,
         collections: List[str],
         targetPrototypes: Literal['Native', 'Anonymized'],
+        filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
 
@@ -335,7 +363,21 @@ def run_compositional_MPDD(
         targetPresent = 0
         for col in collections:
             print('Looking through: ' + col)
-            for e in MPDD[col].find(nativeQuery).limit(limit):
+
+            pipeline = [
+                {"$match": nativeQuery},
+                {"$group": {
+                    "_id": "$" + filterPrototypes,
+                    "document": {"$first": "$$ROOT"}
+                }},
+                {"$limit": limit}
+            ]
+
+            aggregated_data = list(MPDD[col].aggregate(pipeline))
+
+            for entry in aggregated_data:
+
+                e = entry['document']
 
                 s = Structure.from_dict(json.loads(e['material']['mgJSON']))
                 spGroupA = SpacegroupAnalyzer(s)
@@ -399,18 +441,31 @@ def run_compositional_MPDD(
 
         # Search all collections using the compound index for the first 8 components
         for col in collections:
-            for candidate in MPDD[col].find(
-                    sortedFractionsDictQuery
-            ).hint([
-                ('material.sortedFractionsDict.c1', 1),
-                ('material.sortedFractionsDict.c2', 1),
-                ('material.sortedFractionsDict.c3', 1),
-                ('material.sortedFractionsDict.c4', 1),
-                ('material.sortedFractionsDict.c5', 1),
-                ('material.sortedFractionsDict.c6', 1),
-                ('material.sortedFractionsDict.c7', 1),
-                ('material.sortedFractionsDict.c8', 1)
-            ]).limit(limit):
+            print('Looking through: ' + col)
+
+            pipeline = [
+                {"$match": sortedFractionsDictQuery},
+                {"$group": {
+                    "_id": "$" + filterPrototypes,
+                    "document": {"$first": "$$ROOT"}
+                }},
+                {"$limit": limit}
+            ]
+
+            aggregated_data = list(MPDD[col].aggregate(pipeline, hint={
+                'material.sortedFractionsDict.c1': 1,
+                'material.sortedFractionsDict.c2': 1,
+                'material.sortedFractionsDict.c3': 1,
+                'material.sortedFractionsDict.c4': 1,
+                'material.sortedFractionsDict.c5': 1,
+                'material.sortedFractionsDict.c6': 1,
+                'material.sortedFractionsDict.c7': 1,
+                'material.sortedFractionsDict.c8': 1
+            }))
+
+            for entry in aggregated_data:
+
+                candidate = entry['document']
 
                 s = Structure.from_dict(json.loads(candidate['material']['mgJSON']))
                 c = Composition(s.formula)
@@ -790,6 +845,7 @@ class CrystALLSearch:
     def generate_MPDD(
             self,
             targetPrototypes: Literal['Native', 'Anonymized'] = 'Anonymized',
+            filterPrototypes: Literal['material.structID', 'material.volNormStructID'] = 'material.structID',
             limit: int = 1000,
             devs: Dict[str, int] = None
     ) -> None:
@@ -913,35 +969,6 @@ class CrystALLSearch:
         for i, candidate in enumerate(self.candidates):
             average_prediction = sum(candidate[pred] for pred in self.availableObjectives) / len(self.availableObjectives)
             self.candidates[i].update({f'Avg of Formation Energy': average_prediction})
-
-    def filter_prototypes(
-            self,
-            hashID: str,
-            typeID: str = 'structID'
-    ) -> None:
-        """
-        Filters prototypes based on either ``structID`` or ``volNormStructID``. Must be run BEFORE featurizarion by ``run_pysipfenn``.
-        """
-
-        assert self.candidatePath is not None, "No candidates folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert typeID in ['structID', 'volNormStructID'], 'typeID must be either ``structID`` or ``volNormStructID``.'
-
-        if typeID == 'structID':
-            self.candidates = [candidate for candidate in self.candidates if candidate['hash']['material.structID'] == hashID]
-        
-        elif typeID == 'volNormStructID':
-            self.candidates = [candidate for candidate in self.candidates if candidate['hash']['material.volNormStructID'] == hashID]
-
-        # Delete files not in filtered self.candidates
-        for filename in os.listdir(self.candidatePath):
-            if filename not in {candidate['name'] for candidate in self.candidates}:
-                os.remove(os.path.join(self.candidatePath, filename))
-
-        # Update the 'index' key of each dictionary in self.candidates to its position in the list
-        for i, candidate in enumerate(self.candidates):
-            candidate['index'] = i + 1
-
-        print(f"Filtered candidates to {Fore.GREEN}{Style.BRIGHT}{len(self.candidates)}{Style.RESET_ALL} based on prototypes with {typeID} = {hashID}")
 
     def filter_candidates(
             self,
