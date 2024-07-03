@@ -718,7 +718,7 @@ class CrystALLSearch:
         
         # Internal parameters to use during the processing steps
         self.availableCollections: List[str] = None
-        self.availableObjectives: List[str] = []
+        self.predictedObjectives: List[str] = []
         self.inputFiles: List[str] = None
         self.ks2022: np.ndarray = None
         self.figure: Figure = None
@@ -769,10 +769,10 @@ class CrystALLSearch:
             print(f"\nNo models compatible with 'KS2022' were specified in the Calculator.")
             self.Calculator.loadModels(network = alternative_model)
         
-        self.objectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
-        self.objectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.alignn_models else []
+        self.availableObjectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
+        self.availableObjectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.alignn_models else []
 
-        print(f"\nObjectives set for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.objectives)}{Style.RESET_ALL}\nTo select another set, use `update_objectives`.")
+        print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.availableObjectives)}{Style.RESET_ALL}.")
 
     def __check_objectives(
             self
@@ -796,11 +796,6 @@ class CrystALLSearch:
                     print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                 else:
                     print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
-            objectives = existing_objectives
-        else:
-            objectives = self.objectives
-       
-        return objectives
 
     def download_models(
             self
@@ -864,9 +859,9 @@ class CrystALLSearch:
         assert devs is None or isinstance(devs, dict), "Deviations must be a dictionary with element symbols as keys and integer values as deviations"
 
         if devs is None:
-            self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, targetPrototypes, limit)
+            self.candidatePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
         else:
-            self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, limit)
+            self.candidatePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
         self.candidates = [{"index": i + 1, "name": file} for i, file in enumerate(self.inputFiles)]
 
@@ -904,9 +899,9 @@ class CrystALLSearch:
         assert isinstance(self.candidatePath, str), "Candidates folder path must be a string"
         assert self.pysipfenn_models, "pySIPFENN models not found. Please run ``download_models`` first."
 
-        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.objectives)):
-            if model not in self.availableObjectives:
-                self.availableObjectives.append(model)
+        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.availableObjectives)):
+            if model not in self.predictedObjectives:
+                self.predictedObjectives.append(model)
         
         self.Calculator.runFromDirectory(self.candidatePath, 'KS2022', mode='parallel', max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDicts(), np.array(self.Calculator.descriptorData)
@@ -935,8 +930,8 @@ class CrystALLSearch:
         assert self.alignn_models, "MPDD-ALIGNN models not found. Please run ``download_models`` first."
         
         for model_dict in pretrained.get_default_models():
-            if model_dict['name'] in self.objectives and model_dict['name'] not in self.availableObjectives:
-                self.availableObjectives.append(model_dict['name'])
+            if model_dict['name'] in self.availableObjectives and model_dict['name'] not in self.predictedObjectives:
+                self.predictedObjectives.append(model_dict['name'])
         
         print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
         print('Calculating descriptors...')
@@ -962,11 +957,11 @@ class CrystALLSearch:
         """
 
         assert len(self.candidates) > 0, "No candidates identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert self.availableObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert self.predictedObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
 
         # Calculate the average of the predictions
         for i, candidate in enumerate(self.candidates):
-            average_prediction = sum(candidate[pred] for pred in self.availableObjectives) / len(self.availableObjectives)
+            average_prediction = sum(candidate[pred] for pred in self.predictedObjectives) / len(self.predictedObjectives)
             self.candidates[i].update({f'Avg of Formation Energy': average_prediction})
 
     def filter_candidates(
@@ -1162,7 +1157,7 @@ class CrystALLSearch:
         
         # Select the best candidate per cluster based on the minimum predicted property
         self.clusterAffiliation = {}
-        for objective in objectives:
+        for objective in self.predictedObjectives:
             print(f"\nObjective: {objective}")
             self.clusterAffiliation[objective] = {}
             for label, cluster in sorted(clusters.items()):
@@ -1172,7 +1167,7 @@ class CrystALLSearch:
         
         # Create a list of top candidates
         self.topCandidates, i = [], 0
-        for objective in objectives:
+        for objective in self.predictedObjectives:
             for index in self.clusterAffiliation[objective].values():
                 self.topCandidates.append(self.candidates[index - 1].copy())
                 self.topCandidates[i].update({'objective': objective})
@@ -1219,14 +1214,14 @@ class CrystALLSearch:
         
         if 'topCandidates' in content:
             file_name = 'topCandidates.csv' if file_prefix == '' else file_prefix + '_topCandidates.csv'
-            topCandidates_exported = [d for d in self.topCandidates if d['objective'] in self.objectives]
+            topCandidates_exported = [d for d in self.topCandidates if d['objective'] in self.availableObjectives]
             
             with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, topCandidates_exported[0].keys())
                 dict_writer.writeheader()
                 dict_writer.writerows(topCandidates_exported)
             
-            print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.objectives)} objectives to {file_name}")
+            print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.predictedObjectives)} Objective(s) to {file_name}")
   
     def plot_2D(
             self,
@@ -1237,9 +1232,9 @@ class CrystALLSearch:
             colorBlind: bool = False
     ) -> None:
         
-        objective = objective if objective is not None else self.objectives[0]
+        objective = objective if objective is not None else self.availableObjectives[0]
 
-        assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
+        assert objective in self.predictedObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.predictedObjectives)
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
         assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
 
@@ -1371,9 +1366,9 @@ class CrystALLSearch:
             colorBlind: bool = False
     ) -> None:
 
-        objective = objective if objective is not None else self.objectives[0]
+        objective = objective if objective is not None else self.availableObjectives[0]
 
-        assert objective in self.availableObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.availableObjectives)
+        assert objective in self.predictedObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.predictedObjectives)
         assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
         assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
 
