@@ -1008,9 +1008,9 @@ class CrystALLSearch:
         else:
             print(f"Filtered candidates to {Fore.GREEN}{Style.BRIGHT}{len(self.candidates)}{Style.RESET_ALL} based on the cutoff value of {cutoff}")
 
-    def embed_features(
+    def __embed_features(
             self,
-            sameComposition: bool = False
+            sameComposition: bool
     ) -> None:
         """
         Embeds the features in 2D t-SNE space.
@@ -1062,10 +1062,10 @@ class CrystALLSearch:
             print(f"At least 5 candidates are required to run `cluster_candidates`. {len(self.candidates)} found.")
             return
 
-        objectives = self.check_objectives()
+        self.__check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.embed_features(sameComposition)
+        self.__embed_features(sameComposition)
 
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
@@ -1091,7 +1091,7 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.candidates[i])
 
         # Select the best candidate per cluster and Create a list of top candidates
-        self.__select_candidates(clusters, objectives)
+        self.__select_candidates(clusters)
 
     def cluster_candidates_DBSCAN(
             self,
@@ -1142,7 +1142,7 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.candidates[i])
       
         # Select the best candidate per cluster and Create a list of top candidates
-        self.__select_candidates(clusters, objectives)
+        self.__select_candidates(clusters)
 
     def __select_candidates(
             self,
