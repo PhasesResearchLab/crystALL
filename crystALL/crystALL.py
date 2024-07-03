@@ -1122,10 +1122,10 @@ class CrystALLSearch:
             print(f"At least 5 candidates are required to run `cluster_candidates`. {len(self.candidates)} found.")
             return
 
-        objectives = self.check_objectives()
+        self.__check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.embed_features(sameComposition)
+        self.__embed_features(sameComposition)
 
         # Cluster the candidates using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
