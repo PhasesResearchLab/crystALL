@@ -4,6 +4,7 @@ import math, re, json, csv
 import numpy as np
 import pandas as pd
 
+from tqdm import tqdm
 from typing import List, Dict, Union, Literal
 from natsort import natsorted
 from itertools import groupby, permutations, product
@@ -1066,8 +1067,7 @@ class CrystALLSearch:
         # Determine the optimal number of clusters using silhouette score
         sil_dict = {}
         k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(self.embeddedks2022) - 1, 40).astype(int))
-        for i, k in enumerate(k_range):
-            print(f"Processing.. {round(100*i/len(k_range),2)} %") if i != 0 else None
+        for k in tqdm(k_range, desc="Processing", ncols=100, bar_format="{l_bar}{bar}{r_bar}"):
             kmeans = KMeans(n_clusters=k, n_init=500, max_iter=500, random_state=580)
             clusterData = kmeans.fit(self.embeddedks2022)
             sil_score = silhouette_score(self.embeddedks2022, kmeans.labels_)
