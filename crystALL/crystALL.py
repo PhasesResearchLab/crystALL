@@ -33,11 +33,11 @@ from plotly.graph_objs import Figure
 # Run candidate identification and elemental substitution for permutations within the anonymous formula.
 def run_local(
         targetFormula: Union[str, Composition],
-        candidatePath: str
+        prototypePath: str
     ) -> str:
     
     print(f'\nSearching for structure candidates for: {targetFormula}')
-    print('Structure candidate dataset:\n' + candidatePath)
+    print('Structure prototype dataset:\n' + prototypePath)
 
     if isinstance(targetFormula, str):
         #Formula to pymatgen Composition
@@ -46,18 +46,18 @@ def run_local(
         composition = targetFormula
     else:
         raise ValueError('Target formula must be a string or a pymatgen Composition object')
-    assert os.path.isdir(candidatePath), 'Candidate path must be a valid directory'
+    assert os.path.isdir(prototypePath), 'Prototype path must be a valid directory'
 
     aFormula = composition.anonymized_formula
     nElements = composition.to_data_dict['nelements']
 
-    #Initial candidate dataset scan
-    fileList = natsorted(os.listdir(candidatePath))
+    #Initial prototype dataset scan
+    fileList = natsorted(os.listdir(prototypePath))
     total = fileList.__len__()
     print(str(total)+' files detected\n')
     #Intermediate directory for identified candidates
     try:
-        os.mkdir(os.path.split(candidatePath)[1] + '-' + aFormula)
+        os.mkdir(os.path.split(prototypePath)[1] + '-' + aFormula)
         print('Intermediate directory for '+aFormula+' created.')
     except FileExistsError:
         print('Intermediate directory for '+aFormula+' already exist.\nCandidates selection will be overwritten/updated.\n')
@@ -71,12 +71,12 @@ def run_local(
     for file in fileList:
         allS = allS + 1
         if os.path.splitext(file)[1] == '.POSCAR':
-            s = Structure.from_file(candidatePath +'/'+ file)
+            s = Structure.from_file(prototypePath +'/'+ file)
             if s.ntypesp == nElements:
                 nEl = nEl + 1
                 if Composition(s.formula).anonymized_formula == aFormula:
                     sP = Poscar(s)
-                    sP.write_file(os.path.split(candidatePath)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
+                    sP.write_file(os.path.split(prototypePath)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
                     aF = aF + 1
                     if aF % 100 == 0:
                         print(str(aF) + ' candidate structures identified.')
@@ -90,7 +90,7 @@ def run_local(
     print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%')
 
     #List selected candidates
-    candidateList = natsorted(os.listdir(os.path.split(candidatePath)[1] + '-' + aFormula))
+    candidateList = natsorted(os.listdir(os.path.split(prototypePath)[1] + '-' + aFormula))
 
     #Substitution elements combination.
     print('{0:*^80}'.format('Substituting elements in the candidates.'))
@@ -110,9 +110,9 @@ def run_local(
     else:
         print('\nTarget composition indicates discrete element substitution.')
 
-    intPath = f"{os.path.split(candidatePath)[1]}-{aFormula}"
+    intPath = f"{os.path.split(prototypePath)[1]}-{aFormula}"
     print('Intermediate Directory: ' + intPath)
-    finPath = f"{os.path.split(candidatePath)[1]}-{targetFormula}"
+    finPath = f"{os.path.split(prototypePath)[1]}-{targetFormula}"
     print('Final Directory: ' + finPath)
     try:
         os.mkdir(finPath)
@@ -531,7 +531,7 @@ def estimate_compositional_MPDD(
     # Sorted fractions dictionary query
     sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
 
-    print(f'\nDetecting Candidates for substitution into {meanFormula} under allowed deviations {rangesStr}')
+    print(f'\nDetecting Prototypes for substitution into {meanFormula} under allowed deviations {rangesStr}')
     foundTotal = 0
     for col in collections:
         foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
@@ -663,7 +663,7 @@ def orderedAllowedSubstitutions(
         candidateCompDict: Dict[str, int]
     ) -> List[List[str]]:
 
-    # Finds what eleemnts can be used for substitution
+    # Finds what elements can be used for substitution
     allInRangeSubstitutions = []
     for c in candidateCompDict:
         inRangeSubstitutions = []
@@ -699,14 +699,14 @@ class CrystALLSearch:
             targetFormula: Union[str, Composition],
             MPDD: Database = None,
             collections: List[str] = None,
-            candidatePath: str = None,
+            prototypePath: str = None,
             calculator: Calculator = None
     ) -> None:
         
         # Defined at initialization
         self.MPDD = MPDD
         self.collections = collections
-        self.candidatePath = candidatePath
+        self.prototypePath = prototypePath
         if isinstance(targetFormula, str):
             self.targetFormula = Composition(targetFormula)
         elif isinstance(targetFormula, Composition):
@@ -867,21 +867,21 @@ class CrystALLSearch:
 
     def generate_local(
             self,
-            candidatePath: str = None
+            prototypePath: str = None
     ) -> None:
         """
         Generates candidates from a local directory containing POSCAR or CIF files.
 
         Args:
-            candidatePath: Path to the directory with candidate files. If not provided, uses the existing path.
+            prototypePath: Path to the directory with candidate files. If not provided, uses the existing path.
 
         Raises:
             AssertionError: If no candidate directory is specified.
         """
 
-        self.candidatePath = candidatePath if candidatePath is not None else self.candidatePath
-        assert self.candidatePath, "No candidates folder identified. Please provide a path to the candidates folder."
-        self.candidatePath = run_local(self.targetFormula, self.candidatePath)
+        self.prototypePath = prototypePath if prototypePath is not None else self.prototypePath
+        assert self.prototypePath, "No prototypes folder identified. Please provide a path to the candidates folder."
+        self.candidatePath = run_local(self.targetFormula, self.prototypePath)
         self.inputFiles = natsorted(os.listdir(self.candidatePath))
         self.candidates = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
 
