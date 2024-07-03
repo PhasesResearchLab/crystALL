@@ -1326,7 +1326,8 @@ class CrystALLSearch:
         shapes = []
         for i, cluster in enumerate(df['cluster'].unique()):
             df_cluster = df[df['cluster'] == cluster]
-            if len(df_cluster) >= 3:  # ConvexHull requires at least 3 points
+            points = df_cluster[['x', 'y']].values
+            if not np.linalg.matrix_rank(points - points[0], tol=1e-12) < 2 and len(df_cluster) >= 3: # Ensures at least 3 points that are not collinear
                 hull = ConvexHull(df_cluster[['x', 'y']])
                 polygon = {
                     'type': 'path',
