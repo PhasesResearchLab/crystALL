@@ -82,7 +82,7 @@ def run_local(
         allS = allS + 1
         if os.path.splitext(file)[1] == '.POSCAR':
             s = Structure.from_file(prototypePath +'/'+ file)
-            if s.ntypesp == nElements:
+            if s.n_elems == nElements:
                 nEl = nEl + 1
                 if Composition(s.formula).anonymized_formula == aFormula:
                     sP = Poscar(s)
