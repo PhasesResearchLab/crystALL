@@ -8,8 +8,6 @@ import crystall
 
 from pymatgen.core import Structure, Composition
 
-import crystall.crystALL
-
 from pymongo import MongoClient
 
 class TestMPDD(unittest.TestCase):

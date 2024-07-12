@@ -7,8 +7,6 @@ import crystall
 
 from pymatgen.core import Structure, Composition
 
-import crystall.crystALL
-
 class TestLocal(unittest.TestCase):
     """Test the local runtime of crystALL based on the ``testFiles/localTest`` directory with A8B22 sigma phase structure candidates."""
 
