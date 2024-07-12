@@ -4,8 +4,17 @@
 curated*
 /local/
 runner*
+
 # Python egg metadata
 *.egg-info
 
 # crystaALL test outputs
 **/localTest-*
+
+# General
+.DS_Store
+
+# Some extras for user convenience. Uncomment as needed.
+#*.POSCAR
+#*.CIF
+#*.xyz
