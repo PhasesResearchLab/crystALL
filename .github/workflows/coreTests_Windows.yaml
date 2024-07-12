@@ -1,4 +1,4 @@
-name: Linux
+name: Windows
 
 on: 
   push:
@@ -24,10 +24,10 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
       
-      - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.11.0
-        with:
-          mongodb-version: '6.0'
+      - name: Start MongoDB (Windows)
+        run: |
+          Set-Service mongodb -StartupType Automatic          
+          Start-Service -Name mongodb
     
       - name: Install dependencies
         run: |
