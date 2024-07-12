@@ -1,33 +1,42 @@
-#Import libraries
-import sys, os, io
-import math, re, json, csv
-import numpy as np
-import pandas as pd
-
-from tqdm import tqdm
-from typing import List, Dict, Union, Literal
-from natsort import natsorted
+# Base Python imports
+import sys
+import os
+import io
+import math
+import re
+import json
+import csv
 from itertools import groupby, permutations, product
 from operator import itemgetter
 from importlib import resources
 from statistics import mean
+from typing import List, Dict, Union, Literal
+
+# Common tool libraries
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from natsort import natsorted
 from colorama import Fore, Style
 from distinctipy import get_colors
-from alignn import pretrained
+from plotly.offline import plot, iplot
+from plotly.graph_objs import Figure
+
+# ML / Data
 from pymongo.database import Database
 from scipy.spatial import ConvexHull
-
-from pymatgen.core import Structure, Composition, Element
-from pymatgen.io.vasp.inputs import Poscar
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pysipfenn import Calculator
-from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans, DBSCAN
-from plotly.offline import plot, iplot
-from plotly.graph_objs import Figure
+
+# Atomistic / Atomistic ML
+from pysipfenn import Calculator
+from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
+from alignn import pretrained #mpdd-align fork!
+from pymatgen.core import Structure, Composition, Element
+from pymatgen.io.vasp.inputs import Poscar
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 
 # *********** Top-Level Functions ***********
