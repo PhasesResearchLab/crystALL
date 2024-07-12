@@ -13,7 +13,7 @@ class TestLocal(unittest.TestCase):
     def setUp(self) -> None:
         """Set targets and ensure that the output directories ``localTest-A4B11`` and ``localTest-Ni22Ru8`` are not present."""
         self.targetFormula = "Ni22Ru8"
-        self.prototypePath = "testFiles/localTest"
+        self.prototypePath = "tests/testFiles/localTest"
         
         with self.subTest("Check the existence of the output directories"):
             assert not os.path.exists("localTest-Ni22Ru8"), "localTest-Ni22Ru8 directory is present and results may be overwritten if the test proceeds."
@@ -50,11 +50,11 @@ class TestLocal(unittest.TestCase):
         """For each file in the localTest-A4B11 directory (filtering-only), verifies that it was present in the starting test files set based on either hash matching or Structure matching."""
         sourceContents = set()
         sourceStructures = list()
-        for file in os.listdir("testFiles/localTest"):
-            with open("testFiles/localTest/"+file, "r") as f:
+        for file in os.listdir(self.prototypePath):
+            with open(self.prototypePath+"/"+file, "r") as f:
                 contents = f.read()
                 sourceContents.add(hash(contents))
-                sourceStructures.append(Structure.from_file("testFiles/localTest/"+file))
+                sourceStructures.append(Structure.from_file(self.prototypePath+"/"+file))
         
         for file in os.listdir("localTest-A4B11"):
             with self.subTest("Check the presence of "+file+" in the prototype files"):

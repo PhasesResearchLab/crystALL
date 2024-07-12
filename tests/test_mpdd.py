@@ -20,7 +20,7 @@ class TestMPDD(unittest.TestCase):
         
         with self.subTest("Upload the test file to the database"):
             self.collection.drop()
-            with open("testFiles/MPDD_A4B11or13or17.json", "r") as f:
+            with open("tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
                 for entry in json.loads(f.read()):
                     entry["_id"] = entry["_id"]["$oid"]
                     self.collection.insert_one(entry)
