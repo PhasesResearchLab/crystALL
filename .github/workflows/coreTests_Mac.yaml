@@ -1,4 +1,4 @@
-name: Linux
+name: Mac M1
 
 on: 
   push:
@@ -24,10 +24,11 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
       
-      - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.11.0
-        with:
-          mongodb-version: '6.0'
+      - name: Install and run MongoDB
+        run: |
+          brew tap mongodb/brew
+          brew install mongodb-community@6.0
+          brew services start mongodb/brew/mongodb-community
     
       - name: Install dependencies
         run: |
