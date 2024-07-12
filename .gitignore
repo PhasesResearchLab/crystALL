@@ -4,3 +4,8 @@
 curated*
 /local/
 runner*
+# Python egg metadata
+*.egg-info
+
+# crystaALL test outputs
+**/localTest-*
