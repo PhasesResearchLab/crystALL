@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crystall"
+version = "0.5.0"
+authors = [
+  { name="Adam Krajewski", email="adam@phaseslab.org" },
+  { name="Ricardo Amaral", email="rna5137@psu.edu" },
+  { name="Jonathan Siegel", email="jwsiegel@tamu.edu" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Database :: Front-Ends",
+]
+description = "Pure data-driven structure prediction combining MPDD's Big Data (ALL 'crystals') from DFT with high-throughput substitutions, stability predictions, candidate selection, and DFT+experiment validation. Developed since 2021 and demonstrated in the identification of new atomic structures in Nd-Bi and Al-Fe systems."
+readme = "README.md"
+
+requires-python = ">=3.9"
+dependencies = [
+    "pysipfenn>=0.15.0",
+    "mpdd-alignn>=1.0.0",
+    "pymatgen>=2024.2.20",
+    "spglib==2.0.2",
+    "numpy>=1.26.0",
+    "tqdm>=4.65.0",
+    "natsort>=8.3.0",
+    "pymongo>=4.4",
+    "pysmartdl2>=2.0.0",
+    "dnspython",
+    "ruamel.yaml",
+    "colorama",
+    "distinctipy",
+    "scipy",
+    "scikit-learn"
+]
+
+[tool.setuptools]
+packages = { find = { exclude = ["paper", "oldfiles"] } }
+
+[project.urls]
+"Research Page" = "https://phaseslab.org"
+"Homepage" = "https://pysipfenn.org"
+"Bug Tracker" = "https://github.com/PhasesResearchLab/crystALL/issues"
