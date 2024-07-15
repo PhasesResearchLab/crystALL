@@ -745,7 +745,7 @@ class CrystALLSearch:
             for model_dict in pretrained.get_default_models():
                 if not os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
                     self.alignn_models = False
-                    print(f"{Style.DIM}✘ MPDD-ALIGNN models not found. Please run `download_models`.{Style.RESET_ALL}")
+                    print(f"{Style.DIM}x MPDD-ALIGNN models not found. Please run `download_models`.{Style.RESET_ALL}")
                     break
             if self.alignn_models:
                 print(f"{Fore.GREEN}✔ MPDD-ALIGNN models found.{Style.RESET_ALL}")
@@ -760,7 +760,7 @@ class CrystALLSearch:
         
         if not len(existingCompatibleModels) > 0:
             self.pysipfenn_models = False
-            print(f"{Style.DIM}✘ No pySIPFENN models compatible with 'KS2022' descriptor found. Please run `download_models`.{Style.RESET_ALL}")
+            print(f"{Style.DIM}x No pySIPFENN models compatible with 'KS2022' descriptor found. Please run `download_models`.{Style.RESET_ALL}")
         else:
             print(f"{Fore.GREEN}✔ pySIPFENN models found.{Style.RESET_ALL}")
             self.update_objectives(self.Calculator)
@@ -803,7 +803,7 @@ class CrystALLSearch:
             print("\nSome objectives do not have predictions calculated and will not be considered for clustering.")
             for obj in self.availableObjectives:
                 if obj not in self.predictedObjectives:
-                    print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                    print(f"{Style.DIM}x {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                 else:
                     print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
 
