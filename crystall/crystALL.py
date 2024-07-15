@@ -814,8 +814,8 @@ class CrystALLSearch:
         Downloads the default models for both pySIPFENN and MPDD-ALIGNN.
         """        
         
-        print(f"Downloading models for pysipfenn..")
-        self.Calculator.downloadModels()
+        print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
+        self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
         print(f"Downloading models for MPDD-alignn..")
         pretrained.download_default_models()
         print(f"Done! Models are ready to use.")
