@@ -122,7 +122,7 @@ def run_local(
 
     intPath = f"{os.path.split(prototypePath)[1]}-{aFormula}"
     print('Intermediate Directory: ' + intPath)
-    finPath = f"{os.path.split(prototypePath)[1]}-{targetFormula}"
+    finPath = f"{os.path.split(prototypePath)[1]}-{str(targetFormula).replace(' ', '')}"
     print('Final Directory: ' + finPath)
     try:
         os.mkdir(finPath)
@@ -191,7 +191,7 @@ def run_MPDD(
 
     if targetPrototypes == 'Native':
 
-        natPath = f"{'_'.join(collections)}-native-{targetFormula}"
+        natPath = f"{'_'.join(collections)}-native-{str(targetFormula).replace(' ', '')}"
 
         try:
             os.mkdir(natPath)
@@ -268,7 +268,7 @@ def run_MPDD(
         else:
             print('\nTarget composition indicates discrete element substitution.')
 
-        finPath = f"{'_'.join(collections)}-{targetFormula}"
+        finPath = f"{'_'.join(collections)}-{str(targetFormula).replace(' ', '')}"
         print('Final Candidate Directory: ' + finPath)
 
         try:
