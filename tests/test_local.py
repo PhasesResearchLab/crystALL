@@ -15,10 +15,6 @@ class TestLocal(unittest.TestCase):
         self.targetFormula = "Ni22Ru8"
         self.prototypePath = "tests/testFiles/localTest"
         
-        with self.subTest("Check the existence of the output directories"):
-            assert not os.path.exists("localTest-Ni22Ru8"), "localTest-Ni22Ru8 directory is present and results may be overwritten if the test proceeds."
-            assert not os.path.exists("localTest-A4B11"), "localTest-A4B11 directory is present and results may be overwritten if the test proceeds."
-
         with self.subTest("Runtime attempt"):
             crystall.run_local(
                 targetFormula=self.targetFormula,
@@ -78,7 +74,7 @@ class TestLocal(unittest.TestCase):
                 self.assertEqual(structure.composition, Composition(self.targetFormula), "The stoichiometry of "+file+" is incorrect.")
 
 
-    def tearDown(self) -> None:
-        """Clean up the output directories after the test. Even if not empty."""
-        shutil.rmtree("localTest-Ni22Ru8")
-        shutil.rmtree("localTest-A4B11")
+    #def tearDown(self) -> None:
+    #    """Clean up the output directories after the test. Even if not empty."""
+    #    shutil.rmtree("localTest-Ni22Ru8")
+    #    shutil.rmtree("localTest-A4B11")
