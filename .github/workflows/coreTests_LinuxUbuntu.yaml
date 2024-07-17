@@ -42,7 +42,7 @@ jobs:
           pytest -s --durations=0 --cov=crystall --cov-report=html
       
       - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: html-coverage-report
           path: htmlcov/
