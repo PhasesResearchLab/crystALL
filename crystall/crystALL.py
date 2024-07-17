@@ -748,7 +748,7 @@ class CrystALLSearch:
                     print(f"{Style.DIM}x MPDD-ALIGNN models not found. Please run `download_models`.{Style.RESET_ALL}")
                     break
             if self.alignn_models:
-                print(f"{Fore.GREEN}✔ MPDD-ALIGNN models found.{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}√ MPDD-ALIGNN models found.{Style.RESET_ALL}")
 
         # Check if pySIPFENN models are available
         self.pysipfenn_models = True
@@ -762,7 +762,7 @@ class CrystALLSearch:
             self.pysipfenn_models = False
             print(f"{Style.DIM}x No pySIPFENN models compatible with 'KS2022' descriptor found. Please run `download_models`.{Style.RESET_ALL}")
         else:
-            print(f"{Fore.GREEN}✔ pySIPFENN models found.{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}√ pySIPFENN models found.{Style.RESET_ALL}")
             self.update_objectives(self.Calculator)
 
     def update_objectives(
@@ -805,7 +805,7 @@ class CrystALLSearch:
                 if obj not in self.predictedObjectives:
                     print(f"{Style.DIM}x {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                 else:
-                    print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}√ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
 
     def download_models(
             self
