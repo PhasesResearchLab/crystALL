@@ -1104,9 +1104,9 @@ class CrystALLSearch:
         # Select, Scale and Embed features in 2D and 3D t-SNE space
         scaler = MinMaxScaler()
         self.scaledks2022 = scaler.fit_transform(features2use)
-        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
+        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
         self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
-        tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', n_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
+        tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = -1, random_state = 580)
         self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
         
     def cluster_prototypes_KMeans(
