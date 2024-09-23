@@ -1346,7 +1346,7 @@ class CrystALLSearch:
                                     ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
                                     ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
-            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
+            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Entries': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
             
             if markerSymbol and len(df['cluster'].unique()) <= 8:
                 symbol = symbols[i]
@@ -1368,7 +1368,7 @@ class CrystALLSearch:
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
                     size=5, 
-                    color=color_discrete_map['Other Cluster Members'],  # set the color for other cluster members
+                    color=color_discrete_map['Other Cluster Entries'],  # set the color for other cluster members
                     symbol=symbol
                 )
             )
@@ -1414,12 +1414,6 @@ class CrystALLSearch:
         layout = dict(
             shapes=shapes,
             template='plotly_white',  # use the plotly_white template
-            xaxis=dict(
-                title=f'{len(self.scaledks2022[0])}D->2D TSNE3',
-            ),
-            yaxis=dict(
-                title=f'{len(self.scaledks2022[0])}D->2D TSNE3'
-            ),
             height=500,  # set the height of the plot
             width=500,  # set the width of the plot
             title=f'Embedded Prototypes ({len(self.scaledks2022[0])}D ➡ 2D t-SNE space)<br><sub>🟠 Top Candidates ({objective})</sub>'  # add the title here
@@ -1481,7 +1475,7 @@ class CrystALLSearch:
                                     ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
                                     ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
-            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Members': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
+            color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Entries': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
 
             if markerSymbol and len(df['cluster'].unique()) <= 8:
                 symbol = symbols[i]
@@ -1504,7 +1498,7 @@ class CrystALLSearch:
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
                     size=3, 
-                    color=color_discrete_map['Other Cluster Members'],  # set the color for other cluster members
+                    color=color_discrete_map['Other Cluster Entries'],  # set the color for other cluster members
                     symbol=symbol
                 )
             )
@@ -1538,7 +1532,7 @@ class CrystALLSearch:
                 x = df_cluster['x'], 
                 y = df_cluster['y'],
                 z = df_cluster['z'],
-                color=color_discrete_map['Other Cluster Members'],  # set the color of the mesh
+                color=color_discrete_map['Other Cluster Entries'],  # set the color of the mesh
                 hoverinfo = 'text+name'  # don't show any hover information for the mesh
             )
             data.append(mesh)
@@ -1546,9 +1540,9 @@ class CrystALLSearch:
         layout = dict(
             template='plotly_white',  # use the plotly_white template
             scene=dict(
-                xaxis_title=f'{len(self.scaledks2022[0])}D->3D TSNE3',
-                yaxis_title=f'{len(self.scaledks2022[0])}D->3D TSNE3',
-                zaxis_title=f'{len(self.scaledks2022[0])}D->3D TSNE3'
+                xaxis_title='',
+                yaxis_title='',
+                zaxis_title=''
             ),
             height=500,  # set the height of the plot
             width=500,  # set the width of the plot
