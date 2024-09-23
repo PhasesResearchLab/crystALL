@@ -137,9 +137,9 @@ def run_local(
 
         permuts = elementPermutations(sortedElementsList(Composition(s.formula)))
         spGroupA = SpacegroupAnalyzer(s)
-        fileSplit = candidate.split('.')
-        newNameRoot = fileSplit[0] + '-' + spGroupA.get_crystal_system() + '-' + str(
-            spGroupA.get_space_group_number()) + '-'
+        fileSplit = prototype.split('.')
+        newNameRoot = fileSplit[0] + '-' + str(
+            spGroupA.get_space_group_symbol()) + '-'
 
         p = 0
         for permut in permuts:
@@ -150,9 +150,9 @@ def run_local(
                 d.update({Element(permut[e]): Element(sELtarget[e])})
             st.replace_species(d)
             if permuts.__len__() > 1:
-                newName = newNameRoot + str.replace(st.formula, ' ', '') + '-permutation' + str(p) + '.POSCAR'
+                newName = newNameRoot + '-p' + str(p) + '.POSCAR'
             else:
-                newName = newNameRoot + str.replace(st.formula, ' ', '') + '.POSCAR'
+                newName = newNameRoot + '.POSCAR'
             sP = Poscar(st)
             sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
         allS = allS + p
@@ -191,7 +191,7 @@ def run_MPDD(
 
     if targetPrototypes == 'Native':
 
-        natPath = f"{'_'.join(collections)}-native-{str(targetFormula).replace(' ', '')}"
+        natPath = f"{str(targetFormula).replace(' ', '')}-{'_'.join(collections)}-native-prototypes"
 
         try:
             os.mkdir(natPath)
@@ -220,13 +220,13 @@ def run_MPDD(
                 s = Structure.from_dict(json.loads(e['material']['mgJSON']))
                 spGroupA = SpacegroupAnalyzer(s)
 
-                name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
-                    spGroupA.get_space_group_number())
+                name = e['material']['formula'].replace(' ', '') + '-' + str(
+                    spGroupA.get_space_group_symbol())
 
                 if 'parentDatabaseID' in e['metadata']:
-                    name = name + '-' + e['metadata']['parentDatabaseID']
+                    name = name + e['metadata']['parentDatabaseID']
                     if 'parentDatabaseURL' in e['metadata']:
-                        namePrint = name + '-' + e['metadata']['parentDatabaseURL']
+                        namePrint = name + e['metadata']['parentDatabaseURL']
                     else:
                         namePrint = name
                 else:
@@ -268,7 +268,7 @@ def run_MPDD(
         else:
             print('\nTarget composition indicates discrete element substitution.')
 
-        finPath = f"{'_'.join(collections)}-{str(targetFormula).replace(' ', '')}"
+        finPath = f"{str(targetFormula).replace(' ', '')}-{'_'.join(collections)}-prototypes"
         print('Final Prototype Directory: ' + finPath)
 
         try:
@@ -317,9 +317,9 @@ def run_MPDD(
                         d.update({Element(permut[e]): Element(sELtarget[e])})
                     st.replace_species(d)
                     if permuts.__len__() > 1:
-                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
+                        name = nameRoot + '-p' + str(p) + '.POSCAR'
                     else:
-                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
+                        name = nameRoot + '.POSCAR'
                     sP = Poscar(st)
                     sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
                 allS = allS + p
@@ -392,13 +392,13 @@ def run_compositional_MPDD(
                 s = Structure.from_dict(json.loads(e['material']['mgJSON']))
                 spGroupA = SpacegroupAnalyzer(s)
 
-                name = e['material']['formula'].replace(' ', '') + '-' + spGroupA.get_crystal_system() + '-' + str(
-                    spGroupA.get_space_group_number())
+                name = e['material']['formula'].replace(' ', '') + '-' + str(
+                    spGroupA.get_space_group_symbol())
 
                 if 'parentDatabaseID' in e['metadata']:
-                    name = name + '-' + e['metadata']['parentDatabaseID']
+                    name = name + e['metadata']['parentDatabaseID']
                     if 'parentDatabaseURL' in e['metadata']:
-                        namePrint = name + '-' + e['metadata']['parentDatabaseURL']
+                        namePrint = name + e['metadata']['parentDatabaseURL']
                     else:
                         namePrint = name
                 else:
@@ -492,12 +492,11 @@ def run_compositional_MPDD(
 
                 spGroupA = SpacegroupAnalyzer(s)
 
-                nameRoot = candidate['material']['reducedFormula'] + '-' + spGroupA.get_crystal_system() + '-' + \
-                        str(spGroupA.get_space_group_number())
+                nameRoot = prototype['material']['reducedFormula'] + '-' + \
+                        str(spGroupA.get_space_group_symbol())
 
-                if 'parentDatabaseID' in candidate['metadata']:
-                    nameRoot = nameRoot + '-' + candidate['metadata']['parentDatabaseID'].replace('/', '-').replace(':',
-                                                                                                                    '-')
+                if 'parentDatabaseID' in prototype['metadata']:
+                    nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/', '-').replace(':','-').replace('-', '')
 
                 p = 1
                 for substitutions in oAS:
@@ -508,10 +507,10 @@ def run_compositional_MPDD(
                     st.replace_species(d)
 
                     if len(oAS) > 1:
-                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '-permutation_' + str(p) + '.POSCAR'
+                        name = nameRoot + '-p' + str(p) + '.POSCAR'
                         p += 1
                     else:
-                        name = nameRoot + '-' + str.replace(st.formula, ' ', '') + '.POSCAR'
+                        name = nameRoot + '.POSCAR'
                     sP = Poscar(st)
                     sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
                 allS = allS + p
