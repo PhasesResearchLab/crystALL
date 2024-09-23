@@ -6,7 +6,7 @@ import math
 import re
 import json
 import csv
-from itertools import groupby, permutations, product
+from itertools import groupby, permutations, product, combinations
 from operator import itemgetter
 from importlib import resources
 from statistics import mean
@@ -37,6 +37,7 @@ from alignn import pretrained #mpdd-align fork!
 from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 
 
 # *********** Top-Level Functions ***********
@@ -974,7 +975,54 @@ class CrystALLSearch:
         self.calculate_average()
         
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(resultDicts)}{Style.RESET_ALL} prototypes using ALIGNN")
-        print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(resultDicts)}{Style.RESET_ALL} candidates using ALIGNN")
+
+    def get_mpdd_stability(
+            self
+    ) -> None:
+        
+        assert self.MPDD is not None, "No database connection identified. Please run ``connect_MPDD`` first."
+        assert len(self.prototypes) > 0, "No prototypes identified. Please run ``generate_MPDD`` or ``generate_local`` first."
+        
+        MPDDcurated = self.MPDD['curated']
+        
+        eList = self.targetFormula.chemical_system.split('-')
+        sysList = []
+        for nComponents in range(eList.__len__()):
+            for c in combinations(eList, 1+nComponents):
+                t = list(c)
+                t.sort()
+                sysList.append('-'.join(t))
+        
+        entriesForPD = []
+        formulaSet = set()
+        i = 0
+        for e in MPDDcurated.find(
+                {'material.system': {'$in': sysList},
+                'properties.STAB_SIPFENN_NN30': 0},
+                {'material.reducedFormula': 1, 'metadata.parentDatabaseID': 1,
+                'properties.EF_SIPFENN_NN30': 1}):
+            i += 1
+            formula = e['material']['reducedFormula']
+            comp = Composition(formula)
+            dH = e['properties']['EF_SIPFENN_NN30']
+
+            name = f'{formula}-{e["_id"]}'
+            if 'parentDatabaseID' in e['metadata']:
+                name = name + e['metadata']['parentDatabaseID']
+
+            if dH is not None:
+                pdEntry = PDEntry(comp, dH, name)
+                if pdEntry.composition not in formulaSet:
+                    entriesForPD.append(pdEntry)
+                    formulaSet.add(pdEntry.composition)
+
+        for prototype in self.prototypes:
+            pdEntry = PDEntry(self.targetFormula, prototype['SIPFENN_Krajewski2022_NN30'], prototype['name'])
+            entriesForPD.append(pdEntry)
+            pd = PhaseDiagram(entriesForPD)
+            stability = pd.get_e_above_hull(pdEntry)
+            prototype.update({'MPDD_Stability': stability})
+            entriesForPD.pop()
 
     def calculate_average(
             self
