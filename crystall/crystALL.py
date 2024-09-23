@@ -945,7 +945,7 @@ class CrystALLSearch:
         
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN")
     
-    def run_alignn(
+    def get_alignn_properties(
             self
     ) -> None:
         """
@@ -1035,7 +1035,7 @@ class CrystALLSearch:
         """
 
         assert len(self.prototypes) > 0, "No prototypes identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert self.predictedObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``run_alignn`` first."
+        assert self.predictedObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``get_alignn_properties`` first."
 
         # Calculate the average of the predictions
         for i, prototype in enumerate(self.prototypes):
