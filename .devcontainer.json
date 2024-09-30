@@ -21,5 +21,5 @@
        "memory": "16gb",
        "storage": "16gb"
     },
-    "onCreateCommand": "conda install -y python=3.9 && python -m pip install -r requirements.txt"
+    "onCreateCommand": "conda install -y python=3.9 && python -m pip install -r requirements.txt && python -m pip install torch==2.3.1"
 }
