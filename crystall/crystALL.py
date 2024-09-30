@@ -226,13 +226,9 @@ def run_MPDD(
 
                 if 'parentDatabaseID' in e['metadata']:
                     name = name + e['metadata']['parentDatabaseID']
-                    if 'parentDatabaseURL' in e['metadata']:
-                        namePrint = name + e['metadata']['parentDatabaseURL']
-                    else:
-                        namePrint = name
+
                 else:
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
-                    namePrint = name
 
                 p = Poscar(s)
                 p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
@@ -398,13 +394,9 @@ def run_compositional_MPDD(
 
                 if 'parentDatabaseID' in e['metadata']:
                     name = name + e['metadata']['parentDatabaseID']
-                    if 'parentDatabaseURL' in e['metadata']:
-                        namePrint = name + e['metadata']['parentDatabaseURL']
-                    else:
-                        namePrint = name
+
                 else:
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
-                    namePrint = name
 
                 p = Poscar(s)
                 p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
