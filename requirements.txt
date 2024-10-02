@@ -13,3 +13,4 @@ colorama
 distinctipy
 scipy
 scikit-learn
+ipywidgets
