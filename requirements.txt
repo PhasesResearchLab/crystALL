@@ -1,5 +1,6 @@
-pysipfenn>=0.15.0
-mpdd-alignn>=1.0.0
+pysipfenn==0.15.0
+torch==2.3.0
+dgl>=2.2.0
 pymatgen>=2024.2.20
 spglib==2.0.2
 numpy>=1.26.0
@@ -13,4 +14,5 @@ colorama
 distinctipy
 scipy
 scikit-learn
-ipywidgets
+ipykernel
+nbformat
