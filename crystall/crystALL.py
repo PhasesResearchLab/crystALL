@@ -770,7 +770,9 @@ class CrystALLSearch:
                     print(f"{Style.DIM}✘ {model} models not found.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
                     print(f"{Style.DIM}x {model} models not found.{Style.RESET_ALL}")
-            self.update_objectives(self.Calculator)
+
+        # Update objectives with models found
+        self.update_objectives(self.Calculator)
 
     def update_objectives(
             self,
@@ -778,18 +780,21 @@ class CrystALLSearch:
     ) -> None:
 
         assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
-        
-        loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
 
-        if not len(loadedCompatibleModels) > 0:
-            alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
-            print(f"\nNo models compatible with 'KS2022' were specified in the Calculator.")
-            self.Calculator.loadModels(network = alternative_model)
+        if self.model_status['pySIPFENN']:
         
-        self.availableObjectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
-        self.availableObjectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.alignn_models else []
+            loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
+
+            if not len(loadedCompatibleModels) > 0:
+                alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
+                self.Calculator.loadModels(network = alternative_model)
+            
+            self.availableObjectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
+
+        self.availableObjectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.model_status['MPDD-ALIGNN'] else []
 
         print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.availableObjectives)}{Style.RESET_ALL}.")
+
 
     def __check_objectives(
             self
@@ -804,10 +809,10 @@ class CrystALLSearch:
             List[str]: List of common objectives between self.availableObjectives and self.predictedObjectives.
         """
 
-        assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "Objectives must be a list of strings with at least one objective."
+        assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "At least one objective is required for classification. Run run `download_models` first."
         
         if any(value not in self.predictedObjectives for value in self.availableObjectives):
-            print("\nSome objectives do not have predictions calculated and will not be considered for clustering.")
+            print("\nSome objectives do not have predictions calculated and will not be considered for classification.")
             for obj in self.availableObjectives:
                 if obj not in self.predictedObjectives:
                     try:
@@ -832,6 +837,8 @@ class CrystALLSearch:
         print(f"Downloading models for MPDD-alignn..")
         pretrained.download_default_models()
         print(f"Done! Models are ready to use.")
+
+        self.update_objectives(self.Calculator)
 
     def connect_MPDD(
             self,
