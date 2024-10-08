@@ -723,44 +723,53 @@ class CrystALLSearch:
         print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
 
         print(f"\nChecking for available models on the computer..")
-        # Check if MPDD-ALIGNN default models are available
-        self.alignn_models = True
+
+        # Dictionary to record model availability
+        self.model_status = {
+            'pySIPFENN': False,
+            'MPDD-ALIGNN': False
+        }
+
+        # Check for pySIPFENN models
+        existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
+        if existingCompatibleModels:
+            self.model_status['pySIPFENN'] = True
+        else:
+            user_input = input("pySIPFENN models not found. Would you like to automatically run `download_models`? ([y]/n):")
+            if user_input.lower() in ('y', ''):
+                self.download_models()
+                existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
+                if existingCompatibleModels:
+                    self.model_status['pySIPFENN'] = True
+
+        # Check for MPDD-ALIGNN models
         with resources.files('alignn') as alignn_dir:
             for model_dict in pretrained.get_default_models():
-                if not os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
-                    self.alignn_models = False
-                    try:
-                        print(f"{Style.DIM}✘ MPDD-ALIGNN models not found. Please run `download_models`.{Style.RESET_ALL}")
-                    except UnicodeEncodeError:
-                        # Fallback to ASCII characters if Unicode encoding fails
-                        print(f"{Style.DIM}x MPDD-ALIGNN models not found. Please run `download_models`.{Style.RESET_ALL}")
+                if os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
+                    self.model_status['MPDD-ALIGNN'] = True
                     break
-            if self.alignn_models:
-                try:
-                    print(f"{Fore.GREEN}✔ MPDD-ALIGNN models found.{Style.RESET_ALL}")
-                except UnicodeEncodeError:
-                    # Fallback to ASCII characters if Unicode encoding fails
-                    print(f"{Fore.GREEN}√ MPDD-ALIGNN models found.{Style.RESET_ALL}")
+            if not self.model_status['MPDD-ALIGNN']:
+                user_input = input("MPDD-ALIGNN models not found. Would you like to automatically run `download_models`? ([y]/n):")
+                if user_input.lower() in ('y', ''):
+                    self.download_models()
+                    with resources.files('alignn') as alignn_dir:
+                        for model_dict in pretrained.get_default_models():
+                            if os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
+                                self.model_status['MPDD-ALIGNN'] = True
+                                break
 
-        # Check if pySIPFENN models are available
-        self.pysipfenn_models = True
-        stdout, sys.stdout = sys.stdout, io.StringIO()
-        self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
-        sys.stdout = stdout
-        
-        existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
-        
-        if not len(existingCompatibleModels) > 0:
-            self.pysipfenn_models = False
-            try:
-                print(f"{Style.DIM}✘ pySIPFENN models compatible with 'KS2022' descriptor not found. Please run `download_models`.{Style.RESET_ALL}")
-            except UnicodeEncodeError:
-                print(f"{Style.DIM}x No pySIPFENN models compatible with 'KS2022' descriptor found. Please run `download_models`.{Style.RESET_ALL}")
-        else:
-            try:
-                print(f"{Fore.GREEN}✔ pySIPFENN models found.{Style.RESET_ALL}")
-            except UnicodeEncodeError:
-                print(f"{Fore.GREEN}√ pySIPFENN models found.{Style.RESET_ALL}")
+        # Print the status of models
+        for model, status in self.model_status.items():
+            if status:
+                try:
+                    print(f"{Fore.GREEN}✔ {model} models found.{Style.RESET_ALL}")
+                except UnicodeEncodeError:
+                    print(f"{Fore.GREEN}√ {model} models found.{Style.RESET_ALL}")
+            else:
+                try:
+                    print(f"{Style.DIM}✘ {model} models not found.{Style.RESET_ALL}")
+                except UnicodeEncodeError:
+                    print(f"{Style.DIM}x {model} models not found.{Style.RESET_ALL}")
             self.update_objectives(self.Calculator)
 
     def update_objectives(
@@ -912,7 +921,7 @@ class CrystALLSearch:
 
         assert self.prototypePath is not None, "No prototypes folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
         assert isinstance(self.prototypePath, str), "Prototypes folder path must be a string"
-        assert self.pysipfenn_models, "pySIPFENN models not found. Please run ``download_models`` first."
+        assert self.model_status['pySIPFENN'], "pySIPFENN models not found. Please run ``download_models`` first."
 
         for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.availableObjectives)):
             if model not in self.predictedObjectives:
@@ -942,7 +951,7 @@ class CrystALLSearch:
 
         assert self.prototypePath is not None, "No prototypes folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
         assert isinstance(self.prototypePath, str), "Prototypes folder path must be a string"
-        assert self.alignn_models, "MPDD-ALIGNN models not found. Please run ``download_models`` first."
+        assert self.model_status['MPDD-ALIGNN'], "MPDD-ALIGNN models not found. Please run ``download_models`` first."
         
         for model_dict in pretrained.get_default_models():
             if model_dict['name'] in self.availableObjectives and model_dict['name'] not in self.predictedObjectives:
