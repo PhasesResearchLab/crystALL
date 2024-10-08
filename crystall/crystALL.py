@@ -696,16 +696,10 @@ class CrystALLSearch:
     def __init__(
             self,
             targetFormula: Union[str, Composition],
-            MPDD: Database = None,
-            collections: List[str] = None,
-            prototypePath: str = None,
             calculator: Calculator = None
     ) -> None:
         
         # Defined at initialization
-        self.MPDD = MPDD
-        self.collections = collections
-        self.prototypePath = prototypePath
         if isinstance(targetFormula, str):
             self.targetFormula = Composition(targetFormula)
         elif isinstance(targetFormula, Composition):
@@ -714,13 +708,14 @@ class CrystALLSearch:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
         self.targetCompositionDict = {el: round(amt / self.targetFormula.num_atoms * 1000, 0)
                                       for el, amt in self.targetFormula.as_dict().items()}
-        
+
+        stdout, sys.stdout = sys.stdout, io.StringIO()
+        self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
+        sys.stdout = stdout
+
         # Internal parameters to use during the processing steps
-        self.availableCollections: List[str] = None
         self.predictedObjectives: List[str] = []
-        self.inputFiles: List[str] = None
         self.ks2022: np.ndarray = None
-        self.figure: Figure = None
         self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.topCandidates: List[Dict[str, Union[str, float]]] = []
@@ -847,10 +842,11 @@ class CrystALLSearch:
 
         self.MPDD = MPDD if MPDD is not None else self.MPDD
         assert isinstance(self.MPDD, Database), 'MPDD must be a pymongo Database object'
-        self.availableCollections = self.MPDD.list_collection_names()
-        assert len(self.availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
-        assert set(collections).issubset(self.availableCollections), 'At least one of the specified collections is not available in the database'
-        print(f"\nConnected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(self.availableCollections)}{Style.RESET_ALL}")
+        availableCollections = self.MPDD.list_collection_names()
+        assert len(availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
+        assert set(collections).issubset(availableCollections), 'At least one of the specified collections is not available in the database'
+        filtered_collections = [col for col in availableCollections if 'test' not in col.lower()]
+        print(f"\nConnected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(filtered_collections)}{Style.RESET_ALL}")
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
@@ -881,8 +877,8 @@ class CrystALLSearch:
             self.prototypePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
         else:
             self.prototypePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
-        self.inputFiles = natsorted(os.listdir(self.prototypePath))
-        self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(self.inputFiles)]
+        inputFiles = natsorted(os.listdir(self.prototypePath))
+        self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
     def generate_local(
             self,
@@ -901,8 +897,8 @@ class CrystALLSearch:
         self.prototypePath = prototypePath if prototypePath is not None else self.prototypePath
         assert self.prototypePath, "No prototypes folder identified. Please provide a path to the prototypes folder."
         self.prototypePath = run_local(self.targetFormula, self.prototypePath)
-        self.inputFiles = natsorted(os.listdir(self.prototypePath))
-        self.prototypes = [{"index": i, "name": file} for i, file in enumerate(self.inputFiles)]
+        inputFiles = natsorted(os.listdir(self.prototypePath))
+        self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(
             self
@@ -1408,14 +1404,14 @@ class CrystALLSearch:
             title=f'Embedded Prototypes ({len(self.scaledks2022[0])}D ➡ 2D t-SNE space)<br><sub>🟠 Top Candidates ({objective})</sub>'  # add the title here
         )
 
-        self.figure = dict(data=data, layout=layout)
+        figure = dict(data=data, layout=layout)
         
         if save:
-            plot(self.figure, filename='2d_point_clustering.html')
+            plot(figure, filename='2d_point_clustering.html')
             print(f"Plot saved as {file_name}.html")
 
         else:
-            iplot(self.figure, filename='2d point clustering')
+            iplot(figure, filename='2d point clustering')
 
     def plot_3D(
             self,
@@ -1538,11 +1534,11 @@ class CrystALLSearch:
             title=f'Embedded Prototypes ({len(self.scaledks2022[0])}D ➡ 3D t-SNE space)<br><sub>🟠 Top Candidates ({objective})</sub>'  # add the title here
         )
 
-        self.figure = dict(data=data, layout=layout)
+        figure = dict(data=data, layout=layout)
 
         if save:
-            plot(self.figure, filename='3d_point_clustering.html')
+            plot(figure, filename='3d_point_clustering.html')
             print(f"Plot saved as {file_name}.html")
 
         else:
-            iplot(self.figure, filename='3d point clustering')
+            iplot(figure, filename='3d point clustering')
