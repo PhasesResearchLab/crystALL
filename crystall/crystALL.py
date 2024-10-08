@@ -1225,7 +1225,7 @@ class CrystALLSearch:
             for label, cluster in sorted(clusters.items()):
                 prototype = min(cluster, key=lambda x: x[objective])
                 self.clusterAffiliation[objective].update({prototype['cluster']: prototype['index']})
-                print(f"           Cluster {label}: {prototype['name']}")
+                print(f"           Cluster {label:02}: {prototype['name']}")
         
         # Create a list of top candidates
         self.topCandidates, i = [], 0
