@@ -51,7 +51,7 @@ def run_local(
     print('Structure prototype dataset:\n' + prototypePath)
 
     if isinstance(targetFormula, str):
-        #Formula to pymatgen Composition
+        # Formula to pymatgen Composition
         composition = Composition(targetFormula)
     elif isinstance(targetFormula, Composition):
         composition = targetFormula
@@ -62,23 +62,23 @@ def run_local(
     aFormula = composition.anonymized_formula
     nElements = composition.to_data_dict['nelements']
 
-    #Initial prototype dataset scan
+    # Initial prototype dataset scan
     fileList = natsorted(os.listdir(prototypePath))
     total = fileList.__len__()
     print(str(total)+' files detected\n')
-    #Intermediate directory for identified prototypes
+    # Intermediate directory for identified prototypes
     try:
         os.mkdir(os.path.split(prototypePath)[1] + '-' + aFormula)
         print('Intermediate directory for '+aFormula+' created.')
     except FileExistsError:
         print('Intermediate directory for '+aFormula+' already exist.\nPrototypes selection will be overwritten/updated.\n')
 
-    #Counters
+    # Counters
     allS = 0
     nEl = 0
     aF = 0
     print('{0:*^80}'.format('Scanning database for '+aFormula+' compounds.'))
-    #Iterate over dataset of all structures
+    # Iterate over dataset of all structures
     for file in fileList:
         allS = allS + 1
         if os.path.splitext(file)[1] == '.POSCAR':
@@ -100,16 +100,16 @@ def run_local(
     print('\n' + aFormula + ': ' + str(aF))
     print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%')
 
-    #List selected prototypes
+    # List selected prototypes
     prototypeList = natsorted(os.listdir(os.path.split(prototypePath)[1] + '-' + aFormula))
 
-    #Substitution elements combination.
+    # Substitution elements combination.
     print('{0:*^80}'.format('Substituting elements in the prototypes.'))
     sEL = sortedElementsList(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
     print('\nTarget Element Combination: ' + str(sELtarget))
 
-    #Verify need for permutations
+    # Verify need for permutations
     permN = 1
     for multiples in sEL:
         permN = permN * math.factorial(multiples.__len__())
@@ -131,7 +131,7 @@ def run_local(
     except FileExistsError:
         print('Final directory already exist.\nPrototypes will be overwritten/updated.')
 
-    #Substitute over all condidates over all of their permutations
+    # Substitute over all condidates over all of their permutations
     allS = 0
     for prototype in prototypeList:
         s = Structure.from_file(intPath + '/' + prototype)
@@ -176,7 +176,7 @@ def run_MPDD(
     print('Using MPDD Database with collections: '+', '.join(collections))
 
     if isinstance(targetFormula, str):
-        #Formula to pymatgen Composition
+        # Formula to pymatgen Composition
         composition = Composition(targetFormula)
     elif isinstance(targetFormula, Composition):
         composition = targetFormula
@@ -247,13 +247,13 @@ def run_MPDD(
 
         print('\nTotal of '+str(foundTotal) + ' prototypes found.\n')
 
-        #Substitution elements combination.
+        # Substitution elements combination.
         print('{0:*^80}'.format('Substituting elements in the prototypes.'))
         sEL = sortedElementsList(composition)
         sELtarget = [item for sublist in sEL for item in sublist]
         print('\nTarget Element Combination: ' + str(sELtarget))
 
-        #Verify need for permutations
+        # Verify need for permutations
         permN = 1
         for multiples in sEL:
             permN = permN * math.factorial(multiples.__len__())
@@ -274,7 +274,7 @@ def run_MPDD(
         except FileExistsError:
             print('Final directory already exist.\nPrototypes will be overwritten/updated.')
 
-        #Substitute over all prototypes over all of their permutations
+        # Substitute over all prototypes over all of their permutations
         allS = 0
         for col in collections:
             print('Looking through: ' + col)
@@ -327,12 +327,10 @@ def run_MPDD(
         
         return finPath
 
-#Run prototype identification and elemental substitution for permutations within the anonymous composition fractions
+# Run prototype identification and elemental substitution for permutations within the anonymous composition fractions
 # E.g.
-#targetCompositionDict = {'Nd':338, 'Sn':215, 'Bi':447}
-#devs =  {'Nd':15, 'Sn':15, 'Bi':15}
-#MPDD = client['MPDD']
-#collections = ['community', 'curated']
+# targetCompositionDict = {'Nd':338, 'Sn':215, 'Bi':447}
+# devs =  {'Nd':15, 'Sn':15, 'Bi':15}
 def run_compositional_MPDD(
         targetCompositionDict: Dict[str, int],
         devs: Dict[str, int],
@@ -627,7 +625,7 @@ def elementPermutations(
 # E.g. {'Nd':338, 'Sn':215, 'Bi':447}
 # and a list of allowed composition deviations
 # e.g. {'Nd':50, 'Sn':50, 'Bi':20}
-# returns a MPDD query for ananymous composition space with N components and
+# returns a MPDD query for ananymous composition space with N components
 def comp2acompQ(
         compDict: Dict[str, int],
         devs: Dict[str, int]
@@ -656,8 +654,7 @@ def comp2compQ(
         mpddQuery.update({key: {'$gte': (compDict[e] - devs[e]) / 1000, '$lte': (compDict[e] - devs[e]) / 1000}})
     return mpddQuery
 
-# For a given composition, returns elements grouped by their occurrence in the formula,
-# starting from the least common.
+# For a given composition, returns elements grouped by their occurrence in the formula, starting from the least common.
 # E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
 def orderedAllowedSubstitutions(
         targetCompDict: Dict[str, int],
