@@ -1,7 +1,8 @@
 {
     "image": "mcr.microsoft.com/devcontainers/miniconda",
     "containerEnv": {
-        "PYTHONPATH": "${PYTHONPATH}:/workspaces/crystALL"
+        "PYTHONPATH": "${PYTHONPATH}:/workspaces/crystALL",
+        "DGLBACKEND": "pytorch"
     },
     "customizations": {
       "codespaces": {
