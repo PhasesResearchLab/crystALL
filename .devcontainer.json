@@ -25,5 +25,5 @@
        "memory": "16gb",
        "storage": "32gb"
     },
-    "onCreateCommand": "conda install -y python=3.12 && pip install 'dgl>=2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html && python -m pip install -r requirements.txt"
+    "onCreateCommand": "conda install -y python=3.12 && python -m pip install -r requirements.txt && pip install 'dgl>=2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html"
 }
