@@ -104,7 +104,7 @@ def run_local(
     prototypeList = natsorted(os.listdir(os.path.split(prototypePath)[1] + '-' + aFormula))
 
     # Substitution elements combination.
-    print('{0:*^80}'.format('Substituting elements in the prototypes.'))
+    print('{0:*^80}'.format(' Substituting elements in the prototypes '))
     sEL = sortedElementsList(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
     print('\nTarget Element Combination: ' + str(sELtarget))
@@ -248,7 +248,7 @@ def run_MPDD(
         print('\nTotal of '+str(foundTotal) + ' prototypes found.\n')
 
         # Substitution elements combination.
-        print('{0:*^80}'.format('Substituting elements in the prototypes.'))
+        print('{0:*^80}'.format(' Substituting elements in the prototypes '))
         sEL = sortedElementsList(composition)
         sELtarget = [item for sublist in sEL for item in sublist]
         print('\nTarget Element Combination: ' + str(sELtarget))
@@ -424,7 +424,7 @@ def run_compositional_MPDD(
 
         # ********************************* Substitution elements combination ********************************************
 
-        print('{0:*^80}'.format('Substituting elements in the prototypes.'))
+        print('{0:*^80}'.format(' Substituting elements in the prototypes '))
 
         finPath = '_'.join(collections) + '-' + meanFormula + rangesStr
         print('Final Prototype Directory: ' + finPath)
@@ -770,7 +770,7 @@ class CrystALLSearch:
     def update_objectives(
             self,
             calculator: Calculator,
-            verbose: True
+            verbose: bool = True
     ) -> None:
 
         assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
@@ -981,7 +981,7 @@ class CrystALLSearch:
         
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(resultDicts)}{Style.RESET_ALL} prototypes using ALIGNN")
 
-    def get_mpdd_stability(
+    def get_mpdd_convexhull(
             self
     ) -> None:
         
