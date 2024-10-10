@@ -16,4 +16,3 @@ scipy
 scikit-learn
 jupyter
 ipykernel
-nbformat
