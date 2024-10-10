@@ -714,6 +714,7 @@ class CrystALLSearch:
         sys.stdout = stdout
 
         # Internal parameters to use during the processing steps
+        self.availableObjectives: List[str] = []
         self.predictedObjectives: List[str] = []
         self.ks2022: np.ndarray = None
         self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
@@ -738,9 +739,6 @@ class CrystALLSearch:
             user_input = input("pySIPFENN models not found. Would you like to automatically run `download_models`? ([y]/n):")
             if user_input.lower() in ('y', ''):
                 self.download_models()
-                existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
-                if existingCompatibleModels:
-                    self.model_status['pySIPFENN'] = True
 
         # Check for MPDD-ALIGNN models
         with resources.files('alignn') as alignn_dir:
@@ -752,11 +750,6 @@ class CrystALLSearch:
                 user_input = input("MPDD-ALIGNN models not found. Would you like to automatically run `download_models`? ([y]/n):")
                 if user_input.lower() in ('y', ''):
                     self.download_models()
-                    with resources.files('alignn') as alignn_dir:
-                        for model_dict in pretrained.get_default_models():
-                            if os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
-                                self.model_status['MPDD-ALIGNN'] = True
-                                break
 
         # Print the status of models
         for model, status in self.model_status.items():
@@ -776,7 +769,8 @@ class CrystALLSearch:
 
     def update_objectives(
             self,
-            calculator: Calculator
+            calculator: Calculator,
+            verbose: True
     ) -> None:
 
         assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
@@ -787,13 +781,21 @@ class CrystALLSearch:
 
             if not len(loadedCompatibleModels) > 0:
                 alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
+                stdout, sys.stdout = sys.stdout, io.StringIO()
                 self.Calculator.loadModels(network = alternative_model)
+                sys.stdout = stdout
             
             self.availableObjectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
 
+        else:
+
+            print("\npySIPFENN objective required for calculation. Run `download_models` first.")
+
         self.availableObjectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.model_status['MPDD-ALIGNN'] else []
 
-        print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.availableObjectives)}{Style.RESET_ALL}.")
+        if len(self.availableObjectives) >= 1 and verbose:
+        
+            print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.availableObjectives)}{Style.RESET_ALL}.")
 
 
     def __check_objectives(
@@ -809,7 +811,7 @@ class CrystALLSearch:
             List[str]: List of common objectives between self.availableObjectives and self.predictedObjectives.
         """
 
-        assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "At least one objective is required for classification. Run run `download_models` first."
+        assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "At least one objective is required for classification. Run `download_models` first."
         
         if any(value not in self.predictedObjectives for value in self.availableObjectives):
             print("\nSome objectives do not have predictions calculated and will not be considered for classification.")
@@ -834,11 +836,13 @@ class CrystALLSearch:
         
         print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
         self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
+        self.model_status['pySIPFENN'] = True
         print(f"Downloading models for MPDD-alignn..")
         pretrained.download_default_models()
+        self.model_status['MPDD-ALIGNN'] = True
         print(f"Done! Models are ready to use.")
 
-        self.update_objectives(self.Calculator)
+        self.update_objectives(self.Calculator, False)
 
     def connect_MPDD(
             self,
