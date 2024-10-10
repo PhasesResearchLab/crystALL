@@ -1,5 +1,8 @@
 {
     "image": "mcr.microsoft.com/devcontainers/miniconda",
+    "containerEnv": {
+        "PYTHONPATH": "${PYTHONPATH}:/workspaces/crystALL"
+    },
     "customizations": {
       "codespaces": {
         "openFiles": [
