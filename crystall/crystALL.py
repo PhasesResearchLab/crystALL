@@ -139,7 +139,7 @@ def run_local(
         spGroupA = SpacegroupAnalyzer(s)
         fileSplit = prototype.split('.')
         newNameRoot = fileSplit[0] + '-' + str(
-            spGroupA.get_space_group_symbol()) + '-'
+            spGroupA.get_lattice_type()) + '-'
 
         p = 0
         for permut in permuts:
@@ -221,7 +221,7 @@ def run_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 name = e['material']['formula'].replace(' ', '') + '-' + str(
-                    spGroupA.get_space_group_symbol())
+                    spGroupA.get_lattice_type())
 
                 if 'parentDatabaseID' in e['metadata']:
                     name = name + e['metadata']['parentDatabaseID']
@@ -299,7 +299,7 @@ def run_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = prototype['material']['reducedFormula'] + '-' + str(
-                    spGroupA.get_space_group_symbol())
+                    spGroupA.get_lattice_type())
 
                 if 'parentDatabaseID' in prototype['metadata']:
                     nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/','-').replace(':','-').replace('-','')
@@ -387,7 +387,7 @@ def run_compositional_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 name = e['material']['formula'].replace(' ', '') + '-' + str(
-                    spGroupA.get_space_group_symbol())
+                    spGroupA.get_lattice_type())
 
                 if 'parentDatabaseID' in e['metadata']:
                     name = name + e['metadata']['parentDatabaseID']
@@ -483,7 +483,7 @@ def run_compositional_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = prototype['material']['reducedFormula'] + '-' + \
-                        str(spGroupA.get_space_group_symbol())
+                        str(spGroupA.get_lattice_type())
 
                 if 'parentDatabaseID' in prototype['metadata']:
                     nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/', '-').replace(':','-').replace('-', '')
