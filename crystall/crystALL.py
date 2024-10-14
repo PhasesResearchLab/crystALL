@@ -1352,10 +1352,19 @@ class CrystALLSearch:
         data = []
         for i, cluster in enumerate(df['cluster'].unique()):
             df_cluster = df[df['cluster'] == cluster]
-            hovertext = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:3])] + 
-                                    ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
+            df_cluster = df_cluster.sort_values('objective')
+
+            # Separate the data into top candidates and other cluster members
+            df_prototypes = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+
+            hovertext_prototypes = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:2] + [c['name'].split('-')[-1]])] + 
+                                    ['<b>Affiliation: </b>' + c['name'].split('-')[2]] + 
                                     ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
+            
+            hovertext_top_candidates = hovertext_prototypes.pop(0)
+
             color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Entries': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
             
             if markerSymbol and len(df['cluster'].unique()) <= 8:
@@ -1363,18 +1372,14 @@ class CrystALLSearch:
             else: 
                 symbol = symbols[0]
 
-            # Separate the data into top candidates and other cluster members
-            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
-            df_other_members = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
-
             # Create scatter plot for other cluster members
-            scatter_other_members = dict(
+            scatter_prototypes = dict(
                 mode = "markers",
                 name = f"Cluster {cluster}",
                 type = "scatter",
-                x = df_other_members['x'], 
-                y = df_other_members['y'],
-                hovertext = hovertext,  # set the hover name
+                x = df_prototypes['x'], 
+                y = df_prototypes['y'],
+                hovertext = hovertext_prototypes,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
                     size=5, 
@@ -1382,7 +1387,7 @@ class CrystALLSearch:
                     symbol=symbol
                 )
             )
-            data.append(scatter_other_members)
+            data.append(scatter_prototypes)
 
             # Create scatter plot for top candidates
             scatter_top_candidates = dict(
@@ -1392,7 +1397,7 @@ class CrystALLSearch:
                 type = "scatter",
                 x = df_top_candidates['x'], 
                 y = df_top_candidates['y'],
-                hovertext = hovertext,  # set the hover name
+                hovertext = hovertext_top_candidates,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
                     size=5, 
@@ -1481,30 +1486,35 @@ class CrystALLSearch:
         data = []
         for i, cluster in enumerate(df['cluster'].unique()):
             df_cluster = df[df['cluster'] == cluster]
-            hovertext = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:3])] + 
-                                    ['<b>Affiliation: </b>' + '-'.join(c['name'].split('-')[3:5])] + 
+            df_cluster = df_cluster.sort_values('objective')
+
+            # Separate the data into top candidates and other cluster members
+            df_prototypes = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+
+            hovertext_prototypes = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:2] + [c['name'].split('-')[-1]])] +
+                                    ['<b>Affiliation: </b>' + c['name'].split('-')[2]] + 
                                     ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
+            
+            hovertext_top_candidates = hovertext_prototypes.pop(0)
+
             color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Entries': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
 
             if markerSymbol and len(df['cluster'].unique()) <= 8:
                 symbol = symbols[i]
             else: 
                 symbol = symbols[0]
-            
-            # Separate the data into top candidates and other cluster members
-            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
-            df_other_members = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
 
             # Create scatter plot for other cluster members
-            scatter_other_members = dict(
+            scatter_prototypes = dict(
                 mode = "markers",
                 name = f"Cluster {cluster}",
                 type = "scatter3d",
-                x = df_other_members['x'], 
-                y = df_other_members['y'],
-                z = df_other_members['z'],
-                hovertext = hovertext,  # set the hover name
+                x = df_prototypes['x'], 
+                y = df_prototypes['y'],
+                z = df_prototypes['z'],
+                hovertext = hovertext_prototypes,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
                     size=3, 
@@ -1512,7 +1522,7 @@ class CrystALLSearch:
                     symbol=symbol
                 )
             )
-            data.append(scatter_other_members)
+            data.append(scatter_prototypes)
 
             # Create scatter plot for top candidates
             scatter_top_candidates = dict(
@@ -1523,7 +1533,7 @@ class CrystALLSearch:
                 x = df_top_candidates['x'], 
                 y = df_top_candidates['y'],
                 z = df_top_candidates['z'],
-                hovertext = hovertext,  # set the hover name
+                hovertext = hovertext_top_candidates,  # set the hover name
                 hoverinfo = 'text+name',  # only show the hovertext
                 marker = dict(
                     size=3, 
