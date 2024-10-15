@@ -1352,7 +1352,7 @@ class CrystALLSearch:
         data = []
         for i, cluster in enumerate(df['cluster'].unique()):
             df_cluster = df[df['cluster'] == cluster]
-            df_cluster = df_cluster.sort_values('objective')
+            df_cluster = df_cluster.sort_values(by=['objective', 'index'])
 
             # Separate the data into top candidates and other cluster members
             df_prototypes = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
@@ -1486,7 +1486,7 @@ class CrystALLSearch:
         data = []
         for i, cluster in enumerate(df['cluster'].unique()):
             df_cluster = df[df['cluster'] == cluster]
-            df_cluster = df_cluster.sort_values('objective')
+            df_cluster = df_cluster.sort_values(by=['objective', 'index'])
 
             # Separate the data into top candidates and other cluster members
             df_prototypes = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
