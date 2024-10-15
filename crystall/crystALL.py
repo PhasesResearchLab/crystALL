@@ -920,7 +920,8 @@ class CrystALLSearch:
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(
-            self
+            self,
+            mode: str = 'serial'
     ) -> None:
         """
         Predicts properties for the prototype materials using pySIPFENN models and updates the prototypes with the predictions.
@@ -937,7 +938,7 @@ class CrystALLSearch:
             if model not in self.predictedObjectives:
                 self.predictedObjectives.append(model)
         
-        self.Calculator.runFromDirectory(self.prototypePath, 'KS2022', mode='parallel', max_workers=8)
+        self.Calculator.runFromDirectory(self.prototypePath, 'KS2022', mode=mode, max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDicts(), np.array(self.Calculator.descriptorData)
         assert len(self.prototypes) == len(resultDicts), "Number of prototypes does not match number of property predictions"
         
@@ -953,7 +954,8 @@ class CrystALLSearch:
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN")
     
     def get_alignn_properties(
-            self
+            self,
+            mode: str = 'serial'
     ) -> None:
         """
         Predicts properties for the prototype materials using MPDD-ALIGNN models and updates the prototypes with the predictions.
@@ -972,7 +974,7 @@ class CrystALLSearch:
         
         print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
         print('Calculating descriptors...')
-        resultDicts = pretrained.run_models_from_directory(self.prototypePath, mode='parallel')
+        resultDicts = pretrained.run_models_from_directory(self.prototypePath, mode=mode)
         assert len(self.prototypes) == len(resultDicts), "Number of prototypes does not match number of property predictions"
 
         for i in range(len(resultDicts)):
