@@ -20,6 +20,7 @@ from natsort import natsorted
 from colorama import Fore, Style
 from distinctipy import get_colors
 from plotly.offline import plot, iplot
+import plotly.graph_objs as go
 
 # ML / Data
 from pymongo.database import Database
@@ -1311,7 +1312,102 @@ class CrystALLSearch:
                 dict_writer.writerows(topCandidates_exported)
             
             print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.predictedObjectives)} Objective(s) to {file_name}")
-  
+
+    def plot_histogram(
+            self,
+            objective: Union[str, List[str]] = None,
+            save: bool = False,
+            file_name: str = 'histogram_clusterPrototypes',
+            colorBlind: bool = False
+    ) -> None:
+
+        objective = objective if objective is not None else self.availableObjectives[0]
+
+        assert objective in self.predictedObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.predictedObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
+        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+
+        if not self.topCandidates:
+            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
+            return
+        
+        # Create a DataFrame from the data
+        df = pd.DataFrame({
+            'cluster': [c['cluster'] for c in self.prototypes],
+            'name': [c['name'].split('-')[0] + '-' + c['name'].split('-')[-1].replace('.POSCAR', '') for c in self.prototypes],
+            'objective': [c[objective] for c in self.prototypes],
+            'index': [c['index'] for c in self.prototypes]
+        })
+
+        df = df.sort_values('cluster')
+
+        # Define color set based on clusters
+        colorblind_type = "Protanopia" if colorBlind else None
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        cluster_colors = {cluster: '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255), int(colors[i][1]*255), int(colors[i][2]*255)) for i, cluster in enumerate(df['cluster'].unique())}
+
+        # Sort the dataframe by 'objective' in ascending order
+        df_sorted = df.sort_values(by=['objective', 'index'])
+
+        # Segment the DataFrame into df_prototypes and df_top_candidates
+        df_prototypes = df_sorted[~df_sorted['index'].isin(self.clusterAffiliation[objective].values())]
+        df_top_candidates = df_sorted[df_sorted['index'].isin(self.clusterAffiliation[objective].values())]
+
+        # Get the minimum and maximum values for the y-axis range
+        y_min = df_sorted['objective'].min() * 1.2
+        y_max = df_sorted['objective'].max() * 0.8
+
+        # Create bar plots for prototypes and top candidates
+        trace_prototypes = go.Bar(
+            x=df_prototypes['index'],
+            y=df_prototypes['objective'],
+            hovertext=df_prototypes['objective'],
+            hoverinfo='text',
+            marker=dict(color='#a6a6a6'),
+            width=0.4,
+            name='Prototypes'
+        )
+
+        # Create bar plots for each top candidate cluster
+        traces_top_candidates = []
+        for cluster in df_top_candidates['cluster'].unique():
+            df_cluster = df_top_candidates[df_top_candidates['cluster'] == cluster]
+            trace = go.Bar(
+                x=df_cluster['index'],
+                y=df_cluster['objective'],
+                hovertext=df_cluster['objective'],
+                hoverinfo='text',
+                marker=dict(color=cluster_colors[cluster]),
+                width=0.4,
+                name=f'Cluster {cluster}: Top Candidate'
+            )
+            traces_top_candidates.append(trace)
+
+        data = [trace_prototypes] + traces_top_candidates
+
+        layout = go.Layout(
+            xaxis=dict(
+                side='top',
+                tickvals=df['index'],
+                ticktext=df['name'],
+                tickangle=270
+            ),
+            yaxis=dict(
+                title='',
+                range=[y_min, y_max]
+            ),
+            template='plotly_white'
+        )
+
+        figure = go.Figure(data=data, layout=layout)
+
+        if save:
+            plot(figure, filename=f'{file_name}.html')
+            print(f"Plot saved as {file_name}.html")
+
+        else:
+            iplot(figure, filename=file_name)
+
     def plot_2D(
             self,
             objective: Union[str, List[str]] = None,
@@ -1439,11 +1535,11 @@ class CrystALLSearch:
         figure = dict(data=data, layout=layout)
         
         if save:
-            plot(figure, filename='2d_point_clustering.html')
+            plot(figure, filename=f'{file_name}.html')
             print(f"Plot saved as {file_name}.html")
 
         else:
-            iplot(figure, filename='2d point clustering')
+            iplot(figure, filename=file_name)
 
     def plot_3D(
             self,
@@ -1574,8 +1670,8 @@ class CrystALLSearch:
         figure = dict(data=data, layout=layout)
 
         if save:
-            plot(figure, filename='3d_point_clustering.html')
+            plot(figure, filename=f'{file_name}.html')
             print(f"Plot saved as {file_name}.html")
 
         else:
-            iplot(figure, filename='3d point clustering')
+            iplot(figure, filename=file_name)
