@@ -1,0 +1,32 @@
+{
+  "build": {
+      "dockerfile": "./Dockerfile"
+  },
+  "containerEnv": {
+      "PYTHONPATH": "${PYTHONPATH}:/workspaces/crystALL",
+      "DGLBACKEND": "pytorch"
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "notebooks/README.md"
+      ]
+    },
+    "vscode": {
+      "settings": {
+        "remote.autoForwardPortsSource": "process",
+        "remote.localPortHost": "localhost"
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "hansvn.instant-mongo"
+      ]
+    }
+  },
+  "hostRequirements": {
+     "cpus": 4,
+     "memory": "16gb",
+     "storage": "16gb"
+  }
+}
