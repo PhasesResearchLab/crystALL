@@ -59,22 +59,43 @@ class TestMPDD(unittest.TestCase):
             cas.generate_MPDD()
 
         with self.subTest("Assert that one of the expected candidates is present"):
-            self.assertEqual(cas.candidatePath, "curated-Ni26Ru8", "The candidate path is incorrect.")
-            self.assertIn("Al13Rh4-monoclinic-12-aflow-880c7a1f43ceb5f8-Ni39Ru12.POSCAR", os.listdir("curated-Ni26Ru8"), "The expected candidate was not generated.")
+            self.assertEqual(cas.candidatePath, "Ni26Ru8-curated-prototypes", "The candidate path is incorrect.")
+            self.assertIn("Al13Rh4-monoclinic-12-aflow-880c7a1f43ceb5f8-Ni39Ru12.POSCAR", os.listdir("Ni26Ru8-curated-prototypes"), "The expected candidate was not generated.")
 
         with self.subTest('Assert one of the expected candidates has the correct composition and symmetry'):
-            structure = Structure.from_file("curated-Ni26Ru8/Al13Rh4-monoclinic-12-aflow-880c7a1f43ceb5f8-Ni39Ru12.POSCAR")
+            structure = Structure.from_file("Ni26Ru8-curated-prototypes/Al13Rh4-monoclinic-12-aflow-880c7a1f43ceb5f8-Ni39Ru12.POSCAR")
             spgA = SpacegroupAnalyzer(structure)
             self.assertEqual(structure.composition.reduced_formula, Composition(self.targetFormula).reduced_formula, "The composition of the candidate is incorrect.")
             self.assertEqual(spgA.get_crystal_system(), "monoclinic", "The crystal system of the candidate is incorrect.")
             self.assertEqual(spgA.get_space_group_number(), 12, "The space group number of the candidate is incorrect.")
 
-        with self.subTest("Assert that the correct number of candidates was generated"):
-            self.assertEqual(len(os.listdir("curated-Ni26Ru8")), 30, "The number of candidates generated is incorrect, based on the local files.")
-            self.assertEqual(len(cas.inputFiles), 30, "The number of candidates identified as input files by CAS is incorrect.")
-            self.assertEqual(len(cas.candidates), 30, "The number of candidate dictionaries listed by CAS is incorrect.")
-
+        with self.subTest("Assert that the correct number of candidates was generated according to the aggregation pipeline"):
+            targetPrototypes_List = ['Native', 'Anonymized']
+            filterPrototypes_list = ["material.structID", "material.volNormStructID"]
+            for targetPrototypes in targetPrototypes_List:
+                natPath = "Ni26Ru8-curated-prototypes" if targetPrototypes == "Anonymized" else "Ni26Ru8-curated-native-prototypes"
+                for filterPrototypes in filterPrototypes_list:
+                    shutil.rmtree(natPath)
+                    cas.generate_MPDD(targetPrototypes=targetPrototypes, filterPrototypes=filterPrototypes)
+                    if filterPrototypes == "material.structID" and targetPrototypes == "Native":
+                        self.assertEqual(len(os.listdir(natPath)), 2, "The number of candidates generated is incorrect ('material.structID'), based on the local files.")
+                        self.assertEqual(len(cas.inputFiles), 2, "The number of candidates identified as input files by CAS is incorrect ('material.structID').")
+                        self.assertEqual(len(cas.candidates), 2, "The number of candidate dictionaries listed by CAS is incorrect ('material.structID').")
+                    elif filterPrototypes == "material.volNormStructID" and targetPrototypes == "Native":
+                        self.assertEqual(len(os.listdir(natPath)), 1, "The number of candidates generated is incorrect, based on the local files ('material.volNormStructID').")
+                        self.assertEqual(len(cas.inputFiles), 1, "The number of candidates identified as input files by CAS is incorrect ('material.volNormStructID').")
+                        self.assertEqual(len(cas.candidates), 1, "The number of candidate dictionaries listed by CAS is incorrect ('material.volNormStructID').")
+                    elif filterPrototypes == "material.structID" and targetPrototypes == "Anonymized":
+                        self.assertEqual(len(os.listdir(natPath)), 30, "The number of candidates generated is incorrect ('material.structID'), based on the local files.")
+                        self.assertEqual(len(cas.inputFiles), 30, "The number of candidates identified as input files by CAS is incorrect ('material.structID').")
+                        self.assertEqual(len(cas.candidates), 30, "The number of candidate dictionaries listed by CAS is incorrect ('material.structID').")
+                    elif filterPrototypes == "material.volNormStructID" and targetPrototypes == "Anonymized":
+                        self.assertEqual(len(os.listdir(natPath)), 28, "The number of candidates generated is incorrect, based on the local files ('material.volNormStructID').")
+                        self.assertEqual(len(cas.inputFiles), 28, "The number of candidates identified as input files by CAS is incorrect ('material.volNormStructID').")
+                        self.assertEqual(len(cas.candidates), 28, "The number of candidate dictionaries listed by CAS is incorrect ('material.volNormStructID').")
+        
         with self.subTest("Download pySIPFENN (SIPFENN_Krajewski2022_NN30) model and ALIGNN models; then run featurization"):
             cas.download_models()
             #cas.run_pysipfenn()
             #cas.run_alignn()
+
