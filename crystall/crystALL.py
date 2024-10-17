@@ -239,14 +239,14 @@ def run_MPDD(
 
     elif targetPrototypes == 'Anonymized':
 
-        print('\nDetecting Prototypes:')
+        print('\nDetecting Input Structures:')
         foundTotal = 0
         for col in collections:
             foundN = MPDD[col].count_documents({'material.anonymizedFormula' : aFormula})
             foundTotal += foundN
             print('Found ' + str(foundN) + ' in ' + col)
 
-        print('\nTotal of '+str(foundTotal) + ' prototypes found.\n')
+        print('\nTotal of '+str(foundTotal) + ' structures available.\n')
 
         # Substitution elements combination.
         print('{0:*^80}'.format(' Substituting elements in the prototypes '))
@@ -416,14 +416,14 @@ def run_compositional_MPDD(
 
         # ************************************** Count prototypes ********************************************************
 
-        print('\nDetecting Prototypes:')
+        print('\nDetecting Input Structures:')
         foundTotal = 0
         for col in collections:
             foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
             foundTotal += foundN
             print('Found ' + str(foundN) + ' in ' + col)
 
-        print('\nTotal of ' + str(foundTotal) + ' prototypes available.\n')
+        print('\nTotal of ' + str(foundTotal) + ' structures available.\n')
 
         # ********************************* Substitution elements combination ********************************************
 
@@ -535,14 +535,14 @@ def estimate_compositional_MPDD(
     # Sorted fractions dictionary query
     sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
 
-    print(f'\nDetecting Prototypes for substitution into {meanFormula} under allowed deviations {rangesStr}')
+    print(f'\nDetecting Input Structures for substitution into {meanFormula} under allowed deviations {rangesStr}')
     foundTotal = 0
     for col in collections:
         foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
         foundTotal += foundN
         print('Found ' + str(foundN) + ' in ' + col)
 
-    print('\nTotal of ' + str(foundTotal) + ' prototypes available.\n')
+    print('\nTotal of ' + str(foundTotal) + ' structures available.\n')
 
     return foundTotal
 
