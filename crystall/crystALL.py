@@ -209,6 +209,7 @@ def run_MPDD(
                     "_id": "$" + filterPrototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
+                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
                 {"$limit": limit}
             ]
 
@@ -285,6 +286,7 @@ def run_MPDD(
                     "_id": "$" + filterPrototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
+                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
                 {"$limit": limit}
             ]
 
@@ -375,6 +377,7 @@ def run_compositional_MPDD(
                     "_id": "$" + filterPrototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
+                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
                 {"$limit": limit}
             ]
 
@@ -450,6 +453,7 @@ def run_compositional_MPDD(
                     "_id": "$" + filterPrototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
+                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
                 {"$limit": limit}
             ]
 
