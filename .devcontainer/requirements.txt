@@ -20,6 +20,3 @@ pyvista
 trame
 trame-vtk
 trame-vuetify
-
-# Additional package with custom index URL
-dgl>=2.2.0 --find-links https://data.dgl.ai/wheels/torch-2.3/repo.html
