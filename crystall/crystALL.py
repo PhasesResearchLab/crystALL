@@ -944,14 +944,18 @@ class CrystALLSearch:
                 self.predictedObjectives.append(model)
         
         self.Calculator.runFromDirectory(self.prototypePath, 'KS2022', mode=mode, max_workers=8)
-        resultDicts, self.ks2022 = self.Calculator.get_resultDicts(), np.array(self.Calculator.descriptorData)
+        resultDicts, self.ks2022 = self.Calculator.get_resultDictsWithNames(), np.array(self.Calculator.descriptorData)
         assert len(self.prototypes) == len(resultDicts), "Number of prototypes does not match number of property predictions"
         
-        for i in range(len(resultDicts)):
-            self.prototypes[i].update(resultDicts[i])
-            for key in resultDicts[i].keys():
-                if type(self.prototypes[i][key]) == float:
-                    self.prototypes[i][key] = float(f'{self.prototypes[i][key]:.4f}')
+        for result in resultDicts:
+            name = result['name']
+            for prototype in self.prototypes:
+                if prototype['name'] == name:
+                    prototype.update(result)
+                    for key in result.keys():
+                        if isinstance(prototype[key], float):
+                            prototype[key] = float(f'{prototype[key]:.4f}')
+                    break
 
         # Update average of the predictions
         self.calculate_average()
@@ -982,11 +986,15 @@ class CrystALLSearch:
         resultDicts = pretrained.run_models_from_directory(self.prototypePath, mode=mode)
         assert len(self.prototypes) == len(resultDicts), "Number of prototypes does not match number of property predictions"
 
-        for i in range(len(resultDicts)):
-            self.prototypes[i].update(resultDicts[i])
-            for key in resultDicts[i].keys():
-                if type(self.prototypes[i][key]) == float:
-                    self.prototypes[i][key] = float(f'{self.prototypes[i][key]:.4f}')
+        for result in resultDicts:
+            name = result['name']
+            for prototype in self.prototypes:
+                if prototype['name'] == name:
+                    prototype.update(result)
+                    for key in result.keys():
+                        if isinstance(prototype[key], float):
+                            prototype[key] = float(f'{prototype[key]:.4f}')
+                    break
 
         # Update average of the predictions
         self.calculate_average()
