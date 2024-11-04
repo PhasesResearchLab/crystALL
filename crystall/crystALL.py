@@ -1381,8 +1381,8 @@ class CrystALLSearch:
         df_top_candidates = df_sorted[df_sorted['index'].isin(self.clusterAffiliation[objective].values())]
 
         # Get the minimum and maximum values for the y-axis range
-        y_min = df_sorted['objective'].min() * 1.2
-        y_max = df_sorted['objective'].max() * 0.8
+        y_min = df_sorted['objective'].min() * 1.01
+        y_max = df_sorted['objective'].max() * 0.95
 
         # Create bar plots for prototypes and top candidates
         trace_prototypes = go.Bar(
@@ -1406,7 +1406,7 @@ class CrystALLSearch:
                 hoverinfo='text',
                 marker=dict(color=cluster_colors[cluster]),
                 width=0.4,
-                name=f'Cluster {cluster}: Top Candidate'
+                name=f'Top Candidate (Cluster {cluster})'
             )
             traces_top_candidates.append(trace)
 
@@ -1417,13 +1417,21 @@ class CrystALLSearch:
                 side='top',
                 tickvals=df['index'],
                 ticktext=df['name'],
-                tickangle=270
+                tickangle=300,
+                showline=True,
+                linewidth=1,
+                linecolor='black',
+                mirror=True
             ),
             yaxis=dict(
-                title='',
-                range=[y_min, y_max]
+                title='Enthalpy of Formation (eV/atom)',
+                range=[y_min, y_max],
+                showline=True,
+                linewidth=1,
+                linecolor='black',
+                mirror=True
             ),
-            template='plotly_white'
+            template='simple_white'
         )
 
         figure = go.Figure(data=data, layout=layout)
