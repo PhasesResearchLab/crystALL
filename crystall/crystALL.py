@@ -125,7 +125,7 @@ def run_local(
 
     # Substitution elements combination.
     print('{0:*^80}'.format(' Substituting elements in the prototypes '))
-    sEL = sortedElementsList(composition)
+    sEL = sorted_elements_list(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
     print('\nTarget Element Combination: ' + str(sELtarget))
 
@@ -156,7 +156,7 @@ def run_local(
     for prototype in prototypeList:
         s = Structure.from_file(intPath + '/' + prototype)
 
-        permuts = elementPermutations(sortedElementsList(Composition(s.formula)))
+        permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
         spGroupA = SpacegroupAnalyzer(s)
         fileSplit = prototype.split('.')
         newNameRoot = fileSplit[0] + '-' + str(
@@ -290,7 +290,7 @@ def run_MPDD(
 
         # Substitution elements combination.
         print('{0:*^80}'.format(' Substituting elements in the prototypes '))
-        sEL = sortedElementsList(composition)
+        sEL = sorted_elements_list(composition)
         sELtarget = [item for sublist in sEL for item in sublist]
         print('\nTarget Element Combination: ' + str(sELtarget))
 
@@ -338,7 +338,7 @@ def run_MPDD(
 
                 s = Structure.from_dict(json.loads(prototype['material']['mgJSON']))
 
-                permuts = elementPermutations(sortedElementsList(Composition(s.formula)))
+                permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = prototype['material']['reducedFormula'] + '-' + str(
@@ -419,7 +419,7 @@ def run_compositional_MPDD(
             print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.')
 
         # Query for matching MPDD entries
-        nativeQuery = comp2compQ(targetCompositionDict, devs)
+        nativeQuery = comp2comp_q(targetCompositionDict, devs)
 
         targetPresent = 0
         for col in collections:
@@ -466,7 +466,7 @@ def run_compositional_MPDD(
         # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
 
         # Sorted fractions dictionary query
-        sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
+        sortedFractionsDictQuery = comp2acomp_q(targetCompositionDict, devs)
 
         # ************************************** Count prototypes ********************************************************
 
@@ -535,7 +535,7 @@ def run_compositional_MPDD(
 
                 elements = [element for element in cDict]
 
-                oAS = orderedAllowedSubstitutions(targetCompositionDict, devs, cDict)
+                oAS = ordered_allowed_substitutions(targetCompositionDict, devs, cDict)
 
                 permutNList += [len(oAS)]
 
@@ -602,7 +602,7 @@ def estimate_compositional_MPDD(
     rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
 
     # Sorted fractions dictionary query
-    sortedFractionsDictQuery = comp2acompQ(targetCompositionDict, devs)
+    sortedFractionsDictQuery = comp2acomp_q(targetCompositionDict, devs)
 
     print(f'\nDetecting Input Structures for substitution into {meanFormula} under allowed deviations {rangesStr}')
     foundTotal = 0
@@ -615,7 +615,7 @@ def estimate_compositional_MPDD(
 
     return foundTotal
 
-def sortedElementsList(
+def sorted_elements_list(
         comp: Composition
     ) -> List[List[str]]:
     """
@@ -638,7 +638,7 @@ def sortedElementsList(
            for _, g in groupby(compl,key=itemgetter(1))]
     return sortedEL
 
-def elementPermutations(
+def element_permutations(
         sEL: List[List[str]]
     ) -> List[List[str]]:
     """
@@ -655,7 +655,7 @@ def elementPermutations(
     outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
     return outList
 
-def comp2acompQ(
+def comp2acomp_q(
         compDict: Dict[str, int],
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
@@ -680,7 +680,7 @@ def comp2acompQ(
     result.update({f'material.nComponents': len(eVals)})
     return result
 
-def comp2compQ(
+def comp2comp_q(
         compDict: Dict[str, int],
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
@@ -703,7 +703,7 @@ def comp2compQ(
         mpddQuery.update({key: {'$gte': (compDict[e] - devs[e]) / 1000, '$lte': (compDict[e] - devs[e]) / 1000}})
     return mpddQuery
 
-def orderedAllowedSubstitutions(
+def ordered_allowed_substitutions(
         targetCompDict: Dict[str, int],
         devs: Dict[str, int],
         prototypeCompDict: Dict[str, int]
@@ -1096,7 +1096,7 @@ class CrystALLSearch:
         assert self.MPDD is not None, 'No database connection identified. Please run `connect_MPDD` first.'
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
 
-        MPDDcurated = self.MPDD['curated']
+        MPDD_curated = self.MPDD['curated']
         
         eList = self.targetFormula.chemical_system.split('-')
         sysList = []
@@ -1109,7 +1109,7 @@ class CrystALLSearch:
         entriesForPD = []
         formulaSet = set()
         i = 0
-        for e in MPDDcurated.find(
+        for e in MPDD_curated.find(
                 {'material.system': {'$in': sysList},
                 'properties.STAB_SIPFENN_NN30': 0},
                 {'material.reducedFormula': 1, 'metadata.parentDatabaseID': 1,
