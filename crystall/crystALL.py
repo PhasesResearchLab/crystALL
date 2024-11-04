@@ -1172,15 +1172,25 @@ class CrystALLSearch:
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
         # Determine the optimal number of clusters using silhouette score
+        distances = pairwise_distances(self.embeddedks2022)
+        distance_threshold = 0.1
+
+        mask = np.ones(len(self.embeddedks2022), dtype=bool)
+        for i in range(len(self.embeddedks2022)):
+            for j in range(i + 1, len(self.embeddedks2022)):
+                if distances[i, j] < distance_threshold:
+                    mask[j] = False
+
+        filtered_data = self.embeddedks2022[mask] # Filter out overlapping embeddings
+        
         sil_dict = {}
-        k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(self.embeddedks2022) - 1, 40).astype(int))
+        k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(filtered_data) - 1, 40).astype(int))
         for k in tqdm(k_range, desc="Processing", ncols=100, bar_format="{l_bar}{bar}{r_bar}"):
             kmeans = KMeans(n_clusters=k, n_init=500, max_iter=500, random_state=580)
             clusterData = kmeans.fit(self.embeddedks2022)
-            sil_score = silhouette_score(self.embeddedks2022, kmeans.labels_)
+            sil_score = silhouette_score(self.embeddedks2022, kmeans.labels_) - k / len(self.embeddedks2022)
             sil_dict[sil_score] = clusterData
 
-        # Determine the optimal number of clusters as the one with the highest silhouette score
         clusterData = sil_dict[max(sil_dict.keys())]
 
         print(f"\nClustered prototypes into {clusterData.n_clusters} clusters using KMeans in 2D t-SNE embedded space.\n")
