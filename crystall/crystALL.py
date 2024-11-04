@@ -615,39 +615,6 @@ def estimate_compositional_MPDD(
 
     return foundTotal
 
-def compositionalManhattanDistanceAdd(
-        structureFiles: str,
-        csvfile: str, 
-        targetCompositionDict: Dict[str, int]
-    ) -> None:
-    """
-    Calculate the distance between structures in POSCAR files and the target composition.
-
-    Args:
-        structureFiles: Path to the directory containing structure files.
-        csvfile: Name of the CSV file containing structure data.
-        targetCompositionDict: Dictionary with element symbols as keys and their amounts as values.
-    """
-
-    oldCSVpath = structureFiles + '/' + csvfile
-    reader = csv.reader(open(oldCSVpath, 'r'))
-    newCSV = open(oldCSVpath.replace('.csv', '') + '_distances.csv', 'w', newline='')
-    writer = csv.writer(newCSV)
-    headers = next(reader)
-    headers.append("Distance")
-    writer.writerow(headers)
-
-    for row in reader:
-        s = Structure.from_file(structureFiles + '/' + row[0])
-        c = Composition(s.formula)
-        cDict = dict(c.fractional_composition.as_dict())
-        d = 0
-        for e in targetCompositionDict:
-            d += abs(targetCompositionDict[e] - int(cDict[e] * 1000))
-        row.append(str(d))
-        writer.writerow(row)
-    newCSV.close()
-
 def sortedElementsList(
         comp: Composition
     ) -> List[List[str]]:
