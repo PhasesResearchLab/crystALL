@@ -228,7 +228,7 @@ def run_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 name = e['material']['formula'].replace(' ', '') + '-' + str(
-                    spGroupA.get_lattice_type())
+                    spGroupA.get_crystal_system())
 
                 if 'parentDatabaseID' in e['metadata']:
                     name = name + e['metadata']['parentDatabaseID']
@@ -307,7 +307,7 @@ def run_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = prototype['material']['reducedFormula'] + '-' + str(
-                    spGroupA.get_lattice_type())
+                    spGroupA.get_crystal_system())
 
                 if 'parentDatabaseID' in prototype['metadata']:
                     nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/','-').replace(':','-').replace('-','')
@@ -396,7 +396,7 @@ def run_compositional_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 name = e['material']['formula'].replace(' ', '') + '-' + str(
-                    spGroupA.get_lattice_type())
+                    spGroupA.get_crystal_system())
 
                 if 'parentDatabaseID' in e['metadata']:
                     name = name + e['metadata']['parentDatabaseID']
@@ -493,7 +493,7 @@ def run_compositional_MPDD(
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = prototype['material']['reducedFormula'] + '-' + \
-                        str(spGroupA.get_lattice_type())
+                        str(spGroupA.get_crystal_system())
 
                 if 'parentDatabaseID' in prototype['metadata']:
                     nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/', '-').replace(':','-').replace('-', '')
