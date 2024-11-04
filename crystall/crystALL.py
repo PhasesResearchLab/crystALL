@@ -172,7 +172,7 @@ def run_MPDD(
         targetFormula: Union[str, Composition],
         MPDD: Database,
         collections: List[str],
-        targetPrototypes: Literal['Native', 'Anonymized'],
+        targetPrototypes: Literal['native', 'non-native'],
         filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
@@ -242,7 +242,7 @@ def run_MPDD(
 
         return natPath
 
-    elif targetPrototypes == 'Anonymized':
+    elif targetPrototypes == 'non-native':
 
         print('\nDetecting Input Structures:')
         foundTotal = 0
@@ -343,7 +343,7 @@ def run_compositional_MPDD(
         devs: Dict[str, int],
         MPDD: Database,
         collections: List[str],
-        targetPrototypes: Literal['Native', 'Anonymized'],
+        targetPrototypes: Literal['native', 'non-native'],
         filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
@@ -413,7 +413,7 @@ def run_compositional_MPDD(
 
         return natPath
 
-    elif targetPrototypes == 'Anonymized':
+    elif targetPrototypes == 'non-native':
         # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
 
         # Sorted fractions dictionary query
@@ -882,7 +882,7 @@ class CrystALLSearch:
         
     def generate_MPDD(
             self,
-            targetPrototypes: Literal['Native', 'Anonymized'] = 'Anonymized',
+            targetPrototypes: Literal['native', 'non-native'] = 'non-native',
             filterPrototypes: Literal['material.structID', 'material.volNormStructID'] = 'material.structID',
             limit: int = 1000,
             devs: Dict[str, int] = None
