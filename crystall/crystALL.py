@@ -32,25 +32,40 @@ from pymongo.database import Database
 from scipy.spatial import ConvexHull
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, pairwise_distances
 from sklearn.cluster import KMeans, DBSCAN
 
 # Atomistic / Atomistic ML
 from pysipfenn import Calculator
 from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
-from alignn import pretrained #mpdd-align fork!
+from alignn import pretrained
 from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 
+# Top-Level Functions *************************************************************************
 
-# *********** Top-Level Functions ***********
-# Run prototype identification and elemental substitution for permutations within the anonymous formula.
 def run_local(
         targetFormula: Union[str, Composition],
         prototypePath: str
     ) -> str:
+    """
+    Run prototype identification and elemental substitution for permutations within the anonymous formula.
+
+    Args:
+        targetFormula: The target formula as a string or pymatgen Composition object.
+        prototypePath: Path to the directory containing prototype files.
+
+    Returns:
+        Path to the directory containing the generated prototypes.
+
+    Raises:
+        ValueError: If the target formula is not a string or pymatgen Composition object.
+        AssertionError: If the prototype path is not a valid directory.
+    """
+
+    assert os.path.isdir(prototypePath), 'Prototype path must be a valid directory'
     
     print(f'\nSearching for structure prototypes for: {targetFormula}')
     print('Structure prototype dataset:\n' + prototypePath)
@@ -167,7 +182,6 @@ def run_local(
     print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} prototypes.')
     return finPath
 
-# Run prototype identification and elemental substitution for permutations within the anonymous formula.
 def run_MPDD(
         targetFormula: Union[str, Composition],
         MPDD: Database,
@@ -176,7 +190,28 @@ def run_MPDD(
         filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
+    """
+    Run prototype identification and elemental substitution for permutations within the anonymous formula using the MPDD database.
 
+    Args:
+        targetFormula: The target formula as a string or pymatgen Composition object.
+        MPDD: A pymongo Database object corresponding to the MPDD database.
+        collections: List of collection names to search in.
+        targetPrototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        filterPrototypes: Specifies the prototype filter to use.
+        limit: The maximum number of prototypes to generate.
+
+    Returns:
+        Path to the directory containing the generated prototypes.
+
+    Raises:
+        ValueError: If the target formula is not a string or pymatgen Composition object.
+        AssertionError: If no collections are specified or if MPDD is not a pymongo Database object.
+    """
+
+    assert len(collections) > 0, 'At least one collection must be specified'
+    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
+    
     print(f'\nSearching for structure prototypes for: {targetFormula}')
     print('Using MPDD Database with collections: '+', '.join(collections))
 
@@ -195,7 +230,7 @@ def run_MPDD(
 
     print(f'\nLooking for {targetFormula} in MPDD database collections.')
 
-    if targetPrototypes == 'Native':
+    if targetPrototypes == 'native':
 
         natPath = f"{str(targetFormula).replace(' ', '')}-{'_'.join(collections)}-native-prototypes"
 
@@ -334,10 +369,6 @@ def run_MPDD(
         
         return finPath
 
-# Run prototype identification and elemental substitution for permutations within the anonymous composition fractions
-# E.g.
-# targetCompositionDict = {'Nd':338, 'Sn':215, 'Bi':447}
-# devs =  {'Nd':15, 'Sn':15, 'Bi':15}
 def run_compositional_MPDD(
         targetCompositionDict: Dict[str, int],
         devs: Dict[str, int],
@@ -347,7 +378,25 @@ def run_compositional_MPDD(
         filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
+    """
+    Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
 
+    Args:
+        targetCompositionDict: Dictionary with element symbols as keys and their amounts as values.
+        devs: Dictionary with element symbols as keys and their allowed deviations as values.
+        MPDD: A pymongo Database object corresponding to the MPDD database.
+        collections: List of collection names to search in.
+        targetPrototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        filterPrototypes: Specifies the prototype filter to use.
+        limit: The maximum number of prototypes to generate.
+
+    Returns:
+        Path to the directory containing the generated prototypes.
+    """
+    
+    assert len(collections) > 0, 'At least one collection must be specified'
+    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
+    
     # Target formula
     meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
     rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
@@ -355,7 +404,7 @@ def run_compositional_MPDD(
     print('\nSearching for structure prototypes for: ' + meanFormula + ' ' + rangesStr)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
 
-    if targetPrototypes == 'Native':
+    if targetPrototypes == 'native':
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
@@ -532,6 +581,21 @@ def estimate_compositional_MPDD(
         MPDD: Database,
         collections: List[str]
     ) -> str:
+    """
+    Estimate the number of input structures available for substitution into the target composition.
+
+    Args:
+        targetCompositionDict: Dictionary with element symbols as keys and their amounts as values.
+        devs: Dictionary with element symbols as keys and their allowed deviations as values.
+        MPDD: A pymongo Database object corresponding to the MPDD database.
+        collections: List of collection names to search in.
+
+    Returns:
+        Total number of structures available.
+    """
+
+    assert len(collections) > 0, 'At least one collection must be specified'
+    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
 
     # Target formula
     meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
@@ -551,13 +615,19 @@ def estimate_compositional_MPDD(
 
     return foundTotal
 
-# Calcualte distance between structures in POSCAR files and the composition given by the target composition dictionary
-# CSV file needs to be in the structure files folder
 def compositionalManhattanDistanceAdd(
         structureFiles: str,
         csvfile: str, 
         targetCompositionDict: Dict[str, int]
     ) -> None:
+    """
+    Calculate the distance between structures in POSCAR files and the target composition.
+
+    Args:
+        structureFiles: Path to the directory containing structure files.
+        csvfile: Name of the CSV file containing structure data.
+        targetCompositionDict: Dictionary with element symbols as keys and their amounts as values.
+    """
 
     oldCSVpath = structureFiles + '/' + csvfile
     reader = csv.reader(open(oldCSVpath, 'r'))
@@ -578,12 +648,18 @@ def compositionalManhattanDistanceAdd(
         writer.writerow(row)
     newCSV.close()
 
-# For a given composition, returns elements grouped by their occurrence in the formula,
-# starting from the least common.
-# E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
 def sortedElementsList(
         comp: Composition
     ) -> List[List[str]]:
+    """
+    Return elements grouped by their occurrence in the formula, starting from the least common.
+
+    Args:
+        comp: A pymatgen Composition object.
+
+    Returns:
+        List of lists of element symbols grouped by their occurrence in the formula.
+    """
 
     fractions = re.sub(r'[A-z]+', '', comp.formula).split()
     elements = re.sub(r'[0-9]+', '', comp.formula).split()
@@ -595,50 +671,37 @@ def sortedElementsList(
            for _, g in groupby(compl,key=itemgetter(1))]
     return sortedEL
 
-# For a given list of elements grouped by occurrence in the formula (see sortedElementsList())
-# it returns all permutations of elements within the groups that conserve the anonymous
-# formula of the compound.
-# E.g. 'Al2Ni3O2U4As3I4Bi2Gd1' returns
-# [['Gd', 'Al', 'Bi', 'O', 'Ni', 'As', 'U', 'I'],
-#  ['Gd', 'Al', 'Bi', 'O', 'Ni', 'As', 'I', 'U'],
-#  ['Gd', 'Al', 'Bi', 'O', 'As', 'Ni', 'U', 'I'],
-#  ['Gd', 'Al', 'Bi', 'O', 'As', 'Ni', 'I', 'U'],
-#  ['Gd', 'Al', 'O', 'Bi', 'Ni', 'As', 'U', 'I'],
-#  ['Gd', 'Al', 'O', 'Bi', 'Ni', 'As', 'I', 'U'],
-#  ['Gd', 'Al', 'O', 'Bi', 'As', 'Ni', 'U', 'I'],
-#  ['Gd', 'Al', 'O', 'Bi', 'As', 'Ni', 'I', 'U'],
-#  ['Gd', 'Bi', 'Al', 'O', 'Ni', 'As', 'U', 'I'],
-#  ['Gd', 'Bi', 'Al', 'O', 'Ni', 'As', 'I', 'U'],
-#  ['Gd', 'Bi', 'Al', 'O', 'As', 'Ni', 'U', 'I'],
-#  ['Gd', 'Bi', 'Al', 'O', 'As', 'Ni', 'I', 'U'],
-#  ['Gd', 'Bi', 'O', 'Al', 'Ni', 'As', 'U', 'I'],
-#  ['Gd', 'Bi', 'O', 'Al', 'Ni', 'As', 'I', 'U'],
-#  ['Gd', 'Bi', 'O', 'Al', 'As', 'Ni', 'U', 'I'],
-#  ['Gd', 'Bi', 'O', 'Al', 'As', 'Ni', 'I', 'U'],
-#  ['Gd', 'O', 'Al', 'Bi', 'Ni', 'As', 'U', 'I'],
-#  ['Gd', 'O', 'Al', 'Bi', 'Ni', 'As', 'I', 'U'],
-#  ['Gd', 'O', 'Al', 'Bi', 'As', 'Ni', 'U', 'I'],
-#  ['Gd', 'O', 'Al', 'Bi', 'As', 'Ni', 'I', 'U'],
-#  ['Gd', 'O', 'Bi', 'Al', 'Ni', 'As', 'U', 'I'],
-#  ['Gd', 'O', 'Bi', 'Al', 'Ni', 'As', 'I', 'U'],
-#  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'U', 'I'],
-#  ['Gd', 'O', 'Bi', 'Al', 'As', 'Ni', 'I', 'U']]
 def elementPermutations(
         sEL: List[List[str]]
     ) -> List[List[str]]:
+    """
+    Return all permutations of elements within the groups that conserve the anonymous formula of the compound.
+
+    Args:
+        sEL: List of lists of element symbols grouped by their occurrence in the formula.
+
+    Returns:
+        List of lists of element symbols representing all permutations.
+    """
+
     generatingList = [[list(i) for i in permutations(lev)] for lev in sEL]
     outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
     return outList
 
-# For a given (1) composition dictionary with permil fractions (1/1000)
-# E.g. {'Nd':338, 'Sn':215, 'Bi':447}
-# and a list of allowed composition deviations
-# e.g. {'Nd':50, 'Sn':50, 'Bi':20}
-# returns a MPDD query for ananymous composition space with N components
 def comp2acompQ(
         compDict: Dict[str, int],
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
+    """
+    Return a MPDD query for anonymous composition space with N components.
+
+    Args:
+        compDict: Dictionary with element symbols as keys and their amounts as values.
+        devs: Dictionary with element symbols as keys and their allowed deviations as values.
+
+    Returns:
+        Dictionary representing the MPDD query.
+    """
 
     eVals = []
     for e in compDict:
@@ -654,6 +717,16 @@ def comp2compQ(
         compDict: Dict[str, int],
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
+    """
+    Return a MPDD query for the given composition dictionary with permil fractions.
+
+    Args:
+        compDict: Dictionary with element symbols as keys and their amounts as values.
+        devs: Dictionary with element symbols as keys and their allowed deviations as values.
+
+    Returns:
+        Dictionary representing the MPDD query.
+    """
 
     meanComposition = Composition(' '.join(''.join((key, str(val))) for (key, val) in compDict.items()))
     mpddQuery = dict()
@@ -663,13 +736,22 @@ def comp2compQ(
         mpddQuery.update({key: {'$gte': (compDict[e] - devs[e]) / 1000, '$lte': (compDict[e] - devs[e]) / 1000}})
     return mpddQuery
 
-# For a given composition, returns elements grouped by their occurrence in the formula, starting from the least common.
-# E.g. 'Al2Ni3O2U4As3I4Bi2' returns [['Al', 'Bi', 'O'], ['Ni', 'As'], ['U', 'I']]
 def orderedAllowedSubstitutions(
         targetCompDict: Dict[str, int],
         devs: Dict[str, int],
         prototypeCompDict: Dict[str, int]
     ) -> List[List[str]]:
+    """
+    Return elements grouped by their occurrence in the formula, starting from the least common.
+
+    Args:
+        targetCompDict: Dictionary with element symbols as keys and their amounts as values.
+        devs: Dictionary with element symbols as keys and their allowed deviations as values.
+        prototypeCompDict: Dictionary with element symbols as keys and their amounts as values for the prototype.
+
+    Returns:
+        List of lists of element symbols representing allowed substitutions.
+    """
 
     # Finds what elements can be used for substitution
     allInRangeSubstitutions = []
@@ -691,8 +773,7 @@ def orderedAllowedSubstitutions(
 
     return allAllowedSubstitutions
 
-
-# *********** Convenience High-Level API Class ***********
+# Convenience High-Level API Class ************************************************************
 
 class CrystALLSearch:
     """
@@ -707,7 +788,19 @@ class CrystALLSearch:
             targetFormula: Union[str, Composition],
             calculator: Calculator = None
     ) -> None:
-        
+        """
+        Initialize the CrystALLSearch class.
+
+        Args:
+            targetFormula: The target formula as a string or pymatgen Composition object.
+            calculator: A pySIPFENN Calculator object. If not provided, a default Calculator is used.
+
+        Raises:
+            TypeError: If the target formula is not a string or pymatgen Composition object.
+        """
+
+        assert isinstance(targetFormula, (str, Composition)), 'Target formula must be a string or a pymatgen Composition object'
+
         # Defined at initialization
         if isinstance(targetFormula, str):
             self.targetFormula = Composition(targetFormula)
@@ -781,9 +874,19 @@ class CrystALLSearch:
             calculator: Calculator,
             verbose: bool = True
     ) -> None:
+        """
+        Update the available objectives with the models found.
+
+        Args:
+            calculator: A pySIPFENN Calculator object.
+            verbose: If True, prints the available objectives. Defaults to True.
+
+        Raises:
+            AssertionError: If the calculator is not a pySIPFENN Calculator object.
+        """
 
         assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
-
+        
         if self.model_status['pySIPFENN']:
         
             loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
@@ -806,18 +909,17 @@ class CrystALLSearch:
         
             print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.availableObjectives)}{Style.RESET_ALL}.")
 
-
     def __check_objectives(
             self
     ) -> None:
         """
-        Checks available objectives with predictions.
+        Check available objectives with predictions.
 
         Raises:
             AssertionError: If no objectives are available.
 
         Returns:
-            List[str]: List of common objectives between self.availableObjectives and self.predictedObjectives.
+            List of common objectives between available objectives and predicted objectives.
         """
 
         assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "At least one objective is required for classification. Run `download_models` first."
@@ -840,8 +942,8 @@ class CrystALLSearch:
             self
     ) -> None:
         """
-        Downloads the default models for both pySIPFENN and MPDD-ALIGNN.
-        """        
+        Download the default models for both pySIPFENN and MPDD-ALIGNN.
+        """
         
         print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
         self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
@@ -859,7 +961,7 @@ class CrystALLSearch:
             collections: List[str] = ['curated']
     ) -> None:
         """
-        Establishes a connection to the MPDD database and sets the collections to search in.
+        Establish a connection to the MPDD database and set the collections to search in.
 
         Args:
             MPDD: A pymongo Database object to connect to. If not provided, uses the existing connection.
@@ -888,20 +990,22 @@ class CrystALLSearch:
             devs: Dict[str, int] = None
     ) -> None:
         """
-        Generates prototype materials from the Material-Property-Descriptor Database (MPDD) based on the target formula specified in the `targetFormula` attribute of the class.
+        Generate prototype materials from the MPDD database based on the target formula.
 
-        Before calling this method, a connection to the MPDD must be established using the `connect_MPDD` method.
+        Args:
+            targetPrototypes: Specifies whether to use 'native' or 'non-native' prototypes. Defaults to 'non-native'.
+            filterPrototypes: Specifies the prototype filter to use. Defaults to 'material.structID'.
+            limit: The maximum number of prototypes to generate. Defaults to 1000.
+            devs: Dictionary with element symbols as keys and their allowed deviations as values. Defaults to None.
 
         Raises:
             AssertionError: If no connection to the MPDD has been established, or if no collections have been specified.
-
-        Args:
-            limit: The maximum number of prototypes to generate. Defaults to 1000.
         """
-        assert self.MPDD is not None, "No database connection identified. Please run ``connect_MPDD`` first."
-        assert self.collections, "No collections identified. Please provide a list of collections to search in."
-        assert devs is None or isinstance(devs, dict), "Deviations must be a dictionary with element symbols as keys and integer values as deviations"
 
+        assert self.MPDD is not None, 'No database connection identified. Please run `connect_MPDD` first.'
+        assert self.collections, 'No collections identified. Please provide a list of collections to search in.'
+        assert devs is None or isinstance(devs, dict), 'Deviations must be a dictionary with element symbols as keys and integer values as deviations'
+        
         if devs is None:
             self.prototypePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
         else:
@@ -914,7 +1018,7 @@ class CrystALLSearch:
             prototypePath: str = None
     ) -> None:
         """
-        Generates prototypes from a local directory containing POSCAR or CIF files.
+        Generate prototypes from a local directory containing POSCAR or CIF files.
 
         Args:
             prototypePath: Path to the directory with prototype files. If not provided, uses the existing path.
@@ -924,7 +1028,7 @@ class CrystALLSearch:
         """
 
         self.prototypePath = prototypePath if prototypePath is not None else self.prototypePath
-        assert self.prototypePath, "No prototypes folder identified. Please provide a path to the prototypes folder."
+        assert self.prototypePath, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
         self.prototypePath = run_local(self.targetFormula, self.prototypePath)
         inputFiles = natsorted(os.listdir(self.prototypePath))
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
@@ -934,15 +1038,18 @@ class CrystALLSearch:
             mode: str = 'serial'
     ) -> None:
         """
-        Predicts properties for the prototype materials using pySIPFENN models and updates the prototypes with the predictions.
+        Predict properties for the prototype materials using pySIPFENN models and update the prototypes with the predictions.
+
+        Args:
+            mode: Mode to run pySIPFENN. Defaults to 'serial'.
 
         Raises:
             AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no pySIPFENN models are found, or if the number of prototypes does not match the number of property predictions.
         """
 
-        assert self.prototypePath is not None, "No prototypes folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert isinstance(self.prototypePath, str), "Prototypes folder path must be a string"
-        assert self.model_status['pySIPFENN'], "pySIPFENN models not found. Please run ``download_models`` first."
+        assert self.prototypePath is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert isinstance(self.prototypePath, str), 'Prototypes folder path must be a string'
+        assert self.model_status['pySIPFENN'], 'pySIPFENN models not found. Please run `download_models` first.'
 
         for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.availableObjectives)):
             if model not in self.predictedObjectives:
@@ -950,7 +1057,7 @@ class CrystALLSearch:
         
         self.Calculator.runFromDirectory(self.prototypePath, 'KS2022', mode=mode, max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDictsWithNames(), np.array(self.Calculator.descriptorData)
-        assert len(self.prototypes) == len(resultDicts), "Number of prototypes does not match number of property predictions"
+        assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
         
         for result in resultDicts:
             name = result['name']
@@ -972,15 +1079,18 @@ class CrystALLSearch:
             mode: str = 'serial'
     ) -> None:
         """
-        Predicts properties for the prototype materials using MPDD-ALIGNN models and updates the prototypes with the predictions.
+        Predict properties for the prototype materials using MPDD-ALIGNN models and update the prototypes with the predictions.
+
+        Args:
+            mode: Mode to run ALIGNN. Defaults to 'serial'.
 
         Raises:
             AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of prototypes does not match the number of property predictions.
         """
 
-        assert self.prototypePath is not None, "No prototypes folder identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert isinstance(self.prototypePath, str), "Prototypes folder path must be a string"
-        assert self.model_status['MPDD-ALIGNN'], "MPDD-ALIGNN models not found. Please run ``download_models`` first."
+        assert self.prototypePath is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert isinstance(self.prototypePath, str), 'Prototypes folder path must be a string'
+        assert self.model_status['MPDD-ALIGNN'], 'MPDD-ALIGNN models not found. Please run `download_models` first.'
         
         for model_dict in pretrained.get_default_models():
             if model_dict['name'] in self.availableObjectives and model_dict['name'] not in self.predictedObjectives:
@@ -989,7 +1099,7 @@ class CrystALLSearch:
         print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
         print('Calculating descriptors...')
         resultDicts = pretrained.run_models_from_directory(self.prototypePath, mode=mode)
-        assert len(self.prototypes) == len(resultDicts), "Number of prototypes does not match number of property predictions"
+        assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
 
         for result in resultDicts:
             name = result['name']
@@ -1009,10 +1119,16 @@ class CrystALLSearch:
     def get_mpdd_convexhull(
             self
     ) -> None:
-        
-        assert self.MPDD is not None, "No database connection identified. Please run ``connect_MPDD`` first."
-        assert len(self.prototypes) > 0, "No prototypes identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        
+        """
+        Get the MPDD convex hull stability for the prototypes.
+
+        Raises:
+            AssertionError: If no connection to the MPDD has been established, or if no prototypes have been identified.
+        """
+
+        assert self.MPDD is not None, 'No database connection identified. Please run `connect_MPDD` first.'
+        assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
+
         MPDDcurated = self.MPDD['curated']
         
         eList = self.targetFormula.chemical_system.split('-')
@@ -1058,14 +1174,14 @@ class CrystALLSearch:
             self
     ) -> None:
         """
-        Calculates the average of the predicted properties for each prototype material.
+        Calculate the average of the predicted properties for each prototype material.
 
         Raises:
             AssertionError: If no features are identified or if less than two models are available for averaging.
         """
 
-        assert len(self.prototypes) > 0, "No prototypes identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert self.predictedObjectives, "No objective predictions identified. Please run ``run_pysipfenn`` or ``get_alignn_properties`` first."
+        assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert self.predictedObjectives, 'No objective predictions identified. Please run `run_pysipfenn` or `get_alignn_properties` first.'
 
         # Calculate the average of the predictions
         for i, prototype in enumerate(self.prototypes):
@@ -1078,11 +1194,18 @@ class CrystALLSearch:
             cutoff: float = 0.5
     ) -> None:
         """
-        Filters the prototypes based on the Formation Energy cutoff value provided. Must be run AFTER featurizarion / property prediction by ``run_pysipfenn``.
+        Filter the prototypes based on the Formation Energy cutoff value provided.
+
+        Args:
+            max_prototypes: The maximum number of prototypes to keep.
+            cutoff: The Formation Energy cutoff value. Defaults to 0.5.
+
+        Raises:
+            AssertionError: If no prototypes are identified or if no features are identified.
         """
 
-        assert len(self.prototypes) > 0, "No prototypes identified. Please run ``generate_MPDD`` or ``generate_local`` first."
-        assert len(self.ks2022) > 0, "No features identified. Please run ``run_pysipfenn`` first."
+        assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert len(self.ks2022) > 0, 'No features identified. Please run `run_pysipfenn` first.'
 
         if max_prototypes:
             self.prototypes.sort(key=lambda prototype: (prototype['Avg_Formation_Energy'], prototype['index']))
@@ -1115,7 +1238,7 @@ class CrystALLSearch:
             sameComposition: bool
     ) -> None:
         """
-        Embeds the features in 2D t-SNE space.
+        Embed the features in 2D t-SNE space.
 
         Args:
             sameComposition: If True, only structural features are used. Defaults to False.
@@ -1123,8 +1246,9 @@ class CrystALLSearch:
         Raises:
             AssertionError: If no features are identified.
         """
-        assert len(self.prototypes) >= 5, "At least 5 prototypes are required to run `cluster_prototypes`."
-        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
+
+        assert len(self.prototypes) >= 5, 'At least 5 prototypes are required to run `cluster_prototypes`.'
+        assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
 
         if sameComposition:
             features2use = np.array([onlyStructural(v) for v in self.ks2022])
@@ -1145,7 +1269,7 @@ class CrystALLSearch:
             sameComposition: bool = False
     ) -> None:
         """
-        Clusters the prototypes using KMeans, assigns each data point to its cluster, and selects the best prototypes.
+        Cluster the prototypes using KMeans, assign each data point to its cluster, and select the best prototypes.
 
         Args:
             n_clusters: Number of clusters. If not provided, the optimal number is determined automatically using silhouette score.
@@ -1155,9 +1279,9 @@ class CrystALLSearch:
             AssertionError: If no features are identified, if the number of clusters is not an integer, or if any objective is not allowed.
         """
 
-        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
-        assert isinstance(n_clusters, int) or n_clusters is None, "Number of clusters must be an integer"
-        assert n_clusters is None or n_clusters <= len(self.prototypes), "Number of clusters must be less or equal than the number of prototypes"
+        assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
+        assert isinstance(n_clusters, int) or n_clusters is None, 'Number of clusters must be an integer'
+        assert n_clusters is None or n_clusters <= len(self.prototypes), 'Number of clusters must be less or equal than the number of prototypes'
 
         # Check if the number of prototypes is sufficient for clustering
         if len(self.prototypes) < 5:
@@ -1212,7 +1336,7 @@ class CrystALLSearch:
             sameComposition: bool = False
     ) -> None:
         """
-        Clusters the prototypes using DBSCAN, assigns each data point to its cluster, and selects the best prototypes.
+        Cluster the prototypes using DBSCAN, assign each data point to its cluster, and select the best prototypes.
 
         Args:
             eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
@@ -1224,9 +1348,9 @@ class CrystALLSearch:
             AssertionError: If no features are identified, if eps is not a float, if min_samples is not an integer, or if any objective is not allowed.
         """
 
-        assert self.ks2022 is not None, "No features identified. Please run ``run_pysipfenn`` first."
-        assert isinstance(eps, float), "eps must be a float"
-        assert isinstance(min_samples, int), "min_samples must be an integer"
+        assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
+        assert isinstance(eps, float), 'eps must be a float'
+        assert isinstance(min_samples, int), 'min_samples must be an integer'
 
         # Check if the number of prototypes is sufficient for clustering
         if len(self.prototypes) < 5:
@@ -1260,14 +1384,13 @@ class CrystALLSearch:
             clusters: dict
     ) -> None:
         """
-        Selects the best prototype per cluster for each objective and stores them in self.topCandidates.
+        Select the best prototype per cluster for each objective and store them in self.topCandidates.
 
         Args:
             clusters: A dictionary mapping cluster labels to lists of prototype dictionaries.
-            objectives: A list of objectives to consider when selecting prototypes.
 
         Returns:
-            List[dict]: A list of dictionaries representing the selected prototypes.
+            List of dictionaries representing the selected prototypes.
         """
 
         print(f"List of prototypes selected per energy of each cluster:")
@@ -1298,23 +1421,21 @@ class CrystALLSearch:
             file_prefix: str = ''
     ) -> None:
         """
-        Exports a CSV file with the specified content.
+        Export a CSV file with the specified content.
 
         Args:
-            content: Specifies the type of data to export. Can be 'allPrototypes' and/or 'topCandidates'. 
-                                        Defaults to ['allPrototypes', 'topCandidates'].
+            content: Specifies the type of data to export. Can be 'allPrototypes' and/or 'topCandidates'. Defaults to ['allPrototypes', 'topCandidates'].
             file_prefix: A prefix that will be added to the file name. Defaults to ''.
 
         Raises:
             AssertionError: If no prototypes are identified or if an invalid content type is provided.
 
         Outputs:
-            CSV files: Writes CSV files for 'allPrototypes' and/or 'topCandidates' depending on the content argument. 
-                        The files are named based on the content type and the file_prefix (if provided).
+            CSV files: Writes CSV files for 'allPrototypes' and/or 'topCandidates' depending on the content argument. The files are named based on the content type and the file_prefix (if provided).
         """
 
-        assert len(self.prototypes) > 0, "No prototypes identified. Please run `generate_MPDD` or `generate_local` first."
-        assert not any(value not in ['allPrototypes', 'topCandidates'] for value in content), "Content should contain only 'allPrototypes' and/or 'topCandidates'"
+        assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert not any(value not in ['allPrototypes', 'topCandidates'] for value in content), 'Content should contain only `allPrototypes` and/or `topCandidates`'
 
         if 'topCandidates' in content and not self.topCandidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'allPrototypes' only.")
@@ -1340,19 +1461,31 @@ class CrystALLSearch:
             
             print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.predictedObjectives)} Objective(s) to {file_name}")
 
-    def plot_histogram(
+    def plot_barchart(
             self,
             objective: Union[str, List[str]] = None,
             save: bool = False,
-            file_name: str = 'histogram_clusterPrototypes',
+            file_name: str = 'barchart_clusterPrototypes',
             colorBlind: bool = False
     ) -> None:
+        """
+        Plot bar charts for the prototypes.
+
+        Args:
+            objective: The objective to plot. Defaults to the first available objective.
+            save: If True, saves the plot as an HTML file. Defaults to False.
+            file_name: The name of the HTML file to save the plot. Defaults to 'barchart_clusterPrototypes'.
+            colorBlind: If True, uses a colorblind-friendly color palette. Defaults to False.
+
+        Raises:
+            AssertionError: If the objective is not one of the calculated objectives or their average.
+        """
 
         objective = objective if objective is not None else self.availableObjectives[0]
 
-        assert objective in self.predictedObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.predictedObjectives)
-        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
-        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+        assert objective in self.predictedObjectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predictedObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
+        assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.topCandidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
@@ -1451,12 +1584,25 @@ class CrystALLSearch:
             markerSymbol: bool = False,
             colorBlind: bool = False
     ) -> None:
-        
+        """
+        Plot 2D scatter plots for the prototypes.
+
+        Args:
+            objective: The objective to plot. Defaults to the first available objective.
+            save: If True, saves the plot as an HTML file. Defaults to False.
+            file_name: The name of the HTML file to save the plot. Defaults to '2D_clusterPrototypes'.
+            markerSymbol: If True, uses different marker symbols for each cluster. Defaults to False.
+            colorBlind: If True, uses a colorblind-friendly color palette. Defaults to False.
+
+        Raises:
+            AssertionError: If the objective is not one of the calculated objectives or their average.
+        """
+
         objective = objective if objective is not None else self.availableObjectives[0]
 
-        assert objective in self.predictedObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.predictedObjectives)
-        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
-        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+        assert objective in self.predictedObjectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predictedObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
+        assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.topCandidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
@@ -1584,12 +1730,25 @@ class CrystALLSearch:
             markerSymbol: bool = False,
             colorBlind: bool = False
     ) -> None:
+        """
+        Plot 3D scatter plots for the prototypes.
+
+        Args:
+            objective: The objective to plot. Defaults to the first available objective.
+            save: If True, saves the plot as an HTML file. Defaults to False.
+            file_name: The name of the HTML file to save the plot. Defaults to '3D_clusterPrototypes'.
+            markerSymbol: If True, uses different marker symbols for each cluster. Defaults to False.
+            colorBlind: If True, uses a colorblind-friendly color palette. Defaults to False.
+
+        Raises:
+            AssertionError: If the objective is not one of the calculated objectives or their average.
+        """
 
         objective = objective if objective is not None else self.availableObjectives[0]
 
-        assert objective in self.predictedObjectives, "Objective should be one of the calculated objectives and/or their average: " + ', '.join(self.predictedObjectives)
-        assert isinstance(objective, str) or isinstance(objective, list), "Objective must be a single value specified as a string or a list with a single string"
-        assert not (isinstance(objective, list) and len(objective) != 1), "If objective is given as a list, it must contain exactly one string"
+        assert objective in self.predictedObjectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predictedObjectives)
+        assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
+        assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.topCandidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 3D plot generation.")
