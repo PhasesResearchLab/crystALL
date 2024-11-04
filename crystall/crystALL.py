@@ -22,6 +22,11 @@ from distinctipy import get_colors
 from plotly.offline import plot, iplot
 import plotly.graph_objs as go
 
+# Disable undesired warnings from torch and pymatgen
+import warnings
+warnings.filterwarnings("ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*")
+warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
+
 # ML / Data
 from pymongo.database import Database
 from scipy.spatial import ConvexHull
