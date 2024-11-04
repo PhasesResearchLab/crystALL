@@ -1384,32 +1384,32 @@ class CrystALLSearch:
 
     def export_table(
             self,
-            content: List[str] = ['all_prototypes', 'top_candidates'],
+            content: List[str] = ['all-prototypes', 'top-candidates'],
             file_prefix: str = ''
     ) -> None:
         """
         Export a CSV file with the specified content.
 
         Args:
-            content: Specifies the type of data to export. Can be 'all_prototypes' and/or 'top_candidates'. Defaults to ['all_prototypes', 'top_candidates'].
+            content: Specifies the type of data to export. Can be 'all-prototypes' and/or 'top-candidates'. Defaults to ['all-prototypes', 'top-candidates'].
             file_prefix: A prefix that will be added to the file name. Defaults to ''.
 
         Raises:
             AssertionError: If no prototypes are identified or if an invalid content type is provided.
 
         Outputs:
-            CSV files: Writes CSV files for 'all_prototypes' and/or 'top_candidates' depending on the content argument. The files are named based on the content type and the file_prefix (if provided).
+            CSV files: Writes CSV files for 'all-prototypes' and/or 'top-candidates' depending on the content argument. The files are named based on the content type and the file_prefix (if provided).
         """
 
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert not any(value not in ['all_prototypes', 'top_candidates'] for value in content), 'Content should contain only `all_prototypes` and/or `top_candidates`'
+        assert not any(value not in ['all-prototypes', 'top-candidates'] for value in content), 'Content should contain only `all_prototypes` and/or `top_candidates`'
 
-        if 'top_candidates' in content and not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all_prototypes' only.")
-            content = ['all_prototypes']
+        if 'top-candidates' in content and not self.top_candidates:
+            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all-prototypes' only.")
+            content = ['all-prototypes']
 
-        if 'all_prototypes' in content:
-            file_name = 'all_prototypes.csv' if file_prefix == '' else file_prefix + '_all_prototypes.csv'
+        if 'all-prototypes' in content:
+            file_name = 'all-prototypes.csv' if file_prefix == '' else file_prefix + '_all_prototypes.csv'
             with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, self.prototypes[0].keys())
                 dict_writer.writeheader()
@@ -1417,8 +1417,8 @@ class CrystALLSearch:
             
             print(f"\nExported {Fore.GREEN}{Style.BRIGHT}{len(self.prototypes)}{Style.RESET_ALL} prototypes to {file_name}")
         
-        if 'top_candidates' in content:
-            file_name = 'top_candidates.csv' if file_prefix == '' else file_prefix + '_top_candidates.csv'
+        if 'top-candidates' in content:
+            file_name = 'top-candidates.csv' if file_prefix == '' else file_prefix + '_top_candidates.csv'
             top_candidates_exported = [d for d in self.top_candidates if d['objective'] in self.available_objectives]
             
             with open(file_name, 'w', newline='') as output_file:
