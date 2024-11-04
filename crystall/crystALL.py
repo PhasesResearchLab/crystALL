@@ -145,7 +145,7 @@ def run_local(
         spGroupA = SpacegroupAnalyzer(s)
         fileSplit = prototype.split('.')
         newNameRoot = fileSplit[0] + '-' + str(
-            spGroupA.get_lattice_type()) + '-'
+            spGroupA.get_crystal_system()) + '-'
 
         p = 0
         for permut in permuts:
@@ -231,7 +231,7 @@ def run_MPDD(
                     spGroupA.get_crystal_system())
 
                 if 'parentDatabaseID' in e['metadata']:
-                    name = name + e['metadata']['parentDatabaseID']
+                    name = name + '-' + e['metadata']['parentDatabaseID']
 
                 else:
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
@@ -399,7 +399,7 @@ def run_compositional_MPDD(
                     spGroupA.get_crystal_system())
 
                 if 'parentDatabaseID' in e['metadata']:
-                    name = name + e['metadata']['parentDatabaseID']
+                    name = name + '-' + e['metadata']['parentDatabaseID']
 
                 else:
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
@@ -1038,7 +1038,7 @@ class CrystALLSearch:
 
             name = f'{formula}-{e["_id"]}'
             if 'parentDatabaseID' in e['metadata']:
-                name = name + e['metadata']['parentDatabaseID']
+                name = name + '-' + e['metadata']['parentDatabaseID']
 
             if dH is not None:
                 pdEntry = PDEntry(comp, dH, name)
