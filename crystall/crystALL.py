@@ -47,15 +47,15 @@ from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 # Top-Level Functions *************************************************************************
 
 def run_local(
-        targetFormula: Union[str, Composition],
-        prototypePath: str
+        target_formula: Union[str, Composition],
+        prototype_path: str
     ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous formula.
 
     Args:
-        targetFormula: The target formula as a string or pymatgen Composition object.
-        prototypePath: Path to the directory containing prototype files.
+        target_formula: The target formula as a string or pymatgen Composition object.
+        prototype_path: Path to the directory containing prototype files.
 
     Returns:
         Path to the directory containing the generated prototypes.
@@ -65,30 +65,30 @@ def run_local(
         AssertionError: If the prototype path is not a valid directory.
     """
 
-    assert os.path.isdir(prototypePath), 'Prototype path must be a valid directory'
+    assert os.path.isdir(prototype_path), 'Prototype path must be a valid directory'
     
-    print(f'\nSearching for structure prototypes for: {targetFormula}')
-    print('Structure prototype dataset:\n' + prototypePath)
+    print(f'\nSearching for structure prototypes for: {target_formula}')
+    print('Structure prototype dataset:\n' + prototype_path)
 
-    if isinstance(targetFormula, str):
+    if isinstance(target_formula, str):
         # Formula to pymatgen Composition
-        composition = Composition(targetFormula)
-    elif isinstance(targetFormula, Composition):
-        composition = targetFormula
+        composition = Composition(target_formula)
+    elif isinstance(target_formula, Composition):
+        composition = target_formula
     else:
         raise ValueError('Target formula must be a string or a pymatgen Composition object')
-    assert os.path.isdir(prototypePath), 'Prototype path must be a valid directory'
+    assert os.path.isdir(prototype_path), 'Prototype path must be a valid directory'
 
     aFormula = composition.anonymized_formula
     nElements = composition.to_data_dict['nelements']
 
     # Initial prototype dataset scan
-    fileList = natsorted(os.listdir(prototypePath))
+    fileList = natsorted(os.listdir(prototype_path))
     total = fileList.__len__()
     print(str(total)+' files detected\n')
     # Intermediate directory for identified prototypes
     try:
-        os.mkdir(os.path.split(prototypePath)[1] + '-' + aFormula)
+        os.mkdir(os.path.split(prototype_path)[1] + '-' + aFormula)
         print('Intermediate directory for '+aFormula+' created.')
     except FileExistsError:
         print('Intermediate directory for '+aFormula+' already exist.\nPrototypes selection will be overwritten/updated.\n')
@@ -102,12 +102,12 @@ def run_local(
     for file in fileList:
         allS = allS + 1
         if os.path.splitext(file)[1] == '.POSCAR':
-            s = Structure.from_file(prototypePath +'/'+ file)
+            s = Structure.from_file(prototype_path +'/'+ file)
             if s.n_elems == nElements:
                 nEl = nEl + 1
                 if Composition(s.formula).anonymized_formula == aFormula:
                     sP = Poscar(s)
-                    sP.write_file(os.path.split(prototypePath)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
+                    sP.write_file(os.path.split(prototype_path)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
                     aF = aF + 1
                     if aF % 100 == 0:
                         print(str(aF) + ' prototype structures identified.')
@@ -121,7 +121,7 @@ def run_local(
     print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%')
 
     # List selected prototypes
-    prototypeList = natsorted(os.listdir(os.path.split(prototypePath)[1] + '-' + aFormula))
+    prototypeList = natsorted(os.listdir(os.path.split(prototype_path)[1] + '-' + aFormula))
 
     # Substitution elements combination.
     print('{0:*^80}'.format(' Substituting elements in the prototypes '))
@@ -141,9 +141,9 @@ def run_local(
     else:
         print('\nTarget composition indicates discrete element substitution.')
 
-    intPath = f"{os.path.split(prototypePath)[1]}-{aFormula}"
+    intPath = f"{os.path.split(prototype_path)[1]}-{aFormula}"
     print('Intermediate Directory: ' + intPath)
-    finPath = f"{os.path.split(prototypePath)[1]}-{str(targetFormula).replace(' ', '')}"
+    finPath = f"{os.path.split(prototype_path)[1]}-{str(target_formula).replace(' ', '')}"
     print('Final Directory: ' + finPath)
     try:
         os.mkdir(finPath)
@@ -179,26 +179,26 @@ def run_local(
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
-    print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} prototypes.')
+    print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
     return finPath
 
 def run_MPDD(
-        targetFormula: Union[str, Composition],
+        target_formula: Union[str, Composition],
         MPDD: Database,
         collections: List[str],
-        targetPrototypes: Literal['native', 'non-native'],
-        filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
+        target_prototypes: Literal['native', 'non-native'],
+        filter_prototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous formula using the MPDD database.
 
     Args:
-        targetFormula: The target formula as a string or pymatgen Composition object.
+        target_formula: The target formula as a string or pymatgen Composition object.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
-        targetPrototypes: Specifies whether to use 'native' or 'non-native' prototypes.
-        filterPrototypes: Specifies the prototype filter to use.
+        target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
 
     Returns:
@@ -212,14 +212,14 @@ def run_MPDD(
     assert len(collections) > 0, 'At least one collection must be specified'
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
     
-    print(f'\nSearching for structure prototypes for: {targetFormula}')
+    print(f'\nSearching for structure prototypes for: {target_formula}')
     print('Using MPDD Database with collections: '+', '.join(collections))
 
-    if isinstance(targetFormula, str):
+    if isinstance(target_formula, str):
         # Formula to pymatgen Composition
-        composition = Composition(targetFormula)
-    elif isinstance(targetFormula, Composition):
-        composition = targetFormula
+        composition = Composition(target_formula)
+    elif isinstance(target_formula, Composition):
+        composition = target_formula
     else:
         raise ValueError('Target formula must be a string or a pymatgen Composition object')
     assert len(collections) > 0, 'At least one collection must be specified'
@@ -228,11 +228,11 @@ def run_MPDD(
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
 
-    print(f'\nLooking for {targetFormula} in MPDD database collections.')
+    print(f'\nLooking for {target_formula} in MPDD database collections.')
 
-    if targetPrototypes == 'native':
+    if target_prototypes == 'native':
 
-        natPath = f"{str(targetFormula).replace(' ', '')}-{'_'.join(collections)}-native-prototypes"
+        natPath = f"{str(target_formula).replace(' ', '')}-{'_'.join(collections)}-native-prototypes"
 
         try:
             os.mkdir(natPath)
@@ -246,7 +246,7 @@ def run_MPDD(
             pipeline = [
                 {"$match": {"material.reducedFormula": rFormula}},
                 {"$group": {
-                    "_id": "$" + filterPrototypes,
+                    "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
@@ -277,7 +277,7 @@ def run_MPDD(
 
         return natPath
 
-    elif targetPrototypes == 'non-native':
+    elif target_prototypes == 'non-native':
 
         print('\nDetecting Input Structures:')
         foundTotal = 0
@@ -306,7 +306,7 @@ def run_MPDD(
         else:
             print('\nTarget composition indicates discrete element substitution.')
 
-        finPath = f"{str(targetFormula).replace(' ', '')}-{'_'.join(collections)}-prototypes"
+        finPath = f"{str(target_formula).replace(' ', '')}-{'_'.join(collections)}-prototypes"
         print('Final Prototype Directory: ' + finPath)
 
         try:
@@ -323,7 +323,7 @@ def run_MPDD(
             pipeline = [
                 {"$match": {"material.anonymizedFormula": aFormula}},
                 {"$group": {
-                    "_id": "$" + filterPrototypes,
+                    "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
@@ -365,29 +365,29 @@ def run_MPDD(
                 if allS % 1000 == 0:
                     print(str(allS) + ' substitutions complete.')
 
-        print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {targetFormula} prototypes.')
+        print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
         
         return finPath
 
 def run_compositional_MPDD(
-        targetCompositionDict: Dict[str, int],
+        target_composition_dict: Dict[str, int],
         devs: Dict[str, int],
         MPDD: Database,
         collections: List[str],
-        targetPrototypes: Literal['native', 'non-native'],
-        filterPrototypes: Literal['material.structID', 'material.volNormStructID'],
+        target_prototypes: Literal['native', 'non-native'],
+        filter_prototypes: Literal['material.structID', 'material.volNormStructID'],
         limit: int
     ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
 
     Args:
-        targetCompositionDict: Dictionary with element symbols as keys and their amounts as values.
+        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
-        targetPrototypes: Specifies whether to use 'native' or 'non-native' prototypes.
-        filterPrototypes: Specifies the prototype filter to use.
+        target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
 
     Returns:
@@ -398,13 +398,13 @@ def run_compositional_MPDD(
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
     
     # Target formula
-    meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
+    meanFormula = ''.join(f'{key}{val}' for key, val in target_composition_dict.items())
     rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
 
     print('\nSearching for structure prototypes for: ' + meanFormula + ' ' + rangesStr)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
 
-    if targetPrototypes == 'native':
+    if target_prototypes == 'native':
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
@@ -419,7 +419,7 @@ def run_compositional_MPDD(
             print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.')
 
         # Query for matching MPDD entries
-        nativeQuery = comp2comp_q(targetCompositionDict, devs)
+        nativeQuery = comp2comp_q(target_composition_dict, devs)
 
         targetPresent = 0
         for col in collections:
@@ -428,7 +428,7 @@ def run_compositional_MPDD(
             pipeline = [
                 {"$match": nativeQuery},
                 {"$group": {
-                    "_id": "$" + filterPrototypes,
+                    "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
@@ -462,11 +462,11 @@ def run_compositional_MPDD(
 
         return natPath
 
-    elif targetPrototypes == 'non-native':
+    elif target_prototypes == 'non-native':
         # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
 
         # Sorted fractions dictionary query
-        sortedFractionsDictQuery = comp2acomp_q(targetCompositionDict, devs)
+        sortedFractionsDictQuery = comp2acomp_q(target_composition_dict, devs)
 
         # ************************************** Count prototypes ********************************************************
 
@@ -504,7 +504,7 @@ def run_compositional_MPDD(
             pipeline = [
                 {"$match": sortedFractionsDictQuery},
                 {"$group": {
-                    "_id": "$" + filterPrototypes,
+                    "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
@@ -535,7 +535,7 @@ def run_compositional_MPDD(
 
                 elements = [element for element in cDict]
 
-                oAS = ordered_allowed_substitutions(targetCompositionDict, devs, cDict)
+                oAS = ordered_allowed_substitutions(target_composition_dict, devs, cDict)
 
                 permutNList += [len(oAS)]
 
@@ -576,7 +576,7 @@ def run_compositional_MPDD(
         return finPath
 
 def estimate_compositional_MPDD(
-        targetCompositionDict: Dict[str, int],
+        target_composition_dict: Dict[str, int],
         devs: Dict[str, int],
         MPDD: Database,
         collections: List[str]
@@ -585,7 +585,7 @@ def estimate_compositional_MPDD(
     Estimate the number of input structures available for substitution into the target composition.
 
     Args:
-        targetCompositionDict: Dictionary with element symbols as keys and their amounts as values.
+        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
@@ -598,11 +598,11 @@ def estimate_compositional_MPDD(
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
 
     # Target formula
-    meanFormula = ''.join(f'{key}{val}' for key, val in targetCompositionDict.items())
+    meanFormula = ''.join(f'{key}{val}' for key, val in target_composition_dict.items())
     rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
 
     # Sorted fractions dictionary query
-    sortedFractionsDictQuery = comp2acomp_q(targetCompositionDict, devs)
+    sortedFractionsDictQuery = comp2acomp_q(target_composition_dict, devs)
 
     print(f'\nDetecting Input Structures for substitution into {meanFormula} under allowed deviations {rangesStr}')
     foundTotal = 0
@@ -656,14 +656,14 @@ def element_permutations(
     return outList
 
 def comp2acomp_q(
-        compDict: Dict[str, int],
+        comp_dict: Dict[str, int],
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
     """
     Return a MPDD query for anonymous composition space with N components.
 
     Args:
-        compDict: Dictionary with element symbols as keys and their amounts as values.
+        comp_dict: Dictionary with element symbols as keys and their amounts as values.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
 
     Returns:
@@ -671,8 +671,8 @@ def comp2acomp_q(
     """
 
     eVals = []
-    for e in compDict:
-        eVals.append([compDict[e], devs[e]])
+    for e in comp_dict:
+        eVals.append([comp_dict[e], devs[e]])
     eVals.sort(key = lambda x: x[0], reverse=True)
     result = dict()
     for eVal, c in zip(eVals, range(eVals.__len__())):
@@ -681,40 +681,40 @@ def comp2acomp_q(
     return result
 
 def comp2comp_q(
-        compDict: Dict[str, int],
+        comp_dict: Dict[str, int],
         devs: Dict[str, int]
     ) -> Dict[str, Union[Dict[str, int], int]]:
     """
     Return a MPDD query for the given composition dictionary with permil fractions.
 
     Args:
-        compDict: Dictionary with element symbols as keys and their amounts as values.
+        comp_dict: Dictionary with element symbols as keys and their amounts as values.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
 
     Returns:
         Dictionary representing the MPDD query.
     """
 
-    meanComposition = Composition(' '.join(''.join((key, str(val))) for (key, val) in compDict.items()))
+    meanComposition = Composition(' '.join(''.join((key, str(val))) for (key, val) in comp_dict.items()))
     mpddQuery = dict()
     mpddQuery.update({'material.system': meanComposition.chemical_system})
-    for e in compDict:
+    for e in comp_dict:
         key = 'material.compositionDictionary.' + e
-        mpddQuery.update({key: {'$gte': (compDict[e] - devs[e]) / 1000, '$lte': (compDict[e] - devs[e]) / 1000}})
+        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] - devs[e]) / 1000}})
     return mpddQuery
 
 def ordered_allowed_substitutions(
-        targetCompDict: Dict[str, int],
+        target_comp_dict: Dict[str, int],
         devs: Dict[str, int],
-        prototypeCompDict: Dict[str, int]
+        prototype_comp_dict: Dict[str, int]
     ) -> List[List[str]]:
     """
     Return elements grouped by their occurrence in the formula, starting from the least common.
 
     Args:
-        targetCompDict: Dictionary with element symbols as keys and their amounts as values.
+        target_comp_dict: Dictionary with element symbols as keys and their amounts as values.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
-        prototypeCompDict: Dictionary with element symbols as keys and their amounts as values for the prototype.
+        prototype_comp_dict: Dictionary with element symbols as keys and their amounts as values for the prototype.
 
     Returns:
         List of lists of element symbols representing allowed substitutions.
@@ -722,11 +722,11 @@ def ordered_allowed_substitutions(
 
     # Finds what elements can be used for substitution
     allInRangeSubstitutions = []
-    for c in prototypeCompDict:
+    for c in prototype_comp_dict:
         inRangeSubstitutions = []
-        val = prototypeCompDict[c]
-        for e in targetCompDict:
-            if targetCompDict[e] - devs[e] <= val and targetCompDict[e] + devs[e] >= val:
+        val = prototype_comp_dict[c]
+        for e in target_comp_dict:
+            if target_comp_dict[e] - devs[e] <= val and target_comp_dict[e] + devs[e] >= val:
                 inRangeSubstitutions += [str(e)]
         allInRangeSubstitutions.append(inRangeSubstitutions)
 
@@ -752,45 +752,45 @@ class CrystALLSearch:
     
     def __init__(
             self,
-            targetFormula: Union[str, Composition],
+            target_formula: Union[str, Composition],
             calculator: Calculator = None
     ) -> None:
         """
         Initialize the CrystALLSearch class.
 
         Args:
-            targetFormula: The target formula as a string or pymatgen Composition object.
+            target_formula: The target formula as a string or pymatgen Composition object.
             calculator: A pySIPFENN Calculator object. If not provided, a default Calculator is used.
 
         Raises:
             TypeError: If the target formula is not a string or pymatgen Composition object.
         """
 
-        assert isinstance(targetFormula, (str, Composition)), 'Target formula must be a string or a pymatgen Composition object'
+        assert isinstance(target_formula, (str, Composition)), 'Target formula must be a string or a pymatgen Composition object'
 
         # Defined at initialization
-        if isinstance(targetFormula, str):
-            self.targetFormula = Composition(targetFormula)
-        elif isinstance(targetFormula, Composition):
-            self.targetFormula = targetFormula
+        if isinstance(target_formula, str):
+            self.target_formula = Composition(target_formula)
+        elif isinstance(target_formula, Composition):
+            self.target_formula = target_formula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
-        self.targetCompositionDict = {el: round(amt / self.targetFormula.num_atoms * 1000, 0)
-                                      for el, amt in self.targetFormula.as_dict().items()}
+        self.target_composition_dict = {el: round(amt / self.target_formula.num_atoms * 1000, 0)
+                                      for el, amt in self.target_formula.as_dict().items()}
 
         stdout, sys.stdout = sys.stdout, io.StringIO()
         self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
         sys.stdout = stdout
 
         # Internal parameters to use during the processing steps
-        self.availableObjectives: List[str] = []
-        self.predictedObjectives: List[str] = []
+        self.available_objectives: List[str] = []
+        self.predicted_objectives: List[str] = []
         self.ks2022: np.ndarray = None
-        self.clusterAffiliation: Dict[int, Dict[str, float]] = {}
+        self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.topCandidates: List[Dict[str, Union[str, float]]] = []
 
-        print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.targetFormula.formula}{Style.RESET_ALL}")
+        print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.target_formula.formula}{Style.RESET_ALL}")
 
         print(f"\nChecking for available models on the computer..")
 
@@ -864,17 +864,17 @@ class CrystALLSearch:
                 self.Calculator.loadModels(network = alternative_model)
                 sys.stdout = stdout
             
-            self.availableObjectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
+            self.available_objectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
 
         else:
 
             print("\npySIPFENN objective required for calculation. Run `download_models` first.")
 
-        self.availableObjectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.model_status['MPDD-ALIGNN'] else []
+        self.available_objectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.model_status['MPDD-ALIGNN'] else []
 
-        if len(self.availableObjectives) >= 1 and verbose:
+        if len(self.available_objectives) >= 1 and verbose:
         
-            print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.availableObjectives)}{Style.RESET_ALL}.")
+            print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.available_objectives)}{Style.RESET_ALL}.")
 
     def __check_objectives(
             self
@@ -889,12 +889,12 @@ class CrystALLSearch:
             List of common objectives between available objectives and predicted objectives.
         """
 
-        assert isinstance(self.availableObjectives, list) and len(self.availableObjectives) >= 1, "At least one objective is required for classification. Run `download_models` first."
+        assert isinstance(self.available_objectives, list) and len(self.available_objectives) >= 1, "At least one objective is required for classification. Run `download_models` first."
         
-        if any(value not in self.predictedObjectives for value in self.availableObjectives):
+        if any(value not in self.predicted_objectives for value in self.available_objectives):
             print("\nSome objectives do not have predictions calculated and will not be considered for classification.")
-            for obj in self.availableObjectives:
-                if obj not in self.predictedObjectives:
+            for obj in self.available_objectives:
+                if obj not in self.predicted_objectives:
                     try:
                         print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                     except UnicodeEncodeError:
@@ -951,8 +951,8 @@ class CrystALLSearch:
         
     def generate_MPDD(
             self,
-            targetPrototypes: Literal['native', 'non-native'] = 'non-native',
-            filterPrototypes: Literal['material.structID', 'material.volNormStructID'] = 'material.structID',
+            target_prototypes: Literal['native', 'non-native'] = 'non-native',
+            filter_prototypes: Literal['material.structID', 'material.volNormStructID'] = 'material.structID',
             limit: int = 1000,
             devs: Dict[str, int] = None
     ) -> None:
@@ -960,8 +960,8 @@ class CrystALLSearch:
         Generate prototype materials from the MPDD database based on the target formula.
 
         Args:
-            targetPrototypes: Specifies whether to use 'native' or 'non-native' prototypes. Defaults to 'non-native'.
-            filterPrototypes: Specifies the prototype filter to use. Defaults to 'material.structID'.
+            target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes. Defaults to 'non-native'.
+            filter_prototypes: Specifies the prototype filter to use. Defaults to 'material.structID'.
             limit: The maximum number of prototypes to generate. Defaults to 1000.
             devs: Dictionary with element symbols as keys and their allowed deviations as values. Defaults to None.
 
@@ -974,30 +974,30 @@ class CrystALLSearch:
         assert devs is None or isinstance(devs, dict), 'Deviations must be a dictionary with element symbols as keys and integer values as deviations'
         
         if devs is None:
-            self.prototypePath = run_MPDD(self.targetFormula, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
+            self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
         else:
-            self.prototypePath = run_compositional_MPDD(self.targetCompositionDict, devs, self.MPDD, self.collections, targetPrototypes, filterPrototypes, limit)
-        inputFiles = natsorted(os.listdir(self.prototypePath))
+            self.prototype_path = run_compositional_MPDD(self.target_composition_dict, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
+        inputFiles = natsorted(os.listdir(self.prototype_path))
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
     def generate_local(
             self,
-            prototypePath: str = None
+            prototype_path: str = None
     ) -> None:
         """
         Generate prototypes from a local directory containing POSCAR or CIF files.
 
         Args:
-            prototypePath: Path to the directory with prototype files. If not provided, uses the existing path.
+            prototype_path: Path to the directory with prototype files. If not provided, uses the existing path.
 
         Raises:
             AssertionError: If no prototype directory is specified.
         """
 
-        self.prototypePath = prototypePath if prototypePath is not None else self.prototypePath
-        assert self.prototypePath, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
-        self.prototypePath = run_local(self.targetFormula, self.prototypePath)
-        inputFiles = natsorted(os.listdir(self.prototypePath))
+        self.prototype_path = prototype_path if prototype_path is not None else self.prototype_path
+        assert self.prototype_path, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
+        self.prototype_path = run_local(self.target_formula, self.prototype_path)
+        inputFiles = natsorted(os.listdir(self.prototype_path))
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(
@@ -1014,15 +1014,15 @@ class CrystALLSearch:
             AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no pySIPFENN models are found, or if the number of prototypes does not match the number of property predictions.
         """
 
-        assert self.prototypePath is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert isinstance(self.prototypePath, str), 'Prototypes folder path must be a string'
+        assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
         assert self.model_status['pySIPFENN'], 'pySIPFENN models not found. Please run `download_models` first.'
 
-        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.availableObjectives)):
-            if model not in self.predictedObjectives:
-                self.predictedObjectives.append(model)
+        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.available_objectives)):
+            if model not in self.predicted_objectives:
+                self.predicted_objectives.append(model)
         
-        self.Calculator.runFromDirectory(self.prototypePath, 'KS2022', mode=mode, max_workers=8)
+        self.Calculator.runFromDirectory(self.prototype_path, 'KS2022', mode=mode, max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDictsWithNames(), np.array(self.Calculator.descriptorData)
         assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
         
@@ -1055,17 +1055,17 @@ class CrystALLSearch:
             AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of prototypes does not match the number of property predictions.
         """
 
-        assert self.prototypePath is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert isinstance(self.prototypePath, str), 'Prototypes folder path must be a string'
+        assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
+        assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
         assert self.model_status['MPDD-ALIGNN'], 'MPDD-ALIGNN models not found. Please run `download_models` first.'
         
         for model_dict in pretrained.get_default_models():
-            if model_dict['name'] in self.availableObjectives and model_dict['name'] not in self.predictedObjectives:
-                self.predictedObjectives.append(model_dict['name'])
+            if model_dict['name'] in self.available_objectives and model_dict['name'] not in self.predicted_objectives:
+                self.predicted_objectives.append(model_dict['name'])
         
         print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
         print('Calculating descriptors...')
-        resultDicts = pretrained.run_models_from_directory(self.prototypePath, mode=mode)
+        resultDicts = pretrained.run_models_from_directory(self.prototype_path, mode=mode)
         assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
 
         for result in resultDicts:
@@ -1098,7 +1098,7 @@ class CrystALLSearch:
 
         MPDD_curated = self.MPDD['curated']
         
-        eList = self.targetFormula.chemical_system.split('-')
+        eList = self.target_formula.chemical_system.split('-')
         sysList = []
         for nComponents in range(eList.__len__()):
             for c in combinations(eList, 1+nComponents):
@@ -1130,7 +1130,7 @@ class CrystALLSearch:
                     formulaSet.add(pdEntry.composition)
 
         for prototype in self.prototypes:
-            pdEntry = PDEntry(self.targetFormula, prototype['SIPFENN_Krajewski2022_NN30'], prototype['name'])
+            pdEntry = PDEntry(self.target_formula, prototype['SIPFENN_Krajewski2022_NN30'], prototype['name'])
             entriesForPD.append(pdEntry)
             pd = PhaseDiagram(entriesForPD)
             stability = float(f'{pd.get_e_above_hull(pdEntry):.4f}')
@@ -1148,11 +1148,11 @@ class CrystALLSearch:
         """
 
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert self.predictedObjectives, 'No objective predictions identified. Please run `run_pysipfenn` or `get_alignn_properties` first.'
+        assert self.predicted_objectives, 'No objective predictions identified. Please run `run_pysipfenn` or `get_alignn_properties` first.'
 
         # Calculate the average of the predictions
         for i, prototype in enumerate(self.prototypes):
-            average_prediction = round(sum(prototype[pred] for pred in self.predictedObjectives) / len(self.predictedObjectives), 4)
+            average_prediction = round(sum(prototype[pred] for pred in self.predicted_objectives) / len(self.predicted_objectives), 4)
             self.prototypes[i].update({f'Avg_Formation_Energy': average_prediction})
 
     def filter_prototypes(
@@ -1182,9 +1182,9 @@ class CrystALLSearch:
             self.prototypes = [prototype for prototype in self.prototypes if prototype['Avg_Formation_Energy'] < cutoff + min_energy]
 
         # Delete files not in filtered self.prototypes
-        for filename in os.listdir(self.prototypePath):
+        for filename in os.listdir(self.prototype_path):
             if filename not in {prototype['name'] for prototype in self.prototypes}:
-                os.remove(os.path.join(self.prototypePath, filename))
+                os.remove(os.path.join(self.prototype_path, filename))
 
         # Update the 'index' key of each dictionary in self.prototypes to its position in the list
         for i, prototype in enumerate(self.prototypes):
@@ -1202,13 +1202,13 @@ class CrystALLSearch:
 
     def __embed_features(
             self,
-            sameComposition: bool
+            same_composition: bool
     ) -> None:
         """
         Embed the features in 2D t-SNE space.
 
         Args:
-            sameComposition: If True, only structural features are used. Defaults to False.
+            same_composition: If True, only structural features are used. Defaults to False.
 
         Raises:
             AssertionError: If no features are identified.
@@ -1217,7 +1217,7 @@ class CrystALLSearch:
         assert len(self.prototypes) >= 5, 'At least 5 prototypes are required to run `cluster_prototypes`.'
         assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
 
-        if sameComposition:
+        if same_composition:
             features2use = np.array([onlyStructural(v) for v in self.ks2022])
         else:
             features2use = self.ks2022
@@ -1233,14 +1233,14 @@ class CrystALLSearch:
     def cluster_prototypes_KMeans(
             self,
             n_clusters: int = None,
-            sameComposition: bool = False
+            same_composition: bool = False
     ) -> None:
         """
         Cluster the prototypes using KMeans, assign each data point to its cluster, and select the best prototypes.
 
         Args:
             n_clusters: Number of clusters. If not provided, the optimal number is determined automatically using silhouette score.
-            sameComposition: If True, only prototypes with the same composition are considered. Defaults to False.
+            same_composition: If True, only prototypes with the same composition are considered. Defaults to False.
 
         Raises:
             AssertionError: If no features are identified, if the number of clusters is not an integer, or if any objective is not allowed.
@@ -1258,7 +1258,7 @@ class CrystALLSearch:
         self.__check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(sameComposition)
+        self.__embed_features(same_composition)
 
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
@@ -1300,7 +1300,7 @@ class CrystALLSearch:
             eps: float = 0.3,
             min_samples: int = 1,
             p: int = 1,
-            sameComposition: bool = False
+            same_composition: bool = False
     ) -> None:
         """
         Cluster the prototypes using DBSCAN, assign each data point to its cluster, and select the best prototypes.
@@ -1309,7 +1309,7 @@ class CrystALLSearch:
             eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
             min_samples: The number of samples in a neighborhood for a point to be considered as a core point. Defaults to 1.
             p: The power parameter for the Minkowski metric. Defaults to 1.
-            sameComposition: If True, only prototypes with the same composition are considered. Defaults to False.
+            same_composition: If True, only prototypes with the same composition are considered. Defaults to False.
 
         Raises:
             AssertionError: If no features are identified, if eps is not a float, if min_samples is not an integer, or if any objective is not allowed.
@@ -1327,7 +1327,7 @@ class CrystALLSearch:
         self.__check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(sameComposition)
+        self.__embed_features(same_composition)
 
         # Cluster the prototypes using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
@@ -1363,19 +1363,19 @@ class CrystALLSearch:
         print(f"List of prototypes selected per energy of each cluster:")
         
         # Select the best prototype per cluster based on the minimum predicted property
-        self.clusterAffiliation = {}
-        for objective in self.predictedObjectives:
+        self.cluster_affiliation = {}
+        for objective in self.predicted_objectives:
             print(f"\nObjective: {objective}")
-            self.clusterAffiliation[objective] = {}
+            self.cluster_affiliation[objective] = {}
             for label, cluster in sorted(clusters.items()):
                 prototype = min(cluster, key=lambda x: x[objective])
-                self.clusterAffiliation[objective].update({prototype['cluster']: prototype['index']})
+                self.cluster_affiliation[objective].update({prototype['cluster']: prototype['index']})
                 print(f"           Cluster {label:02}: {prototype['name']}")
         
         # Create a list of top candidates
         self.topCandidates, i = [], 0
-        for objective in self.predictedObjectives:
-            for index in self.clusterAffiliation[objective].values():
+        for objective in self.predicted_objectives:
+            for index in self.cluster_affiliation[objective].values():
                 self.topCandidates.append(self.prototypes[index - 1].copy())
                 self.topCandidates[i].update({'objective': objective})
                 i += 1
@@ -1419,21 +1419,21 @@ class CrystALLSearch:
         
         if 'topCandidates' in content:
             file_name = 'topCandidates.csv' if file_prefix == '' else file_prefix + '_topCandidates.csv'
-            topCandidates_exported = [d for d in self.topCandidates if d['objective'] in self.availableObjectives]
+            topCandidates_exported = [d for d in self.topCandidates if d['objective'] in self.available_objectives]
             
             with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, topCandidates_exported[0].keys())
                 dict_writer.writeheader()
                 dict_writer.writerows(topCandidates_exported)
             
-            print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.predictedObjectives)} Objective(s) to {file_name}")
+            print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.predicted_objectives)} Objective(s) to {file_name}")
 
     def plot_barchart(
             self,
             objective: Union[str, List[str]] = None,
             save: bool = False,
             file_name: str = 'barchart_clusterPrototypes',
-            colorBlind: bool = False
+            color_blind: bool = False
     ) -> None:
         """
         Plot bar charts for the prototypes.
@@ -1442,15 +1442,15 @@ class CrystALLSearch:
             objective: The objective to plot. Defaults to the first available objective.
             save: If True, saves the plot as an HTML file. Defaults to False.
             file_name: The name of the HTML file to save the plot. Defaults to 'barchart_clusterPrototypes'.
-            colorBlind: If True, uses a colorblind-friendly color palette. Defaults to False.
+            color_blind: If True, uses a colorblind-friendly color palette. Defaults to False.
 
         Raises:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.availableObjectives[0]
+        objective = objective if objective is not None else self.available_objectives[0]
 
-        assert objective in self.predictedObjectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predictedObjectives)
+        assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
@@ -1469,7 +1469,7 @@ class CrystALLSearch:
         df = df.sort_values('cluster')
 
         # Define color set based on clusters
-        colorblind_type = "Protanopia" if colorBlind else None
+        colorblind_type = "Protanopia" if color_blind else None
         colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
         cluster_colors = {cluster: '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255), int(colors[i][1]*255), int(colors[i][2]*255)) for i, cluster in enumerate(df['cluster'].unique())}
 
@@ -1477,8 +1477,8 @@ class CrystALLSearch:
         df_sorted = df.sort_values(by=['objective', 'index'])
 
         # Segment the DataFrame into df_prototypes and df_top_candidates
-        df_prototypes = df_sorted[~df_sorted['index'].isin(self.clusterAffiliation[objective].values())]
-        df_top_candidates = df_sorted[df_sorted['index'].isin(self.clusterAffiliation[objective].values())]
+        df_prototypes = df_sorted[~df_sorted['index'].isin(self.cluster_affiliation[objective].values())]
+        df_top_candidates = df_sorted[df_sorted['index'].isin(self.cluster_affiliation[objective].values())]
 
         # Get the minimum and maximum values for the y-axis range
         y_min = df_sorted['objective'].min() * 1.01
@@ -1548,8 +1548,8 @@ class CrystALLSearch:
             objective: Union[str, List[str]] = None,
             save: bool = False,
             file_name: str = '2D_clusterPrototypes',
-            markerSymbol: bool = False,
-            colorBlind: bool = False
+            marker_symbol: bool = False,
+            color_blind: bool = False
     ) -> None:
         """
         Plot 2D scatter plots for the prototypes.
@@ -1558,16 +1558,16 @@ class CrystALLSearch:
             objective: The objective to plot. Defaults to the first available objective.
             save: If True, saves the plot as an HTML file. Defaults to False.
             file_name: The name of the HTML file to save the plot. Defaults to '2D_clusterPrototypes'.
-            markerSymbol: If True, uses different marker symbols for each cluster. Defaults to False.
-            colorBlind: If True, uses a colorblind-friendly color palette. Defaults to False.
+            marker_symbol: If True, uses different marker symbols for each cluster. Defaults to False.
+            color_blind: If True, uses a colorblind-friendly color palette. Defaults to False.
 
         Raises:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.availableObjectives[0]
+        objective = objective if objective is not None else self.available_objectives[0]
 
-        assert objective in self.predictedObjectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predictedObjectives)
+        assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
@@ -1588,7 +1588,7 @@ class CrystALLSearch:
         df = df.sort_values('cluster')
 
         # Define a color for each cluster
-        colorblind_type = "Protanopia" if colorBlind else None
+        colorblind_type = "Protanopia" if color_blind else None
         colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
@@ -1601,8 +1601,8 @@ class CrystALLSearch:
             df_cluster = df_cluster.sort_values(by=['objective', 'index'])
 
             # Separate the data into top candidates and other cluster members
-            df_prototypes = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
-            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+            df_prototypes = df_cluster[~df_cluster['index'].isin(self.cluster_affiliation[objective].values())]
+            df_top_candidates = df_cluster[df_cluster['index'].isin(self.cluster_affiliation[objective].values())]
 
             hovertext_prototypes = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:2] + [c['name'].split('-')[-1]])] + 
                                     ['<b>Affiliation: </b>' + c['name'].split('-')[2]] + 
@@ -1613,7 +1613,7 @@ class CrystALLSearch:
 
             color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Entries': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
             
-            if markerSymbol and len(df['cluster'].unique()) <= 8:
+            if marker_symbol and len(df['cluster'].unique()) <= 8:
                 symbol = symbols[i]
             else: 
                 symbol = symbols[0]
@@ -1694,8 +1694,8 @@ class CrystALLSearch:
             objective: Union[str, List[str]] = None,
             save: bool = False,
             file_name: str = '3D_clusterPrototypes',
-            markerSymbol: bool = False,
-            colorBlind: bool = False
+            marker_symbol: bool = False,
+            color_blind: bool = False
     ) -> None:
         """
         Plot 3D scatter plots for the prototypes.
@@ -1704,16 +1704,16 @@ class CrystALLSearch:
             objective: The objective to plot. Defaults to the first available objective.
             save: If True, saves the plot as an HTML file. Defaults to False.
             file_name: The name of the HTML file to save the plot. Defaults to '3D_clusterPrototypes'.
-            markerSymbol: If True, uses different marker symbols for each cluster. Defaults to False.
-            colorBlind: If True, uses a colorblind-friendly color palette. Defaults to False.
+            marker_symbol: If True, uses different marker symbols for each cluster. Defaults to False.
+            color_blind: If True, uses a colorblind-friendly color palette. Defaults to False.
 
         Raises:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.availableObjectives[0]
+        objective = objective if objective is not None else self.available_objectives[0]
 
-        assert objective in self.predictedObjectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predictedObjectives)
+        assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
@@ -1735,7 +1735,7 @@ class CrystALLSearch:
         df = df.sort_values('cluster')
 
         # Define a color for each cluster
-        colorblind_type = "Protanopia" if colorBlind else None
+        colorblind_type = "Protanopia" if color_blind else None
         colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
@@ -1748,8 +1748,8 @@ class CrystALLSearch:
             df_cluster = df_cluster.sort_values(by=['objective', 'index'])
 
             # Separate the data into top candidates and other cluster members
-            df_prototypes = df_cluster[~df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
-            df_top_candidates = df_cluster[df_cluster['index'].isin(self.clusterAffiliation[objective].values())]
+            df_prototypes = df_cluster[~df_cluster['index'].isin(self.cluster_affiliation[objective].values())]
+            df_top_candidates = df_cluster[df_cluster['index'].isin(self.cluster_affiliation[objective].values())]
 
             hovertext_prototypes = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:2] + [c['name'].split('-')[-1]])] +
                                     ['<b>Affiliation: </b>' + c['name'].split('-')[2]] + 
@@ -1760,7 +1760,7 @@ class CrystALLSearch:
 
             color_discrete_map = {'Top Candidate': '#ff7f0e', 'Other Cluster Entries': '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255),int(colors[i][1]*255),int(colors[i][2]*255))}
 
-            if markerSymbol and len(df['cluster'].unique()) <= 8:
+            if marker_symbol and len(df['cluster'].unique()) <= 8:
                 symbol = symbols[i]
             else: 
                 symbol = symbols[0]
