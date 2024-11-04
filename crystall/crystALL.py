@@ -788,7 +788,7 @@ class CrystALLSearch:
         self.ks2022: np.ndarray = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
-        self.topCandidates: List[Dict[str, Union[str, float]]] = []
+        self.top_candidates: List[Dict[str, Union[str, float]]] = []
 
         print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.target_formula.formula}{Style.RESET_ALL}")
 
@@ -1351,7 +1351,7 @@ class CrystALLSearch:
             clusters: dict
     ) -> None:
         """
-        Select the best prototype per cluster for each objective and store them in self.topCandidates.
+        Select the best prototype per cluster for each objective and store them in self.top_candidates.
 
         Args:
             clusters: A dictionary mapping cluster labels to lists of prototype dictionaries.
@@ -1373,43 +1373,43 @@ class CrystALLSearch:
                 print(f"           Cluster {label:02}: {prototype['name']}")
         
         # Create a list of top candidates
-        self.topCandidates, i = [], 0
+        self.top_candidates, i = [], 0
         for objective in self.predicted_objectives:
             for index in self.cluster_affiliation[objective].values():
-                self.topCandidates.append(self.prototypes[index - 1].copy())
-                self.topCandidates[i].update({'objective': objective})
+                self.top_candidates.append(self.prototypes[index - 1].copy())
+                self.top_candidates[i].update({'objective': objective})
                 i += 1
 
-        return self.topCandidates
+        return self.top_candidates
 
     def export_table(
             self,
-            content: List[str] = ['allPrototypes', 'topCandidates'],
+            content: List[str] = ['all_prototypes', 'top_candidates'],
             file_prefix: str = ''
     ) -> None:
         """
         Export a CSV file with the specified content.
 
         Args:
-            content: Specifies the type of data to export. Can be 'allPrototypes' and/or 'topCandidates'. Defaults to ['allPrototypes', 'topCandidates'].
+            content: Specifies the type of data to export. Can be 'all_prototypes' and/or 'top_candidates'. Defaults to ['all_prototypes', 'top_candidates'].
             file_prefix: A prefix that will be added to the file name. Defaults to ''.
 
         Raises:
             AssertionError: If no prototypes are identified or if an invalid content type is provided.
 
         Outputs:
-            CSV files: Writes CSV files for 'allPrototypes' and/or 'topCandidates' depending on the content argument. The files are named based on the content type and the file_prefix (if provided).
+            CSV files: Writes CSV files for 'all_prototypes' and/or 'top_candidates' depending on the content argument. The files are named based on the content type and the file_prefix (if provided).
         """
 
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert not any(value not in ['allPrototypes', 'topCandidates'] for value in content), 'Content should contain only `allPrototypes` and/or `topCandidates`'
+        assert not any(value not in ['all_prototypes', 'top_candidates'] for value in content), 'Content should contain only `all_prototypes` and/or `top_candidates`'
 
-        if 'topCandidates' in content and not self.topCandidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'allPrototypes' only.")
-            content = ['allPrototypes']
+        if 'top_candidates' in content and not self.top_candidates:
+            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all_prototypes' only.")
+            content = ['all_prototypes']
 
-        if 'allPrototypes' in content:
-            file_name = 'allPrototypes.csv' if file_prefix == '' else file_prefix + '_allPrototypes.csv'
+        if 'all_prototypes' in content:
+            file_name = 'all_prototypes.csv' if file_prefix == '' else file_prefix + '_all_prototypes.csv'
             with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, self.prototypes[0].keys())
                 dict_writer.writeheader()
@@ -1417,14 +1417,14 @@ class CrystALLSearch:
             
             print(f"\nExported {Fore.GREEN}{Style.BRIGHT}{len(self.prototypes)}{Style.RESET_ALL} prototypes to {file_name}")
         
-        if 'topCandidates' in content:
-            file_name = 'topCandidates.csv' if file_prefix == '' else file_prefix + '_topCandidates.csv'
-            topCandidates_exported = [d for d in self.topCandidates if d['objective'] in self.available_objectives]
+        if 'top_candidates' in content:
+            file_name = 'top_candidates.csv' if file_prefix == '' else file_prefix + '_top_candidates.csv'
+            top_candidates_exported = [d for d in self.top_candidates if d['objective'] in self.available_objectives]
             
             with open(file_name, 'w', newline='') as output_file:
-                dict_writer = csv.DictWriter(output_file, topCandidates_exported[0].keys())
+                dict_writer = csv.DictWriter(output_file, top_candidates_exported[0].keys())
                 dict_writer.writeheader()
-                dict_writer.writerows(topCandidates_exported)
+                dict_writer.writerows(top_candidates_exported)
             
             print(f"Exported {Fore.GREEN}{Style.BRIGHT}top{Style.RESET_ALL} candidates for {len(self.predicted_objectives)} Objective(s) to {file_name}")
 
@@ -1454,7 +1454,7 @@ class CrystALLSearch:
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
-        if not self.topCandidates:
+        if not self.top_candidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
             return
         
@@ -1571,7 +1571,7 @@ class CrystALLSearch:
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
-        if not self.topCandidates:
+        if not self.top_candidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
             return
         
@@ -1717,7 +1717,7 @@ class CrystALLSearch:
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
-        if not self.topCandidates:
+        if not self.top_candidates:
             print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 3D plot generation.")
             return
 
