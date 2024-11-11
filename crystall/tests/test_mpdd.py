@@ -1,5 +1,4 @@
 import unittest
-import pytest
 import os
 import json
 import shutil
@@ -69,33 +68,50 @@ class TestMPDD(unittest.TestCase):
             self.assertEqual(spgA.get_crystal_system(), "monoclinic", "The crystal system of the candidate is incorrect.")
             self.assertEqual(spgA.get_space_group_number(), 12, "The space group number of the candidate is incorrect.")
 
-        with self.subTest("Assert that the correct number of candidates was generated according to the aggregation pipeline"):
-            targetPrototypes_List = ['Native', 'Anonymized']
-            filterPrototypes_list = ["material.structID", "material.volNormStructID"]
-            for targetPrototypes in targetPrototypes_List:
-                natPath = "Ni26Ru8-curated-prototypes" if targetPrototypes == "Anonymized" else "Ni26Ru8-curated-native-prototypes"
-                for filterPrototypes in filterPrototypes_list:
-                    shutil.rmtree(natPath)
-                    cas.generate_MPDD(targetPrototypes=targetPrototypes, filterPrototypes=filterPrototypes)
-                    if filterPrototypes == "material.structID" and targetPrototypes == "Native":
-                        self.assertEqual(len(os.listdir(natPath)), 2, "The number of candidates generated is incorrect ('material.structID'), based on the local files.")
-                        self.assertEqual(len(cas.inputFiles), 2, "The number of candidates identified as input files by CAS is incorrect ('material.structID').")
-                        self.assertEqual(len(cas.candidates), 2, "The number of candidate dictionaries listed by CAS is incorrect ('material.structID').")
-                    elif filterPrototypes == "material.volNormStructID" and targetPrototypes == "Native":
-                        self.assertEqual(len(os.listdir(natPath)), 1, "The number of candidates generated is incorrect, based on the local files ('material.volNormStructID').")
-                        self.assertEqual(len(cas.inputFiles), 1, "The number of candidates identified as input files by CAS is incorrect ('material.volNormStructID').")
-                        self.assertEqual(len(cas.candidates), 1, "The number of candidate dictionaries listed by CAS is incorrect ('material.volNormStructID').")
-                    elif filterPrototypes == "material.structID" and targetPrototypes == "Anonymized":
-                        self.assertEqual(len(os.listdir(natPath)), 30, "The number of candidates generated is incorrect ('material.structID'), based on the local files.")
-                        self.assertEqual(len(cas.inputFiles), 30, "The number of candidates identified as input files by CAS is incorrect ('material.structID').")
-                        self.assertEqual(len(cas.candidates), 30, "The number of candidate dictionaries listed by CAS is incorrect ('material.structID').")
-                    elif filterPrototypes == "material.volNormStructID" and targetPrototypes == "Anonymized":
-                        self.assertEqual(len(os.listdir(natPath)), 28, "The number of candidates generated is incorrect, based on the local files ('material.volNormStructID').")
-                        self.assertEqual(len(cas.inputFiles), 28, "The number of candidates identified as input files by CAS is incorrect ('material.volNormStructID').")
-                        self.assertEqual(len(cas.candidates), 28, "The number of candidate dictionaries listed by CAS is incorrect ('material.volNormStructID').")
-        
-        with self.subTest("Download pySIPFENN (SIPFENN_Krajewski2022_NN30) model and ALIGNN models; then run featurization"):
-            cas.download_models()
-            #cas.run_pysipfenn()
-            #cas.run_alignn()
+        test_cases = [
+            ("Native", "material.structID", (2, 2, 2)),
+            ("Native", "material.volNormStructID", (1, 1, 1)),
+            ("Anonymized", "material.structID", (30, 30, 30)),
+            ("Anonymized", "material.volNormStructID", (28, 28, 28)),
+        ]
 
+        for targetPrototypes, filterPrototypes, expected_counts in test_cases:
+            with self.subTest(f"Assert that the correct number of candidates was generated for {targetPrototypes} and {filterPrototypes}"):
+                natPath = "Ni26Ru8-curated-prototypes" if targetPrototypes == "Anonymized" else "Ni26Ru8-curated-native-prototypes"
+                shutil.rmtree(natPath)
+                cas.generate_MPDD(targetPrototypes=targetPrototypes, filterPrototypes=filterPrototypes)
+                self.assertEqual(len(os.listdir(natPath)), expected_counts[0], f"The number of candidates generated is incorrect ({filterPrototypes}), based on the local files.")
+                self.assertEqual(len(cas.inputFiles), expected_counts[1], f"The number of candidates identified as input files by CAS is incorrect ({filterPrototypes}).")
+                self.assertEqual(len(cas.candidates), expected_counts[2], f"The number of candidate dictionaries listed by CAS is incorrect ({filterPrototypes}).")
+
+    def test_run_MPDD(self) -> None:
+        """Test the run_MPDD function."""
+        targetFormula = "Ni26Ru8"
+        collections = ["curated"]
+        targetPrototypes = "native"
+        filterPrototypes = "material.structID"
+        limit = 1000
+        result = crystall.run_MPDD(targetFormula, self.db, collections, targetPrototypes, filterPrototypes, limit)
+        self.assertTrue(os.path.exists(result), "The directory for MPDD prototypes was not created.")
+
+    def test_run_compositional_MPDD(self) -> None:
+        """Test the run_compositional_MPDD function."""
+        targetCompositionDict = {"Ni": 260, "Ru": 80}
+        devs = {"Ni": 10, "Ru": 10}
+        collections = ["curated"]
+        targetPrototypes = "native"
+        filterPrototypes = "material.structID"
+        limit = 1000
+        result = crystall.run_compositional_MPDD(targetCompositionDict, devs, self.db, collections, targetPrototypes, filterPrototypes, limit)
+        self.assertTrue(os.path.exists(result), "The directory for compositional MPDD prototypes was not created.")
+
+    def test_estimate_compositional_MPDD(self) -> None:
+        """Test the estimate_compositional_MPDD function."""
+        targetCompositionDict = {"Ni": 260, "Ru": 80}
+        devs = {"Ni": 10, "Ru": 10}
+        collections = ["curated"]
+        result = crystall.estimate_compositional_MPDD(targetCompositionDict, devs, self.db, collections)
+        self.assertTrue(result > 0, "No structures available for substitution.")
+
+if __name__ == '__main__':
+    unittest.main()

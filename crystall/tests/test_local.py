@@ -1,5 +1,4 @@
 import unittest
-import pytest
 import os
 import shutil
 
@@ -15,6 +14,12 @@ class TestLocal(unittest.TestCase):
         self.targetFormula = "Ni22Ru8"
         self.prototypePath = "tests/testFiles/localTest"
         
+        # Ensure the output directories are not present
+        if os.path.exists("localTest-Ni22Ru8"):
+            shutil.rmtree("localTest-Ni22Ru8")
+        if os.path.exists("localTest-A4B11"):
+            shutil.rmtree("localTest-A4B11")
+        
         with self.subTest("Runtime attempt"):
             crystall.run_local(
                 targetFormula=self.targetFormula,
@@ -22,6 +27,7 @@ class TestLocal(unittest.TestCase):
             )
 
     def test_file_generation(self) -> None:
+        """Test that the output directories and files are generated correctly."""
         self.assertTrue(os.path.exists("localTest-Ni22Ru8"), "localTest-Ni22Ru8 directory was not created.")
         self.assertTrue(os.path.exists("localTest-A4B11"), "localTest-A4B11 directory was not created.")
 
@@ -73,8 +79,12 @@ class TestLocal(unittest.TestCase):
                 structure = Structure.from_file("localTest-Ni22Ru8/"+file)
                 self.assertEqual(structure.composition, Composition(self.targetFormula), "The stoichiometry of "+file+" is incorrect.")
 
+    def tearDown(self) -> None:
+        """Clean up the output directories after the test. Even if not empty."""
+        if os.path.exists("localTest-Ni22Ru8"):
+            shutil.rmtree("localTest-Ni22Ru8")
+        if os.path.exists("localTest-A4B11"):
+            shutil.rmtree("localTest-A4B11")
 
-    #def tearDown(self) -> None:
-    #    """Clean up the output directories after the test. Even if not empty."""
-    #    shutil.rmtree("localTest-Ni22Ru8")
-    #    shutil.rmtree("localTest-A4B11")
+if __name__ == '__main__':
+    unittest.main()
