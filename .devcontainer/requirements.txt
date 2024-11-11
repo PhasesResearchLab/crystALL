@@ -1,5 +1,5 @@
 pysipfenn==0.16.0
-git+https://github.com/amkrajewski/mpdd-alignn@714835762cea35f3d5770afe693c5959997650a3#egg=mpdd-alignn
+mpdd-alignn==1.0.6
 torch==2.3.0
 pymatgen>=2024.2.20
 spglib==2.0.2
@@ -20,3 +20,4 @@ pyvista
 trame
 trame-vtk
 trame-vuetify
+crystal_toolkit
