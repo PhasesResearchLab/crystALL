@@ -7,7 +7,7 @@
   "customizations": {
     "codespaces": {
       "openFiles": [
-        "notebooks/README.md"
+        "tutorial/01.QuickStart.ipynb"
       ]
     },
     "vscode": {
