@@ -11,8 +11,8 @@ class TestLocal(unittest.TestCase):
 
     def setUp(self) -> None:
         """Set targets and ensure that the output directories ``localTest-A4B11`` and ``localTest-Ni22Ru8`` are not present."""
-        self.targetFormula = "Ni22Ru8"
-        self.prototypePath = "tests/testFiles/localTest"
+        self.target_formula = "Ni22Ru8"
+        self.prototype_path = "crystall/tests/testFiles/localTest"
         
         # Ensure the output directories are not present
         if os.path.exists("localTest-Ni22Ru8"):
@@ -22,8 +22,8 @@ class TestLocal(unittest.TestCase):
         
         with self.subTest("Runtime attempt"):
             crystall.run_local(
-                targetFormula=self.targetFormula,
-                prototypePath=self.prototypePath,
+                target_formula=self.target_formula,
+                prototype_path=self.prototype_path,
             )
 
     def test_file_generation(self) -> None:
@@ -52,11 +52,11 @@ class TestLocal(unittest.TestCase):
         """For each file in the localTest-A4B11 directory (filtering-only), verifies that it was present in the starting test files set based on either hash matching or Structure matching."""
         sourceContents = set()
         sourceStructures = list()
-        for file in os.listdir(self.prototypePath):
-            with open(self.prototypePath+"/"+file, "r") as f:
+        for file in os.listdir(self.prototype_path):
+            with open(self.prototype_path+"/"+file, "r") as f:
                 contents = f.read()
                 sourceContents.add(hash(contents))
-                sourceStructures.append(Structure.from_file(self.prototypePath+"/"+file))
+                sourceStructures.append(Structure.from_file(self.prototype_path+"/"+file))
         
         for file in os.listdir("localTest-A4B11"):
             with self.subTest("Check the presence of "+file+" in the prototype files"):
@@ -77,7 +77,7 @@ class TestLocal(unittest.TestCase):
         for file in os.listdir("localTest-Ni22Ru8"):
             with self.subTest("Check the stoichiometry of "+file):
                 structure = Structure.from_file("localTest-Ni22Ru8/"+file)
-                self.assertEqual(structure.composition, Composition(self.targetFormula), "The stoichiometry of "+file+" is incorrect.")
+                self.assertEqual(structure.composition, Composition(self.target_formula), "The stoichiometry of "+file+" is incorrect.")
 
     def tearDown(self) -> None:
         """Clean up the output directories after the test. Even if not empty."""

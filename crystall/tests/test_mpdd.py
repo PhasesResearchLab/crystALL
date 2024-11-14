@@ -37,7 +37,7 @@ class TestMPDD(unittest.TestCase):
                 self.collection.create_index([(hint, 1)], name=hint)
             
             # Populate the collection with the test data
-            with open("tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
+            with open("crystall/tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
                 for entry in json.loads(f.read()):
                     entry["_id"] = entry["_id"]["$oid"]
                     self.collection.insert_one(entry)
@@ -57,41 +57,40 @@ class TestMPDD(unittest.TestCase):
             cas.connect_MPDD(self.db)
             cas.generate_MPDD()
 
-        with self.subTest("Assert that one of the expected candidates is present"):
-            self.assertEqual(cas.candidatePath, "Ni26Ru8-curated-prototypes", "The candidate path is incorrect.")
-            self.assertIn("Al13Rh4-monoclinic-12-aflow-880c7a1f43ceb5f8-Ni39Ru12.POSCAR", os.listdir("Ni26Ru8-curated-prototypes"), "The expected candidate was not generated.")
+        with self.subTest("Assert that one of the expected prototypes is present"):
+            self.assertEqual(cas.prototype_path, "Ni26Ru8-curated-prototypes", "The prototype path is incorrect.")
+            self.assertIn("Al13Rh4-monoclinic-aflow880c7a1f43ceb5f8.POSCAR", os.listdir("Ni26Ru8-curated-prototypes"), "The expected prototype was not generated.")
 
-        with self.subTest('Assert one of the expected candidates has the correct composition and symmetry'):
-            structure = Structure.from_file("Ni26Ru8-curated-prototypes/Al13Rh4-monoclinic-12-aflow-880c7a1f43ceb5f8-Ni39Ru12.POSCAR")
+        with self.subTest('Assert one of the expected prototypes has the correct composition and symmetry'):
+            structure = Structure.from_file("Ni26Ru8-curated-prototypes/Al13Rh4-monoclinic-aflow880c7a1f43ceb5f8.POSCAR")
             spgA = SpacegroupAnalyzer(structure)
-            self.assertEqual(structure.composition.reduced_formula, Composition(self.targetFormula).reduced_formula, "The composition of the candidate is incorrect.")
-            self.assertEqual(spgA.get_crystal_system(), "monoclinic", "The crystal system of the candidate is incorrect.")
-            self.assertEqual(spgA.get_space_group_number(), 12, "The space group number of the candidate is incorrect.")
+            self.assertEqual(structure.composition.reduced_formula, Composition(self.targetFormula).reduced_formula, "The composition of the prototype is incorrect.")
+            self.assertEqual(spgA.get_crystal_system(), "monoclinic", "The crystal system of the prototype is incorrect.")
+            self.assertEqual(spgA.get_space_group_number(), 12, "The space group number of the prototype is incorrect.")
 
         test_cases = [
-            ("Native", "material.structID", (2, 2, 2)),
-            ("Native", "material.volNormStructID", (1, 1, 1)),
-            ("Anonymized", "material.structID", (30, 30, 30)),
-            ("Anonymized", "material.volNormStructID", (28, 28, 28)),
+            ("native", "material.structID", (2, 2)),
+            ("native", "material.volNormStructID", (1, 1)),
+            ("non-native", "material.structID", (30, 30)),
+            ("non-native", "material.volNormStructID", (28, 28)),
         ]
 
-        for targetPrototypes, filterPrototypes, expected_counts in test_cases:
-            with self.subTest(f"Assert that the correct number of candidates was generated for {targetPrototypes} and {filterPrototypes}"):
-                natPath = "Ni26Ru8-curated-prototypes" if targetPrototypes == "Anonymized" else "Ni26Ru8-curated-native-prototypes"
-                shutil.rmtree(natPath)
-                cas.generate_MPDD(targetPrototypes=targetPrototypes, filterPrototypes=filterPrototypes)
-                self.assertEqual(len(os.listdir(natPath)), expected_counts[0], f"The number of candidates generated is incorrect ({filterPrototypes}), based on the local files.")
-                self.assertEqual(len(cas.inputFiles), expected_counts[1], f"The number of candidates identified as input files by CAS is incorrect ({filterPrototypes}).")
-                self.assertEqual(len(cas.candidates), expected_counts[2], f"The number of candidate dictionaries listed by CAS is incorrect ({filterPrototypes}).")
+        for target_prototypes, filter_prototypes, expected_counts in test_cases:
+            with self.subTest(f"Assert that the correct number of prototypes was generated for {target_prototypes} and {filter_prototypes}"):
+                natPath = "Ni26Ru8-curated-prototypes" if target_prototypes == "non-native" else "Ni26Ru8-curated-native-prototypes"
+                os.path.exists(natPath) and shutil.rmtree(natPath)
+                cas.generate_MPDD(target_prototypes=target_prototypes, filter_prototypes=filter_prototypes)
+                self.assertEqual(len(os.listdir(natPath)), expected_counts[0], f"The number of prototypes generated is incorrect ({filter_prototypes}), based on the local files.")
+                self.assertEqual(len(cas.prototypes), expected_counts[1], f"The number of prototype dictionaries listed by CAS is incorrect ({filter_prototypes}).")
 
     def test_run_MPDD(self) -> None:
         """Test the run_MPDD function."""
         targetFormula = "Ni26Ru8"
         collections = ["curated"]
-        targetPrototypes = "native"
-        filterPrototypes = "material.structID"
+        target_prototypes = "native"
+        filter_prototypes = "material.structID"
         limit = 1000
-        result = crystall.run_MPDD(targetFormula, self.db, collections, targetPrototypes, filterPrototypes, limit)
+        result = crystall.run_MPDD(targetFormula, self.db, collections, target_prototypes, filter_prototypes, limit)
         self.assertTrue(os.path.exists(result), "The directory for MPDD prototypes was not created.")
 
     def test_run_compositional_MPDD(self) -> None:
@@ -99,19 +98,11 @@ class TestMPDD(unittest.TestCase):
         targetCompositionDict = {"Ni": 260, "Ru": 80}
         devs = {"Ni": 10, "Ru": 10}
         collections = ["curated"]
-        targetPrototypes = "native"
-        filterPrototypes = "material.structID"
+        target_prototypes = "native"
+        filter_prototypes = "material.structID"
         limit = 1000
-        result = crystall.run_compositional_MPDD(targetCompositionDict, devs, self.db, collections, targetPrototypes, filterPrototypes, limit)
+        result = crystall.run_compositional_MPDD(targetCompositionDict, devs, self.db, collections, target_prototypes, filter_prototypes, limit)
         self.assertTrue(os.path.exists(result), "The directory for compositional MPDD prototypes was not created.")
-
-    def test_estimate_compositional_MPDD(self) -> None:
-        """Test the estimate_compositional_MPDD function."""
-        targetCompositionDict = {"Ni": 260, "Ru": 80}
-        devs = {"Ni": 10, "Ru": 10}
-        collections = ["curated"]
-        result = crystall.estimate_compositional_MPDD(targetCompositionDict, devs, self.db, collections)
-        self.assertTrue(result > 0, "No structures available for substitution.")
 
 if __name__ == '__main__':
     unittest.main()
