@@ -743,6 +743,8 @@ class CrystALLSearch:
         self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
         sys.stdout = stdout
 
+        self.MPDD = None
+        
         # Internal parameters to use during the processing steps
         self.available_objectives: List[str] = []
         self.predicted_objectives: List[str] = []
