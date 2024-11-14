@@ -1360,18 +1360,39 @@ class CrystALLSearch:
             List of dictionaries representing the selected prototypes.
         """
 
-        print(f"List of prototypes selected per energy of each cluster:")
-        
         # Select the best prototype per cluster based on the minimum predicted property
         self.cluster_affiliation = {}
+        cluster_energies = {}
         for objective in self.predicted_objectives:
-            print(f"\nObjective: {objective}")
             self.cluster_affiliation[objective] = {}
             for label, cluster in sorted(clusters.items()):
                 prototype = min(cluster, key=lambda x: x[objective])
-                self.cluster_affiliation[objective].update({prototype['cluster']: prototype['index']})
-                print(f"           Cluster {label:02}: {prototype['name']}")
+                self.cluster_affiliation[objective].update({label: prototype['index']})
+                cluster_energies[label] = prototype[objective]
         
+        # Sort clusters based on the minimum formation energy of their candidates
+        sorted_clusters = sorted(cluster_energies, key=cluster_energies.get)
+        cluster_mapping = {old_label: new_label + 1 for new_label, old_label in enumerate(sorted_clusters)}
+
+        # Reassign clusters based on the new ordering
+        for prototype in self.prototypes:
+            old_label = prototype['cluster']
+            new_label = cluster_mapping[old_label]
+            prototype['cluster'] = new_label
+
+        # Update cluster affiliation with new labels
+        for objective in self.predicted_objectives:
+            self.cluster_affiliation[objective] = {cluster_mapping[old_label]: index for old_label, index in self.cluster_affiliation[objective].items()}
+
+        # Print the updated cluster information
+        print(f"List of prototypes selected per energy of each cluster:")
+        for objective in self.predicted_objectives:
+            print(f"\nObjective: {objective}")
+            for new_label in sorted(self.cluster_affiliation[objective].keys()):
+                index = self.cluster_affiliation[objective][new_label]
+                prototype = next(p for p in self.prototypes if p['index'] == index)
+                print(f"           Cluster {new_label:02}: {prototype['name']}")
+
         # Create a list of top candidates
         self.top_candidates, i = [], 0
         for objective in self.predicted_objectives:
