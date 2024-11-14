@@ -6,6 +6,7 @@ import math
 import re
 import json
 import csv
+from decimal import Decimal, ROUND_DOWN
 from itertools import groupby, permutations, product, combinations
 from operator import itemgetter
 from importlib import resources
@@ -1033,7 +1034,7 @@ class CrystALLSearch:
                     prototype.update(result)
                     for key in result.keys():
                         if isinstance(prototype[key], float):
-                            prototype[key] = float(f'{prototype[key]:.4f}')
+                            prototype[key] = float(Decimal(prototype[key]).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
                     break
 
         # Update average of the predictions
@@ -1075,7 +1076,7 @@ class CrystALLSearch:
                     prototype.update(result)
                     for key in result.keys():
                         if isinstance(prototype[key], float):
-                            prototype[key] = float(f'{prototype[key]:.4f}')
+                            prototype[key] = float(Decimal(prototype[key]).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
                     break
 
         # Update average of the predictions
@@ -1133,7 +1134,7 @@ class CrystALLSearch:
             pdEntry = PDEntry(self.target_formula, prototype['SIPFENN_Krajewski2022_NN30'], prototype['name'])
             entriesForPD.append(pdEntry)
             pd = PhaseDiagram(entriesForPD)
-            stability = float(f'{pd.get_e_above_hull(pdEntry):.4f}')
+            stability = float(Decimal(pd.get_e_above_hull(pdEntry)).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
             prototype.update({'MPDD_Stability': stability})
             entriesForPD.pop()
 
