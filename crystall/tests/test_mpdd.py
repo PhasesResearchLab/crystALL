@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+
 import os
 import json
 import shutil
@@ -47,6 +49,7 @@ class TestMPDD(unittest.TestCase):
         self.assertNotEqual(self.collection.count_documents({}), 0, "The database is empty.")
         print(self.collection.find_one())
 
+    @patch('builtins.input', return_value='n')
     def test_CrystALLSearch(self) -> None:
         """Test the ability to set up the MongoDB connection and perform a search."""
         cas = crystall.CrystALLSearch("Ni26Ru8")

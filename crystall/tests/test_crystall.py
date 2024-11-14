@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+
 import os
 import json
 import shutil
@@ -41,9 +43,10 @@ class TestCrystALLSearch(unittest.TestCase):
                 cls.collection.insert_one(entry)
         
         cls.targetFormula = "Ni26Ru8"
-        cls.cas = crystall.CrystALLSearch(cls.targetFormula)
-        cls.cas.connect_MPDD(cls.db)
-        cls.cas.generate_MPDD()
+        with patch('builtins.input', return_value='n'):
+            cls.cas = crystall.CrystALLSearch(cls.targetFormula)
+            cls.cas.connect_MPDD(cls.db)
+            cls.cas.generate_MPDD()
 
     @pytest.mark.order(1)
     def test_download_models(self) -> None:
