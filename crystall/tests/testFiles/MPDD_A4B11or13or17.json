@@ -17189,7 +17189,7 @@
       "Ru": 0.23529411764705882
     },
     "anonymizedFormula": "A4B13",
-    "reducedFormula": "Ni26Ru8",
+    "reducedFormula": "Ni13Ru4",
     "system": "Ni-Ru",
     "nComponents": 2,
     "averageElectronegativity": 1.7488235294117649,
@@ -17244,7 +17244,7 @@
       "Ru": 0.23529411764705882
     },
     "anonymizedFormula": "A4B13",
-    "reducedFormula": "Ni26Ru8",
+    "reducedFormula": "Ni13Ru4",
     "system": "Ni-Ru",
     "nComponents": 2,
     "averageElectronegativity": 1.1964705882352942,
@@ -18099,5 +18099,125 @@
     "coarseStructID": "37usNNjQLWMUImWbko2qAS",
     "structID": "49UcMf8DX8mNYR02x0YnJT",
     "volNormStructID": "5W8KIj9K9KFxZFu3BM8tqz"
+  }
+},
+{
+  "_id": {
+    "$oid": "60752ce2b003796270e9ab91"
+  },
+  "metadata": {
+    "name": "autoUpload",
+    "created": {
+      "$date": "2021-04-13T05:32:17.000Z"
+    },
+    "affiliation": "MPDD",
+    "comment": "Automated upload based on the OQMD database.",
+    "parentDatabase": "OQMD",
+    "parentDatabaseID": "OQMD-1214654",
+    "parentDatabaseURL": "http://oqmd.org/materials/entry/1214654",
+    "parentDatabaseStructureID": "OQMD-structure-4113066",
+    "lastModified": {
+      "$date": "2023-06-16T17:33:29.075Z"
+    }
+  },
+  "material": {
+    "formula": "Ru1",
+    "compositionDictionary": {
+      "Ru": 1
+    },
+    "anonymizedFormula": "A",
+    "reducedFormula": "Ru",
+    "system": "Ru",
+    "nComponents": 1,
+    "mgJSON": "{\"@module\": \"pymatgen.core.structure\", \"@class\": \"Structure\", \"charge\": null, \"lattice\": {\"matrix\": [[1.357840494966, 0.783949575285, 2.129782], [-1.357840494966, 0.783949575285, 2.129782], [0.0, -1.567899150571, 2.129782]]}, \"sites\": [{\"species\": [{\"element\": \"Ru\", \"occu\": 1.0}], \"abc\": [0.0, 0.0, 0.0]}]}",
+    "POSCAR": "Ru1\n1.0\n1.357840 0.783950 2.129782\n-1.357840 0.783950 2.129782\n0.000000 -1.567899 2.129782\nRu\n1\ndirect\n0.000000 0.000000 0.000000 Ru\n",
+    "averageElectronegativity": 2.2,
+    "crystalSystem": "trigonal",
+    "density": 12.33809400501047,
+    "nSites": 1,
+    "pointGroup": "-3m",
+    "spaceGroup": "R-3m",
+    "spaceGroupN": 166,
+    "sortedFractionsDict": {
+      "c1": 1000
+    },
+    "atomicVolume": 13.602642628035282,
+    "meanMass": 101.07,
+    "volume": 13.602642628035282,
+    "elements": [
+      "Ru"
+    ],
+    "reducedMassAll": 50.535,
+    "coarseStructID": "bDxS8ojJluahgMFzn7TSv",
+    "structID": "yCwCnT2eFc4j38Je2I9CR",
+    "volNormStructID": "3ILzolIJhcK0s2H1eVCnxU"
+  },
+  "properties": {
+    "FormationEnergy_SIPFENN_Krajewski2020_LightModel": 0.01401850301772356,
+    "FormationEnergy_SIPFENN_Krajewski2020_NovelMaterialsModel": 0.009048852138221264,
+    "FormationEnergy_SIPFENN_Krajewski2020_StandardMaterialsModel": 0.050935886800289154,
+    "Stability_SIPFENN_AMK2020_NMM": 0.013431400060653687,
+    "EF_SIPFENN_NN30": 0.03094056248664856,
+    "STAB_SIPFENN_NN30": 0
+  }
+},
+{
+  "_id": {
+    "$oid": "60752ce1b003796270e9ab81"
+  },
+  "metadata": {
+    "name": "autoUpload",
+    "created": {
+      "$date": "2021-04-13T05:32:17.000Z"
+    },
+    "affiliation": "MPDD",
+    "comment": "Automated upload based on the OQMD database.",
+    "parentDatabase": "OQMD",
+    "parentDatabaseID": "OQMD-1214639",
+    "parentDatabaseURL": "http://oqmd.org/materials/entry/1214639",
+    "parentDatabaseStructureID": "OQMD-structure-4113008",
+    "lastModified": {
+      "$date": "2023-06-16T17:33:29.075Z"
+    }
+  },
+  "material": {
+    "formula": "Ni1",
+    "compositionDictionary": {
+      "Ni": 1
+    },
+    "anonymizedFormula": "A",
+    "reducedFormula": "Ni",
+    "system": "Ni",
+    "nComponents": 1,
+    "mgJSON": "{\"@module\": \"pymatgen.core.structure\", \"@class\": \"Structure\", \"charge\": null, \"lattice\": {\"matrix\": [[1.25621436406, 0.72527570125, 1.923352], [-1.25621436406, 0.72527570125, 1.923352], [0.0, -1.4505514025, 1.923352]]}, \"sites\": [{\"species\": [{\"element\": \"Ni\", \"occu\": 1.0}], \"abc\": [0.0, 0.0, 0.0]}]}",
+    "POSCAR": "Ni1\n1.0\n1.256214 0.725276 1.923352\n-1.256214 0.725276 1.923352\n0.000000 -1.450551 1.923352\nNi\n1\ndirect\n0.000000 0.000000 0.000000 Ni\n",
+    "averageElectronegativity": 1.91,
+    "crystalSystem": "trigonal",
+    "density": 9.269609929428547,
+    "nSites": 1,
+    "pointGroup": "-3m",
+    "spaceGroup": "R-3m",
+    "spaceGroupN": 166,
+    "sortedFractionsDict": {
+      "c1": 1000
+    },
+    "atomicVolume": 10.514216282409286,
+    "meanMass": 58.6934,
+    "volume": 10.514216282409286,
+    "elements": [
+      "Ni"
+    ],
+    "reducedMassAll": 29.3467,
+    "coarseStructID": "4QK0Af02bdphoIxg80MIxE",
+    "structID": "6N4VmlRlVa3JSOb8xPqphO",
+    "volNormStructID": "5ro97oycmF5PWzgG1ew4d4"
+  },
+  "properties": {
+    "FormationEnergy_SIPFENN_Krajewski2020_LightModel": 0.024091508239507675,
+    "FormationEnergy_SIPFENN_Krajewski2020_NovelMaterialsModel": 0.05321139469742775,
+    "FormationEnergy_SIPFENN_Krajewski2020_StandardMaterialsModel": 0.032099805772304535,
+    "Stability_SIPFENN_AMK2020_NMM": 0.021454259753227234,
+    "EF_SIPFENN_NN30": 0.03113686293363571,
+    "STAB_SIPFENN_NN30": 0
   }
 }]
