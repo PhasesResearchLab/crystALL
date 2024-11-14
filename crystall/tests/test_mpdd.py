@@ -50,7 +50,7 @@ class TestMPDD(unittest.TestCase):
         print(self.collection.find_one())
 
     @patch('builtins.input', return_value='n')
-    def test_CrystALLSearch(self) -> None:
+    def test_CrystALLSearch(self, mock_input) -> None:
         """Test the ability to set up the MongoDB connection and perform a search."""
         cas = crystall.CrystALLSearch("Ni26Ru8")
         with self.subTest("Check that disconnected MongoDB raises an error"):
