@@ -576,46 +576,6 @@ def run_compositional_MPDD(
 
         return finPath
 
-def estimate_compositional_MPDD(
-        target_composition_dict: Dict[str, int],
-        devs: Dict[str, int],
-        MPDD: Database,
-        collections: List[str]
-    ) -> str:
-    """
-    Estimate the number of input structures available for substitution into the target composition.
-
-    Args:
-        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
-        devs: Dictionary with element symbols as keys and their allowed deviations as values.
-        MPDD: A pymongo Database object corresponding to the MPDD database.
-        collections: List of collection names to search in.
-
-    Returns:
-        Total number of structures available.
-    """
-
-    assert len(collections) > 0, 'At least one collection must be specified'
-    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
-
-    # Target formula
-    meanFormula = ''.join(f'{key}{val}' for key, val in target_composition_dict.items())
-    rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
-
-    # Sorted fractions dictionary query
-    sortedFractionsDictQuery = comp2acomp_q(target_composition_dict, devs)
-
-    print(f'\nDetecting Input Structures for substitution into {meanFormula} under allowed deviations {rangesStr}')
-    foundTotal = 0
-    for col in collections:
-        foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
-        foundTotal += foundN
-        print('Found ' + str(foundN) + ' in ' + col)
-
-    print('\nTotal of ' + str(foundTotal) + ' structures available.\n')
-
-    return foundTotal
-
 def sorted_elements_list(
         comp: Composition
     ) -> List[List[str]]:
