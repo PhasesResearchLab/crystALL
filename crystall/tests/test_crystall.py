@@ -8,7 +8,6 @@ import pytest
 import crystall
 
 from pymongo import MongoClient
-from colorama import Fore, Style
 
 class TestCrystALLSearch(unittest.TestCase):
     """Test the functionalities of the CrystALLSearch class."""
@@ -47,20 +46,6 @@ class TestCrystALLSearch(unittest.TestCase):
             cls.cas = crystall.CrystALLSearch(cls.targetFormula)
             cls.cas.connect_MPDD(cls.db)
             cls.cas.generate_MPDD()
-
-    def test_fore_dim(self) -> None:
-        """Test using Fore.DIM (expected to fail)."""
-        try:
-            print(f"{Fore.DIM}This is dim text using Fore.DIM{Style.RESET_ALL}")
-        except AttributeError as e:
-            self.fail(f"Fore.DIM raised an AttributeError: {e}")
-
-    def test_style_dim(self) -> None:
-        """Test using Style.DIM."""
-        try:
-            print(f"{Style.DIM}This is dim text using Style.DIM{Style.RESET_ALL}")
-        except AttributeError as e:
-            self.fail(f"Style.DIM raised an AttributeError: {e}")
 
     @pytest.mark.order(1)
     def test_download_models(self) -> None:
