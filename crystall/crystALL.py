@@ -40,6 +40,10 @@ from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 
+# Disable undesired warnings from torch and pymatgen
+import warnings
+warnings.filterwarnings("ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*")
+warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
 # Top-Level Functions *************************************************************************
 
