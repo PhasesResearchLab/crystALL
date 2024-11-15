@@ -23,11 +23,6 @@ from distinctipy import get_colors
 from plotly.offline import plot, iplot
 import plotly.graph_objs as go
 
-# Disable undesired warnings from torch and pymatgen
-import warnings
-warnings.filterwarnings("ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*")
-warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
-
 # ML / Data
 from pymongo.database import Database
 from scipy.spatial import ConvexHull
@@ -44,6 +39,7 @@ from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
+
 
 # Top-Level Functions *************************************************************************
 
@@ -869,17 +865,21 @@ class CrystALLSearch:
                         print(f"{Fore.GREEN}√ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
 
     def download_models(
-            self
+            self,
+            mode: Literal['serial', 'parallel'] = 'parallel'
     ) -> None:
         """
         Download the default models for both pySIPFENN and MPDD-ALIGNN.
+
+        Args:
+            mode: Mode to download models: ``'serial'`` or ``'parallel'``. Defaults to 'parallel'.
         """
         
         print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
         self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
         self.model_status['pySIPFENN'] = True
         print(f"Downloading models for MPDD-alignn..")
-        pretrained.download_default_models()
+        pretrained.download_default_models(parallel=(mode == 'parallel'))
         self.model_status['MPDD-ALIGNN'] = True
         print(f"Done! Models are ready to use.")
 
@@ -965,13 +965,13 @@ class CrystALLSearch:
 
     def run_pysipfenn(
             self,
-            mode: str = 'serial'
+            mode: Literal['serial', 'parallel'] = 'serial'
     ) -> None:
         """
         Predict properties for the prototype materials using pySIPFENN models and update the prototypes with the predictions.
 
         Args:
-            mode: Mode to run pySIPFENN. Defaults to 'serial'.
+            mode: Mode to run pySIPFENN: ``'serial'`` or ``'parallel'``. Defaults to 'serial'.
 
         Raises:
             AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no pySIPFENN models are found, or if the number of prototypes does not match the number of property predictions.
@@ -1006,13 +1006,13 @@ class CrystALLSearch:
     
     def get_alignn_properties(
             self,
-            mode: str = 'serial'
+            mode: Literal['serial', 'parallel'] = 'serial'
     ) -> None:
         """
         Predict properties for the prototype materials using MPDD-ALIGNN models and update the prototypes with the predictions.
 
         Args:
-            mode: Mode to run ALIGNN. Defaults to 'serial'.
+            mode: Mode to run ALIGNN: ``'serial'`` or ``'parallel'``. Defaults to 'serial'.
 
         Raises:
             AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of prototypes does not match the number of property predictions.

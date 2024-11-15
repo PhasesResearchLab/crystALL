@@ -3,7 +3,6 @@ from unittest.mock import patch
 
 import os
 import json
-import shutil
 import pytest
 
 import crystall
@@ -51,7 +50,7 @@ class TestCrystALLSearch(unittest.TestCase):
     @pytest.mark.order(1)
     def test_download_models(self) -> None:
         """Test downloading models from the MPDD database."""
-        self.cas.download_models()
+        self.cas.download_models(mode='serial')
         self.assertTrue(self.cas.model_status['pySIPFENN'], "pySIPFENN models not downloaded.")
         self.assertTrue(self.cas.model_status['MPDD-ALIGNN'], "ALIGNN models not downloaded.")
     
