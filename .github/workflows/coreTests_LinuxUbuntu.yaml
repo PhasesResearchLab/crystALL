@@ -44,5 +44,5 @@ jobs:
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: html-coverage-report
+          name: html-coverage-report-${{ github.run_id }}-${{ matrix.python-version }}
           path: htmlcov/
