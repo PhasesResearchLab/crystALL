@@ -1449,7 +1449,8 @@ class CrystALLSearch:
         # Create a DataFrame from the data
         df = pd.DataFrame({
             'cluster': [c['cluster'] for c in self.prototypes],
-            'name': [c['name'].split('-')[0] + '-' + c['name'].split('-')[-1].replace('.POSCAR', '') for c in self.prototypes],
+            'name': [c['name'].split('-')[0] for c in self.prototypes],
+            'label': [c['name'].split('-')[-2] + '-' + c['name'].split('-')[-1].replace('.POSCAR', '') for c in self.prototypes],
             'objective': [c[objective] for c in self.prototypes],
             'index': [c['index'] for c in self.prototypes]
         })
@@ -1469,8 +1470,21 @@ class CrystALLSearch:
         df_top_candidates = df_sorted[df_sorted['index'].isin(self.cluster_affiliation[objective].values())]
 
         # Get the minimum and maximum values for the y-axis range
-        y_min = df_sorted['objective'].min() * 1.01
+        y_min = df_sorted['objective'].min() * 1.001
         y_max = df_sorted['objective'].max() * 0.95
+
+        # Trace for the legend title
+        trace_legend = go.Scatter(
+            x=[None], y=[None],
+            mode='markers',
+            marker=dict(
+                color='black',
+                symbol='triangle-right',
+                size=10
+            ),
+            showlegend=True,
+            name='Top Candidates:'
+        )
 
         # Create bar plots for prototypes and top candidates
         trace_prototypes = go.Bar(
@@ -1480,7 +1494,8 @@ class CrystALLSearch:
             hoverinfo='text',
             marker=dict(color='#a6a6a6'),
             width=0.4,
-            name='Prototypes'
+            name='Prototypes',
+            showlegend=False
         )
 
         # Create bar plots for each top candidate cluster
@@ -1494,22 +1509,25 @@ class CrystALLSearch:
                 hoverinfo='text',
                 marker=dict(color=cluster_colors[cluster]),
                 width=0.4,
-                name=f'Top Candidate (Cluster {cluster})'
+                name=f'{df_cluster.iloc[0]['name']} (Cluster {cluster})'
             )
             traces_top_candidates.append(trace)
 
-        data = [trace_prototypes] + traces_top_candidates
+        data = [trace_prototypes, trace_legend] + traces_top_candidates
 
         layout = go.Layout(
             xaxis=dict(
                 side='top',
                 tickvals=df['index'],
-                ticktext=df['name'],
+                ticktext=df['label'],
                 tickangle=300,
                 showline=True,
                 linewidth=1,
                 linecolor='black',
-                mirror=True
+                mirror=True,
+                tickfont=dict(
+                    size=10
+                )
             ),
             yaxis=dict(
                 title='Enthalpy of Formation (eV/atom)',
@@ -1519,7 +1537,8 @@ class CrystALLSearch:
                 linecolor='black',
                 mirror=True
             ),
-            template='simple_white'
+            template='simple_white',
+            height=600
         )
 
         figure = go.Figure(data=data, layout=layout)
