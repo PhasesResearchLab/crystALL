@@ -785,7 +785,7 @@ class CrystALLSearch:
                 try:
                     print(f"{Fore.GREEN}✔ {model} models found.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
-                    print(f"{Fore.GREEN}√ {model} models found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}v {model} models found.{Style.RESET_ALL}")
             else:
                 try:
                     print(f"{Style.DIM}✘ {model} models not found.{Style.RESET_ALL}")
