@@ -8,6 +8,7 @@ import pytest
 import crystall
 
 from pymongo import MongoClient
+from colorama import just_fix_windows_console
 
 class TestCrystALLSearch(unittest.TestCase):
     """Test the functionalities of the CrystALLSearch class."""
@@ -46,6 +47,9 @@ class TestCrystALLSearch(unittest.TestCase):
             cls.cas = crystall.CrystALLSearch(cls.targetFormula)
             cls.cas.connect_MPDD(cls.db)
             cls.cas.generate_MPDD()
+
+    def setUp(self) -> None:
+        just_fix_windows_console()
 
     @pytest.mark.order(1)
     def test_download_models(self) -> None:
