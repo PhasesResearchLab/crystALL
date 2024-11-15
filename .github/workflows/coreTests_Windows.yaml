@@ -16,7 +16,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Start MongoDB (Windows)
+        run: |
+          Set-Service mongodb -StartupType Automatic          
+          Start-Service -Name mongodb
+    
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -24,11 +29,6 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
       
-      - name: Start MongoDB (Windows)
-        run: |
-          Set-Service mongodb -StartupType Automatic          
-          Start-Service -Name mongodb
-    
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
