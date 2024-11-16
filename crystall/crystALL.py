@@ -1509,7 +1509,7 @@ class CrystALLSearch:
                 hoverinfo='text',
                 marker=dict(color=cluster_colors[cluster]),
                 width=0.4,
-                name=f'{df_cluster.iloc[0]['name']} (Cluster {cluster})'
+                name=f"{df_cluster.iloc[0]['name']} (Cluster {cluster})"
             )
             traces_top_candidates.append(trace)
 
