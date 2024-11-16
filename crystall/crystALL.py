@@ -6,6 +6,8 @@ import math
 import re
 import json
 import csv
+import time
+from urllib.error import HTTPError
 from decimal import Decimal, ROUND_DOWN
 from itertools import groupby, permutations, product, combinations
 from operator import itemgetter
