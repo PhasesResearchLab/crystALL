@@ -870,21 +870,47 @@ class CrystALLSearch:
 
     def download_models(
             self,
-            mode: Literal['serial', 'parallel'] = 'parallel'
+            mode: Literal['serial', 'parallel'] = 'parallel',
+            retries=3, 
+            delay=5
     ) -> None:
         """
         Download the default models for both pySIPFENN and MPDD-ALIGNN.
 
         Args:
             mode: Mode to download models: ``'serial'`` or ``'parallel'``. Defaults to 'parallel'.
+            retries: Number of retry attempts in case of failure.
+            delay: Delay between retry attempts in seconds.
         """
         
         print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
-        self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
-        self.model_status['pySIPFENN'] = True
+        for attempt in range(retries):
+            try:
+                self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
+                self.model_status['pySIPFENN'] = True
+                break  # Exit the loop if successful
+            except HTTPError as e:
+                print(f"HTTPError: {e.code} - {e.reason}")
+                if attempt < retries - 1:
+                    print(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    raise
+        
         print(f"Downloading models for MPDD-alignn..")
-        pretrained.download_default_models(parallel=(mode == 'parallel'))
-        self.model_status['MPDD-ALIGNN'] = True
+        for attempt in range(retries):
+            try:
+                pretrained.download_default_models(parallel=(mode == 'parallel'))
+                self.model_status['MPDD-ALIGNN'] = True
+                break  # Exit the loop if successful
+            except HTTPError as e:
+                print(f"HTTPError: {e.code} - {e.reason}")
+                if attempt < retries - 1:
+                    print(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    raise
+        
         print(f"Done! Models are ready to use.")
 
         self.update_objectives(self.Calculator, False)
