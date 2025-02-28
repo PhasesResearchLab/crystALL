@@ -33,6 +33,7 @@ dependencies = [
     "pysipfenn>=0.16.0",
     "mpdd-alignn>=1.0.6",
     "torch==2.3.0",
+    "torchdata==0.8.0",
     "dgl>=2.2.0",
     "pymatgen>=2024.2.20",
     "spglib==2.0.2",
