@@ -1,1 +1,1 @@
-from crystall.crystALL import *
+from crystall.core import *
