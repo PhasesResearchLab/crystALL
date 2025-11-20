@@ -7,23 +7,28 @@ import re
 import json
 import csv
 import time
-from urllib.error import HTTPError
-from decimal import Decimal, ROUND_DOWN
-from itertools import groupby, permutations, product, combinations
-from operator import itemgetter
-from importlib import resources
-from statistics import mean
-from typing import List, Dict, Union, Literal
-
-# Common tool libraries
 import numpy as np
 import pandas as pd
+import plotly.graph_objs as go
+import importlib.resources
+import threading
+import warnings
+import tomllib
+
+# Common tool libraries
 from tqdm import tqdm
 from natsort import natsorted
 from colorama import Fore, Style
 from distinctipy import get_colors
 from plotly.offline import plot, iplot
-import plotly.graph_objs as go
+from yaspin import yaspin
+from urllib.error import HTTPError
+from decimal import Decimal, ROUND_DOWN
+from itertools import groupby, permutations, product, combinations
+from operator import itemgetter
+from statistics import mean
+from typing import Any, Sequence, List, Dict, Union, Literal, Optional, Tuple
+from importlib.metadata import entry_points
 
 # ML / Data
 from pymongo.database import Database
@@ -32,18 +37,14 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score, pairwise_distances
 from sklearn.cluster import KMeans, DBSCAN
-
-# Atomistic / Atomistic ML
 from pysipfenn import Calculator
 from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
-from alignn import pretrained
 from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 
 # Disable undesired warnings from torch and pymatgen
-import warnings
 warnings.filterwarnings("ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*")
 warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
