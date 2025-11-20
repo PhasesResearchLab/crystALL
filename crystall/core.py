@@ -283,17 +283,18 @@ def run_MPDD(
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
 
-    print(f'\nLooking for {target_formula} in MPDD database collections.')
+    formula_str = str(target_formula).replace(' ', '')
+    source_str = f"MPDD({'-'.join(collections)})"
 
     if target_prototypes == 'native':
 
-        natPath = f"{str(target_formula).replace(' ', '')}-{'_'.join(collections)}-native-prototypes"
+        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
 
         try:
-            os.mkdir(natPath)
-            print('Directory created for MPDD prototypes: '+natPath )
+            os.mkdir(out_dir)
+            print('Directory created for MPDD prototypes: ' + out_dir)
         except FileExistsError:
-            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.')
+            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
 
         for col in collections:
             print('Looking through: ' + col)
@@ -327,10 +328,10 @@ def run_MPDD(
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
 
                 p = Poscar(s)
-                p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
+                p.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
         print('Done.\n')
 
-        return natPath
+        return out_dir
 
     elif target_prototypes == 'non-native':
 
