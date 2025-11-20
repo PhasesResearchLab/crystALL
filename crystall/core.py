@@ -491,8 +491,8 @@ def run_MPDD(
 
         return out_dir
 
-def run_compositional_MPDD(
-        target_composition_dict: Dict[str, int],
+def run_MPDD_devs(
+        target_formula: Union[str, Composition],
         devs: Dict[str, int],
         MPDD: Database,
         collections: List[str],
@@ -519,11 +519,23 @@ def run_compositional_MPDD(
     assert len(collections) > 0, 'At least one collection must be specified'
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
     
-    # Target formula
-    meanFormula = ''.join(f'{key}{val}' for key, val in target_composition_dict.items())
-    rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
+    if isinstance(target_formula, str):
+        # Formula to pymatgen Composition
+        composition = Composition(target_formula)
+    elif isinstance(target_formula, Composition):
+        composition = target_formula
+    else:
+        raise ValueError('Target formula must be a string or a pymatgen Composition object')
+    
+    # Target formula and standardized directory naming components
+    rangesStr = f"({','.join(str(r) for r in devs.values())})"
+    formula_str = f"{str(target_formula).replace(' ', '')}±{rangesStr}"
+    source_str = f"MPDD({'-'.join(collections)})"
 
-    print('\nSearching for structure prototypes for: ' + meanFormula + ' ' + rangesStr)
+    target_composition_dict = {el: round(amt / composition.num_atoms * 1000, 0)
+                                    for el, amt in composition.as_dict().items()}
+
+    print('\nSearching for structure prototypes for: ' + formula_str)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
 
     if target_prototypes == 'native':
