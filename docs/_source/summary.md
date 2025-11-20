@@ -1,28 +1,26 @@
 <div align="center">
-<table>
-  <tr>
-    <td width="160">
-      <img src="_static/crystALL.png" alt="crystALL Logo" width="140"/>
-    </td>
-    <td style="vertical-align: middle;">
-      <!-- Badges go here -->
-      <a href="https://doi.org/10.xxxx/xxxxx"><img src="https://img.shields.io/badge/DOI-10.xxxx/xxxxx-blue"></a>
-      <a href="https://arxiv.org/abs/YYMM.xxxxx"><img src="https://img.shields.io/badge/arXiv-YYMM.xxxxx-darkred"/></a>
-      <img src="https://img.shields.io/badge/Docs-readthedocs-informational"/>
-      <br>
-      <img src="https://img.shields.io/badge/Windows-pass-brightgreen"/>
-      <img src="https://img.shields.io/badge/Macos-pass-brightgreen"/>
-      <img src="https://img.shields.io/badge/Linux-pass-brightgreen"/>
-      <img src="https://img.shields.io/badge/Codecov-100%25-fe226d"/>
-      <br>
-      <img src="https://img.shields.io/badge/python-3.11%2B-lightgray"/>
-      <a href="https://pypi.org/project/crystALL"><img src="https://img.shields.io/badge/pypi-v0.5.0-purple"></a>
-      <a href="https://anaconda.org/conda-forge/crystALL"><img src="https://img.shields.io/badge/condaforge-v0.5.0-yellow"></a>
-    </td>
-  </tr>
-</table>
+  <img src="_static/crystALL.png" alt="crystALL Logo" width="180"/>
+  <br>
+
+  <br>
+  <!-- Badges line 1 -->
+  <a href="https://doi.org/10.xxxx/xxxxx"><img src="https://img.shields.io/badge/DOI-10.xxxx/xxxxx-blue"></a>
+  <a href="https://arxiv.org/abs/YYMM.xxxxx"><img src="https://img.shields.io/badge/arXiv-YYMM.xxxxx-darkred"/></a>
+  <img src="https://img.shields.io/badge/Docs-readthedocs-informational"/>
+
+  <br>
+  <!-- Badges line 2 -->
+  <img src="https://img.shields.io/badge/Windows-pass-brightgreen"/>
+  <img src="https://img.shields.io/badge/Macos-pass-brightgreen"/>
+  <img src="https://img.shields.io/badge/Linux-pass-brightgreen"/>
+  <img src="https://img.shields.io/badge/Codecov-100%25-fe226d"/>
+
+  <br>
+  <!-- Badges line 3 -->
+  <img src="https://img.shields.io/badge/python-3.11%2B-lightgray"/>
+  <a href="https://pypi.org/project/crystALL"><img src="https://img.shields.io/badge/pypi-v0.5.0-purple"></a>
+  <a href="https://anaconda.org/conda-forge/crystALL"><img src="https://img.shields.io/badge/condaforge-v0.5.0-yellow"></a>
 </div>
-<br>
 
 # Summary
 
