@@ -124,9 +124,9 @@ def run_local(
     """
 
     assert os.path.isdir(prototype_path), 'Prototype path must be a valid directory'
-    
+
     print(f'\nSearching for structure prototypes for: {target_formula}')
-    print('Structure prototype dataset:\n' + prototype_path)
+    print('Structure prototype dataset:' + prototype_path)
 
     if isinstance(target_formula, str):
         # Formula to pymatgen Composition
@@ -140,52 +140,49 @@ def run_local(
     aFormula = composition.anonymized_formula
     nElements = composition.to_data_dict['nelements']
 
-    # Initial prototype dataset scan
+    # Initial prototype dataset scan – collect matching structures in memory only
     fileList = natsorted(os.listdir(prototype_path))
-    total = fileList.__len__()
-    print(str(total)+' files detected\n')
-    # Intermediate directory for identified prototypes
-    try:
-        os.mkdir(os.path.split(prototype_path)[1] + '-' + aFormula)
-        print('Intermediate directory for '+aFormula+' created.')
-    except FileExistsError:
-        print('Intermediate directory for '+aFormula+' already exist.\nPrototypes selection will be overwritten/updated.\n')
+    total = len(fileList)
 
-    # Counters
-    allS = 0
-    nEl = 0
-    aF = 0
-    print('{0:*^80}'.format('Scanning database for '+aFormula+' compounds.'))
-    # Iterate over dataset of all structures
+    allS = 0           # total files inspected
+    nEl = 0            # structures with correct number of elements
+    aF = 0             # structures matching anonymized formula
+    # Keep both the original filename (base_name) and the Structure to avoid name collisions later
+    prototypeList: List[Tuple[str, Structure]] = []
+
     for file in fileList:
-        allS = allS + 1
-        if os.path.splitext(file)[1] == '.POSCAR':
-            s = Structure.from_file(prototype_path +'/'+ file)
-            if s.n_elems == nElements:
-                nEl = nEl + 1
-                if Composition(s.formula).anonymized_formula == aFormula:
-                    sP = Poscar(s)
-                    sP.write_file(os.path.split(prototype_path)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
-                    aF = aF + 1
-                    if aF % 100 == 0:
-                        print(str(aF) + ' prototype structures identified.')
-        if allS % 5000 == 0:
+        allS += 1
+        if os.path.splitext(file)[1] != '.POSCAR':
+            continue
+
+        s = Structure.from_file(os.path.join(prototype_path, file))
+        if s.n_elems == nElements:
+            nEl += 1
+            if Composition(s.formula).anonymized_formula == aFormula:
+                base_name = os.path.splitext(os.path.basename(file))[0]
+                prototypeList.append((base_name, s))
+                aF += 1
+                if aF % 100 == 0:
+                    print(str(aF) + ' prototype structures identified.')
+
+        if total and allS % 5000 == 0:
             print(str(round(allS / total * 100, 1)) + '% database scan completed.')
 
     print('\nTotal structures detected: ' + str(allS))
-    print('\n' + str(nElements) + '-element structures: ' + str(nEl))
-    print(str(nElements) + '-element structures fraction: ' + str(round(nEl / total * 100)) + '%')
-    print('\n' + aFormula + ': ' + str(aF))
-    print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%')
-
-    # List selected prototypes
-    prototypeList = natsorted(os.listdir(os.path.split(prototype_path)[1] + '-' + aFormula))
+    print(str(nElements) + '-element structures: ' + str(nEl))
+    if total:
+        print(str(nElements) + '-element structures fraction: ' + str(round(nEl / total * 100)) + '%\n')
+    else:
+        print(str(nElements) + '-element structures fraction: 0%\n')
+    print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(aF))
+    if nEl:
+        print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%\n')
+    else:
+        print(aFormula + ' Fraction from ' + str(nElements) + '-element: 0%\n')
 
     # Substitution elements combination.
-    print('{0:*^80}'.format(' Substituting elements in the prototypes '))
     sEL = sorted_elements_list(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
-    print('\nTarget Element Combination: ' + str(sELtarget))
 
     # Verify need for permutations
     permN = 1
@@ -193,11 +190,10 @@ def run_local(
         permN = permN * math.factorial(multiples.__len__())
 
     if permN > 1:
-        print('\nTarget composition has degenerate anonymous formula thus requires permutations.')
-        print('Up to ' + str(permN) + ' per structure.')
-        print('Total number of prototypes increased up to: ' + str(aF * permN) + '\n')
+        print('Target composition has degenerate anonymous formula thus requires permutations.')
+        print(f'Up to {Fore.BLUE}{Style.BRIGHT}{str(permN)}{Style.RESET_ALL} per structure.\n')
     else:
-        print('\nTarget composition indicates discrete element substitution.\n')
+        print('Target composition indicates discrete element substitution.\n')
 
     # Standardized output directory naming: <formula>-local-prototypes
     formula_str = str(target_formula).replace(' ', '')
