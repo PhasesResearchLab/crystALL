@@ -1222,47 +1222,67 @@ class CrystALLSearch:
         
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN")
     
-    def get_alignn_properties(
-            self,
-            mode: Literal['serial', 'parallel'] = 'serial'
+    def get_calculator_properties(
+        self,
+        calculator: str,
+        mode: Literal["serial", "parallel"] = "serial",
+        max_workers: int | None = None,
+        objectives: Sequence[str] | None = None,
     ) -> None:
-        """
-        Predict properties for the prototype materials using MPDD-ALIGNN models and update the prototypes with the predictions.
+        """Run a pluggable calculator adapter over the prototype directory and merge results.
 
         Args:
-            mode: Mode to run ALIGNN: ``'serial'`` or ``'parallel'``. Defaults to 'serial'.
+            calculator: The adapter name as declared in entry points.
+            mode: 'serial' or 'parallel' as supported by the adapter.
 
         Raises:
-            AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of prototypes does not match the number of property predictions.
+            AssertionError: if prototypes folder missing or unknown calculator name.
         """
-
         assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
         assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
-        assert self.model_status['MPDD-ALIGNN'], 'MPDD-ALIGNN models not found. Please run `download_models` first.'
-        
-        for model_dict in pretrained.get_default_models():
-            if model_dict['name'] in self.available_objectives and model_dict['name'] not in self.predicted_objectives:
-                self.predicted_objectives.append(model_dict['name'])
-        
-        print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
-        print('Calculating descriptors...')
-        resultDicts = pretrained.run_models_from_directory(self.prototype_path, mode=mode)
-        assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
+        assert hasattr(self, "supported_calculators"), "Supported calculators not initialized."
+        assert calculator in self.supported_calculators and calculator != 'pySIPFENN', \
+            f"Unknown calculator '{calculator}'. Available: {list(self.supported_calculators.keys())}"
 
-        for result in resultDicts:
-            name = result['name']
-            for prototype in self.prototypes:
-                if prototype['name'] == name:
-                    prototype.update(result)
-                    for key in result.keys():
-                        if isinstance(prototype[key], float):
-                            prototype[key] = float(Decimal(prototype[key]).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
-                    break
+        adapter_cls = self.supported_calculators[calculator]
+        try:
+            adapter = adapter_cls()
+        except Exception as e:
+            raise RuntimeError(f"Failed to instantiate adapter '{calculator}': {e}")
 
-        # Update average of the predictions
-        self.calculate_average()
-        
-        print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(resultDicts)}{Style.RESET_ALL} prototypes using ALIGNN")
+        results = adapter.run_on_directory(self.prototype_path, mode=mode, max_workers=max_workers, objectives=objectives)
+        # Be tolerant to partial results: merge what we have and warn on mismatch
+        if len(results) != len(self.prototypes):
+            warnings.warn(f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names.")
+
+        # Build index for fast merge
+        name_to_index = {p.get('name'): i for i, p in enumerate(self.prototypes)}
+        matched = 0
+        for r in results:
+            name = r.get('name') if isinstance(r, dict) else None
+            props = r.get('properties', {}) if isinstance(r, dict) else {}
+            if name in name_to_index:
+                self.prototypes[name_to_index[name]].update(props)
+                matched += 1
+
+        if matched == 0:
+            raise AssertionError("No calculator predictions matched any prototype names. Ensure filenames are preserved.")
+
+        # Track only objectives actually produced (respecting user selection)
+        produced_objectives = set()
+        for r in results:
+            props = r.get('properties', {}) if isinstance(r, dict) else {}
+            for key, val in props.items():
+                if isinstance(val, (int, float)):
+                    produced_objectives.add(key)
+        # If user passed a subset, intersect
+        if objectives is not None:
+            produced_objectives = produced_objectives.intersection(set(objectives))
+        for obj in sorted(produced_objectives):
+            if obj not in self.predicted_objectives:
+                self.predicted_objectives.append(obj)
+
+    # No automatic objective aggregation here; users can call `define_objective` to derive new ones.
 
     def get_mpdd_convexhull(
             self
