@@ -1657,7 +1657,7 @@ class CrystALLSearch:
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
             return
         
         # Create a DataFrame from the data
@@ -1673,11 +1673,13 @@ class CrystALLSearch:
 
         # Define color set based on clusters
         colorblind_type = "Protanopia" if color_blind else None
-        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0), (1.0, 0.5, 0.0)], colorblind_type=colorblind_type)
         cluster_colors = {cluster: '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255), int(colors[i][1]*255), int(colors[i][2]*255)) for i, cluster in enumerate(df['cluster'].unique())}
 
         # Sort the dataframe by 'objective' in ascending order
-        df_sorted = df.sort_values(by=['objective', 'index'])
+        df_sorted = df.sort_values(by=['objective', 'index']).reset_index(drop=True)
+        # Create a positional x-axis so bars appear in the sorted order
+        df_sorted['xpos'] = df_sorted.index + 1
 
         # Segment the DataFrame into df_prototypes and df_top_candidates
         df_prototypes = df_sorted[~df_sorted['index'].isin(self.cluster_affiliation[objective].values())]
@@ -1702,7 +1704,7 @@ class CrystALLSearch:
 
         # Create bar plots for prototypes and top candidates
         trace_prototypes = go.Bar(
-            x=df_prototypes['index'],
+            x=df_prototypes['xpos'],
             y=df_prototypes['objective'],
             hovertext=df_prototypes['objective'],
             hoverinfo='text',
@@ -1717,7 +1719,7 @@ class CrystALLSearch:
         for cluster in df_top_candidates['cluster'].unique():
             df_cluster = df_top_candidates[df_top_candidates['cluster'] == cluster]
             trace = go.Bar(
-                x=df_cluster['index'],
+                x=df_cluster['xpos'],
                 y=df_cluster['objective'],
                 hovertext=df_cluster['objective'],
                 hoverinfo='text',
@@ -1732,8 +1734,8 @@ class CrystALLSearch:
         layout = go.Layout(
             xaxis=dict(
                 side='top',
-                tickvals=df['index'],
-                ticktext=df['label'],
+                tickvals=df_sorted['xpos'],
+                ticktext=df_sorted['label'],
                 tickangle=300,
                 showline=True,
                 linewidth=1,
@@ -1793,7 +1795,7 @@ class CrystALLSearch:
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
             return
         
         # Create a DataFrame from the data
@@ -1810,7 +1812,7 @@ class CrystALLSearch:
 
         # Define a color for each cluster
         colorblind_type = "Protanopia" if color_blind else None
-        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0), (1.0, 0.5, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
         symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
@@ -1939,7 +1941,7 @@ class CrystALLSearch:
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 3D plot generation.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 3D plot generation.")
             return
 
         # Create a DataFrame from the data
@@ -1957,7 +1959,7 @@ class CrystALLSearch:
 
         # Define a color for each cluster
         colorblind_type = "Protanopia" if color_blind else None
-        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0), (1.0, 0.5, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
         symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
