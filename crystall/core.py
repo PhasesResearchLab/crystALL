@@ -1136,7 +1136,7 @@ class CrystALLSearch:
         availableCollections = self.MPDD.list_collection_names()
         assert len(availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
         assert set(collections).issubset(availableCollections), 'At least one of the specified collections is not available in the database'
-        filtered_collections = [col for col in availableCollections if 'test' not in col.lower()]
+        filtered_collections = [col for col in availableCollections if 'test' not in col.lower() and 'abnormal' not in col.lower()]
         print(f"\nConnected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(filtered_collections)}{Style.RESET_ALL}")
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
