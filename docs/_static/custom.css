@@ -1,0 +1,28 @@
+/* Most specific selector with !important to override sphinx-rtd-theme */
+.wy-side-nav-search .wy-logo, 
+.wy-side-nav-search img, 
+.wy-side-nav-search .sidebar-logo {
+    max-width: 180px !important;
+    width: 180px !important;
+    height: auto !important;
+}
+
+/* Remove extra padding above/below the logo if needed */
+.wy-side-nav-search {
+    padding-top: 0px !important;
+}
+
+/* Change sidebar header text color (project name, version, possibly search bar text) to black */
+.wy-side-nav-search, 
+.wy-side-nav-search span, 
+.wy-side-nav-search div, 
+.wy-side-nav-search a, 
+.wy-side-nav-search .project, 
+.wy-side-nav-search .version {
+    color: #000 !important;
+}
+
+/* Change sidebar header background color */
+.wy-side-nav-search {
+    background-color: #efefef !important;
+}
