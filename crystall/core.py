@@ -895,7 +895,7 @@ class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` prototypes from either MPDD or a local 
     dataset of POSCAR files, (2) featurizing the prototypes with KS2022 or future ``pySIPFENN`` descriptor calculators,
-    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the prototypes in ``KS2022`` 
+    (3) getting property predictions using ``pySIPFENN`` or external calculators via adapters, (4) clustering the prototypes in ``KS2022`` 
     feature space, and (5) selecting prototypes based on desired property and cluster affiliation.
     """
     
@@ -941,59 +941,59 @@ class CrystALLSearch:
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.top_candidates: List[Dict[str, Union[str, float]]] = []
 
-        print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.target_formula.formula}{Style.RESET_ALL}")
+        print(f"Initialized CrystALLSearch for target formula: {Fore.YELLOW}{Style.BRIGHT}{self.target_formula.formula}{Style.RESET_ALL}")
 
-        print(f"\nChecking for available models on the computer..")
-
-        # Dictionary to record model availability
-        self.model_status = {
-            'pySIPFENN': False,
-            'MPDD-ALIGNN': False
-        }
+        print("\nChecking for available calculators on the computer..")
 
         # Check for pySIPFENN models
         existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
         if existingCompatibleModels:
-            self.model_status['pySIPFENN'] = True
+            loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
+            if not len(loadedCompatibleModels) > 0:
+                alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
+                stdout, sys.stdout = sys.stdout, io.StringIO()
+                self.Calculator.loadModels(network = alternative_model)
+                sys.stdout = stdout
+            # Record pySIPFENN available objectives
+            self.available_calculators['pySIPFENN'] = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
         else:
-            user_input = input("pySIPFENN models not found. Would you like to automatically run `download_models`? ([y]/n):")
+            user_input = input("pySIPFENN models not found. Would you like to automatically run `download_pysipfenn`? ([y]/n):")
             if user_input.lower() in ('y', ''):
-                self.download_models()
+                self.download_pysipfenn()
 
-        # Check for MPDD-ALIGNN models
-        with resources.files('alignn') as alignn_dir:
-            for model_dict in pretrained.get_default_models():
-                if os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
-                    self.model_status['MPDD-ALIGNN'] = True
-                    break
-            if not self.model_status['MPDD-ALIGNN']:
-                user_input = input("MPDD-ALIGNN models not found. Would you like to automatically run `download_models`? ([y]/n):")
-                if user_input.lower() in ('y', ''):
-                    self.download_models()
+        # Supported calculators include builtin pySIPFENN and external adapters via entry points
+        self.supported_calculators: Dict[str, Any] = {'pySIPFENN': None}
+        self.supported_calculators.update(load_adapters())
 
-        # Print the status of models
-        for model, status in self.model_status.items():
-            if status:
+        # Setup external calculators (stub: mark all supported adapters as available with their declared objectives)
+        for calc_name, adapter_cls in self.supported_calculators.items():
+            if calc_name == 'pySIPFENN':
+                continue
+            self.setup_calculator(calc_name)
+
+        # Print the status of calculators (found if present in available_calculators)
+        for calc_name in self.supported_calculators.keys():
+            if calc_name in self.available_calculators:
                 try:
-                    print(f"{Fore.GREEN}✔ {model} models found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}✔ {calc_name} found.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
-                    print(f"{Fore.GREEN}v {model} models found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}v {calc_name} found.{Style.RESET_ALL}")
             else:
                 try:
-                    print(f"{Style.DIM}✘ {model} models not found.{Style.RESET_ALL}")
+                    print(f"{Style.DIM}✘ {calc_name} not found.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
-                    print(f"{Style.DIM}x {model} models not found.{Style.RESET_ALL}")
+                    print(f"{Style.DIM}x {calc_name} not found.{Style.RESET_ALL}")
 
-        # Update objectives with models found
-        self.update_objectives(self.Calculator)
+        # Update objectives with calculators found
+        self.__update_objectives(self.Calculator)
 
-    def update_objectives(
-            self,
-            calculator: Calculator,
-            verbose: bool = True
+    def __update_objectives(
+        self,
+        calculator: Calculator,
+        verbose: bool = True
     ) -> None:
         """
-        Update the available objectives with the models found.
+        Update the available objectives with the calculators found.
 
         Args:
             calculator: A pySIPFENN Calculator object.
@@ -1004,28 +1004,34 @@ class CrystALLSearch:
         """
 
         assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
-        
-        if self.model_status['pySIPFENN']:
-        
-            loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
 
-            if not len(loadedCompatibleModels) > 0:
-                alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
-                stdout, sys.stdout = sys.stdout, io.StringIO()
-                self.Calculator.loadModels(network = alternative_model)
-                sys.stdout = stdout
-            
-            self.available_objectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
+        # pySIPFENN objectives already populated in available_calculators during init or download
+        if 'pySIPFENN' not in self.available_calculators:
+            print("\npySIPFENN objective required for calculation. Run `download_pysipfenn` first.")
 
-        else:
+        # Add objectives from discovered adapters (classes expose class attribute 'objectives')
+        try:
+            for name, adapter_cls in getattr(self, "supported_calculators", {}).items():
+                if name == 'pySIPFENN' or adapter_cls is None:
+                    continue
+                objectives = getattr(adapter_cls, "objectives", []) or []
+                if name not in self.available_calculators:
+                    self.available_calculators[name] = list(objectives)
+        except Exception as e:
+            warnings.warn(f"Adapter objectives aggregation failed: {e}")
 
-            print("\npySIPFENN objective required for calculation. Run `download_models` first.")
-
-        self.available_objectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.model_status['MPDD-ALIGNN'] else []
-
-        if len(self.available_objectives) >= 1 and verbose:
-        
-            print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.available_objectives)}{Style.RESET_ALL}.")
+        if len(self.available_calculators) >= 1 and verbose:
+            print("\nObjectives available for calculation:")
+            for calc_name, obj_list in self.available_calculators.items():
+                if not obj_list:
+                    continue
+                try:
+                    colored_calc = f"{calc_name}"
+                    colored_objs = ', '.join(f"{Fore.GREEN}{Style.BRIGHT}{o}{Style.RESET_ALL}" for o in sorted(obj_list))
+                    print(f"- {colored_calc}: {colored_objs}")
+                except UnicodeEncodeError:
+                    # Fallback without colors if terminal cannot render them
+                    print(f"- {calc_name}: {', '.join(sorted(obj_list))}")
 
     def __check_objectives(
             self
@@ -1039,12 +1045,16 @@ class CrystALLSearch:
         Returns:
             List of common objectives between available objectives and predicted objectives.
         """
+        # Build a list of all available objectives across calculators
+        flat_available = []
+        for lst in self.available_calculators.values():
+            flat_available.extend(lst)
 
-        assert isinstance(self.available_objectives, list) and len(self.available_objectives) >= 1, "At least one objective is required for classification. Run `download_models` first."
+        assert isinstance(flat_available, list) and len(flat_available) >= 1, "At least one objective is required for classification. Run `download_pysipfenn` first."
         
-        if any(value not in self.predicted_objectives for value in self.available_objectives):
+        if any(value not in self.predicted_objectives for value in flat_available):
             print("\nSome objectives do not have predictions calculated and will not be considered for classification.")
-            for obj in self.available_objectives:
+            for obj in flat_available:
                 if obj not in self.predicted_objectives:
                     try:
                         print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
@@ -1056,14 +1066,14 @@ class CrystALLSearch:
                     except UnicodeEncodeError:
                         print(f"{Fore.GREEN}√ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
 
-    def download_models(
+    def download_pysipfenn(
             self,
             mode: Literal['serial', 'parallel'] = 'parallel',
             retries=3, 
             delay=5
     ) -> None:
         """
-        Download the default models for both pySIPFENN and MPDD-ALIGNN.
+        Download the default models required for pySIPFENN operation.
 
         Args:
             mode: Mode to download models: ``'serial'`` or ``'parallel'``. Defaults to 'parallel'.
@@ -1071,11 +1081,12 @@ class CrystALLSearch:
             delay: Delay between retry attempts in seconds.
         """
         
-        print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
+        print("Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
         for attempt in range(retries):
             try:
                 self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
-                self.model_status['pySIPFENN'] = True
+                # Mark pySIPFENN objectives as available
+                self.available_calculators['pySIPFENN'] = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))
                 break  # Exit the loop if successful
             except HTTPError as e:
                 print(f"HTTPError: {e.code} - {e.reason}")
@@ -1084,7 +1095,6 @@ class CrystALLSearch:
                     time.sleep(delay)
                 else:
                     raise
-        
         print("Done! Models are ready to use.")
         self.__update_objectives(self.Calculator, False)
     
