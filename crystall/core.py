@@ -924,8 +924,6 @@ class CrystALLSearch:
             self.target_formula = target_formula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
-        self.target_composition_dict = {el: round(amt / self.target_formula.num_atoms * 1000, 0)
-                                      for el, amt in self.target_formula.as_dict().items()}
 
         stdout, sys.stdout = sys.stdout, io.StringIO()
         self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
@@ -1155,7 +1153,7 @@ class CrystALLSearch:
         Generate prototype materials from the MPDD database based on the target formula.
 
         Args:
-            target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes. Defaults to 'non-native'.
+            target_prototypes: Specifies whether to use 'native' or 'non-native' compositions. Defaults to 'non-native'.
             filter_prototypes: Specifies the prototype filter to use. Defaults to 'material.structID'.
             limit: The maximum number of prototypes to generate. Defaults to 1000.
             devs: Dictionary with element symbols as keys and their allowed deviations as values. Defaults to None.
@@ -1171,7 +1169,7 @@ class CrystALLSearch:
         if devs is None:
             self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
         else:
-            self.prototype_path = run_compositional_MPDD(self.target_composition_dict, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
+            self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
         inputFiles = natsorted(os.listdir(self.prototype_path))
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
