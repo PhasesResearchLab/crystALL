@@ -2142,3 +2142,25 @@ class BaseCalculator:
             return None
         except Exception:
             return None
+        
+# Package Metadata **************************************************************************
+try:
+    with importlib.resources.files("crystall").joinpath("pyproject.toml").open("rb") as f:
+        _toml = tomllib.load(f)
+    _project = _toml.get("project", {})
+    _urls = _project.get("urls", {})
+    __name__ = _project.get("name")
+    __version__ = _project.get("version")
+    __release__ = _project.get("release")
+    __authors__ = ", ".join([a.get("name", "") for a in _project.get("authors", [])])
+    __doc__ = _urls.get("Documentation")
+    __rep__ = _urls.get("Repository")
+    __doi__ = _urls.get("DOI")
+except (FileNotFoundError, ModuleNotFoundError):
+    __name__ = "crystall"
+    __version__ = "X.X.X"
+    __release__ = "YYYY-MM"
+    __authors__ = "Adam Krajewski, Ricardo Amaral"
+    __doc__ = "crystALL.readthedocs.io"
+    __rep__ = "github.com/PhasesResearchLab/crystALL"
+    __doi__ = "doi.org/10.xxxx/xxxxx"
