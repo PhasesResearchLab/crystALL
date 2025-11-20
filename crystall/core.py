@@ -197,28 +197,29 @@ def run_local(
         print('Up to ' + str(permN) + ' per structure.')
         print('Total number of prototypes increased up to: ' + str(aF * permN) + '\n')
     else:
-        print('\nTarget composition indicates discrete element substitution.')
+        print('\nTarget composition indicates discrete element substitution.\n')
 
-    intPath = f"{os.path.split(prototype_path)[1]}-{aFormula}"
-    print('Intermediate Directory: ' + intPath)
-    finPath = f"{os.path.split(prototype_path)[1]}-{str(target_formula).replace(' ', '')}"
-    print('Final Directory: ' + finPath)
+    # Standardized output directory naming: <formula>-local-prototypes
+    formula_str = str(target_formula).replace(' ', '')
+    out_dir = f"{formula_str}-local-prototypes"
+    # Ensure we are not writing back into the prototype source directory
+    assert os.path.abspath(out_dir) != os.path.abspath(prototype_path), 'Output directory must differ from prototype_path'
+
+    print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
     try:
-        os.mkdir(finPath)
-        print('Final directory created.')
+        os.mkdir(out_dir)
+        print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
     except FileExistsError:
-        print('Final directory already exist.\nPrototypes will be overwritten/updated.')
+        print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
-    # Substitute over all condidates over all of their permutations
+    # Substitute over all candidates over all of their permutations
     allS = 0
-    for prototype in prototypeList:
-        s = Structure.from_file(intPath + '/' + prototype)
+    for base_name, s in prototypeList:
 
         permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
         spGroupA = SpacegroupAnalyzer(s)
-        fileSplit = prototype.split('.')
-        newNameRoot = fileSplit[0] + '-' + str(
-            spGroupA.get_crystal_system()) + '-'
+        # Preserve original base_name to avoid overwriting files from different prototypes
+        newNameRoot = 'local-' + str(spGroupA.get_crystal_system()) + '-' + base_name
 
         p = 0
         for permut in permuts:
@@ -233,12 +234,12 @@ def run_local(
             else:
                 newName = newNameRoot + '.POSCAR'
             sP = Poscar(st)
-            sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
+            sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
     print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
-    return finPath
+    return out_dir
 
 def run_MPDD(
         target_formula: Union[str, Composition],
