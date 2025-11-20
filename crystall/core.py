@@ -393,8 +393,8 @@ def run_MPDD(
         else:
             print('\nTarget composition indicates discrete element substitution.')
 
-        finPath = f"{str(target_formula).replace(' ', '')}-{'_'.join(collections)}-prototypes"
-        print('Final Prototype Directory: ' + finPath)
+        out_dir = f"{formula_str}-{source_str}-prototypes"
+        print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
 
         try:
             os.mkdir(finPath)
@@ -479,14 +479,17 @@ def run_MPDD(
                     else:
                         name = nameRoot + '.POSCAR'
                     sP = Poscar(st)
-                    sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
+                    sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name))
                 allS = allS + p
                 if allS % 1000 == 0:
                     print(str(allS) + ' substitutions complete.')
 
-        print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
-        
-        return finPath
+        print(
+            f"Total number of unique prototypes: {Fore.GREEN}{Style.BRIGHT}{len(aggregated_data)}{Style.RESET_ALL} * {Fore.BLUE}{Style.BRIGHT}{permN}{Style.RESET_ALL} permutations each\n"
+            f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.'
+        )
+
+        return out_dir
 
 def run_compositional_MPDD(
         target_composition_dict: Dict[str, int],
@@ -527,15 +530,13 @@ def run_compositional_MPDD(
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
-        print('\nLooking for ' + meanFormula + ' in MPDD database collections.')
-
-        natPath = '_'.join(collections) + '-native-' + meanFormula + rangesStr
+        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
 
         try:
-            os.mkdir(natPath)
-            print('Directory created for MPDD prototypes: ' + natPath)
+            os.mkdir(out_dir)
+            print('Directory created for MPDD prototypes: ' + out_dir)
         except FileExistsError:
-            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.')
+            print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
 
         # Query for matching MPDD entries
         nativeQuery = comp2comp_q(target_composition_dict, devs)
@@ -604,13 +605,13 @@ def run_compositional_MPDD(
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
 
                 p = Poscar(s)
-                p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
+                p.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
                 targetPresent += 1
 
         print('Done.')
         print(f'{targetPresent} target materials found in MPDD.\n')
 
-        return natPath
+        return out_dir
 
     elif target_prototypes == 'non-native':
         # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
@@ -631,16 +632,14 @@ def run_compositional_MPDD(
 
         # ********************************* Substitution elements combination ********************************************
 
-        print('{0:*^80}'.format(' Substituting elements in the prototypes '))
-
-        finPath = '_'.join(collections) + '-' + meanFormula + rangesStr
-        print('Final Prototype Directory: ' + finPath)
+        out_dir = f"{formula_str}-{source_str}-prototypes"
+        print('Final Prototype Directory: ' + out_dir)
 
         try:
-            os.mkdir(finPath)
+            os.mkdir(out_dir)
             print('Final directory created.')
         except FileExistsError:
-            print('Final directory already exist.\nPrototypes will be overwritten/updated.')
+            print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
 
         # All generated prototypes
         allS = 0
@@ -742,19 +741,19 @@ def run_compositional_MPDD(
                     else:
                         name = nameRoot + '.POSCAR'
                     sP = Poscar(st)
-                    sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
+                    sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name))
                 allS = allS + p
                 if allS % 50 == 0:
                     print(str(allS) + ' substitutions complete.')
 
         if allS>0:
-            print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {meanFormula} prototypes.')
+            print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {formula_str} prototypes.')
             print(f'Mean number of permutations: {mean(permutNList)}')
             print(f'Min / Max number of permutations: {min(permutNList)} / {max(permutNList)}')
         else:
             print('No prototypes were generated.')
 
-        return finPath
+        return out_dir
 
 def sorted_elements_list(
         comp: Composition
