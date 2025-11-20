@@ -8,13 +8,9 @@ version = "0.5.0"
 authors = [
   { name="Adam Krajewski", email="adam@phaseslab.org" },
   { name="Ricardo Amaral", email="rna5137@psu.edu" },
-  { name="Jonathan Siegel", email="jwsiegel@tamu.edu" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -28,21 +24,23 @@ classifiers = [
 description = "Pure data-driven structure prediction combining MPDD's Big Data (ALL 'crystals') from DFT with high-throughput substitutions, stability predictions, candidate selection, and DFT+experiment validation. Developed since 2021 and demonstrated in the identification of new atomic structures in Nd-Bi and Al-Fe systems."
 readme = "README.md"
 
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "pysipfenn>=0.16.0",
     "mpdd-alignn>=1.0.6",
-    "torch==2.3.0",
-    "torchdata==0.8.0",
+    "chgnet==0.3.8",
+    "torchdata==0.9.0",
     "dgl>=2.2.0",
     "pymatgen>=2024.2.20",
     "spglib==2.0.2",
     "numpy>=1.26.0",
     "tqdm>=4.65.0",
+    "nbformat>=5",
     "natsort>=8.3.0",
     "pymongo>=4.4",
     "pysmartdl2>=2.0.0",
     "colorama>=0.4.6",
+    "yaspin",
     "dnspython",
     "ruamel.yaml",
     "distinctipy",
@@ -54,6 +52,10 @@ dependencies = [
 packages = { find = { exclude = ["paper", "oldfiles"] } }
 
 [project.urls]
-"Research Page" = "https://phaseslab.org"
-"Homepage" = "https://pysipfenn.org"
-"Bug Tracker" = "https://github.com/PhasesResearchLab/crystALL/issues"
+"Documentation" = "https://crystall.readthedocs.io"
+"Repository" = "https://github.com/PhasesResearchLab/crystALL"
+
+[project.entry-points."crystall.calculators"]
+ALIGNN = "crystall.calculators.alignn:AlignnAdapter"
+CHGNetStatic = "crystall.calculators.chgnet:CHGNetStaticAdapter"
+CHGNetRelax = "crystall.calculators.chgnet:CHGNetRelaxAdapter"
