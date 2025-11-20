@@ -934,7 +934,7 @@ class CrystALLSearch:
         self.MPDD = None
         
         # Internal parameters to use during the processing steps
-        self.available_objectives: List[str] = []
+        self.available_calculators: Dict[str, List[str]] = {}
         self.predicted_objectives: List[str] = []
         self.ks2022: np.ndarray = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
@@ -1621,7 +1621,7 @@ class CrystALLSearch:
         
         if 'top-candidates' in content:
             file_name = 'top-candidates.csv' if file_prefix == '' else file_prefix + '_top_candidates.csv'
-            top_candidates_exported = [d for d in self.top_candidates if d['objective'] in self.available_objectives]
+            top_candidates_exported = [d for d in self.top_candidates if d['objective'] in self.predicted_objectives]
             
             with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, top_candidates_exported[0].keys())
@@ -1650,7 +1650,7 @@ class CrystALLSearch:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.available_objectives[0]
+        objective = objective if objective is not None else self.predicted_objectives[0]
 
         assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
@@ -1786,7 +1786,7 @@ class CrystALLSearch:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.available_objectives[0]
+        objective = objective if objective is not None else self.predicted_objectives[0]
 
         assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
@@ -1932,7 +1932,7 @@ class CrystALLSearch:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.available_objectives[0]
+        objective = objective if objective is not None else self.predicted_objectives[0]
 
         assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
