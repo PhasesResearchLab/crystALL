@@ -50,6 +50,60 @@ warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
 # Top-Level Functions *************************************************************************
 
+def load_adapters() -> Dict[str, Any]:
+    """Discover and load calculator adapters.
+
+    Primary mechanism: Python entry points under group 'crystall.calculators'.
+    Fallback (useful in editable/unchecked-out source trees): dynamically scan
+    local 'crystall.calculators' modules for classes exposing the minimal
+    adapter interface: attributes 'name', 'objectives', and method 'run_on_directory'.
+    Returns a mapping of adapter-name -> adapter class. Failures are warned and skipped.
+    """
+    adapters: Dict[str, Any] = {}
+    # 1) Entry points (preferred when package is installed)
+    try:
+        eps = entry_points(group="crystall.calculators")
+        for ep in eps:
+            try:
+                adapters[ep.name] = ep.load()
+            except Exception as e:
+                warnings.warn(f"Skipping calculator '{ep.name}' due to load error: {e}")
+    except Exception as e:
+        warnings.warn(f"Failed to read entry points for calculators: {e}")
+
+    if adapters:
+        return adapters
+
+    # 2) Fallback: scan local package modules
+    try:
+        import pkgutil
+        import importlib
+        import inspect
+        pkg = importlib.import_module('crystall.calculators')
+        for _, modname, ispkg in pkgutil.iter_modules(pkg.__path__):
+            if ispkg:
+                continue
+            try:
+                mod = importlib.import_module(f'crystall.calculators.{modname}')
+            except Exception as e:
+                warnings.warn(f"Could not import local calculator module '{modname}': {e}")
+                continue
+            for _, obj in inspect.getmembers(mod, inspect.isclass):
+                if getattr(obj, '__module__', '') != mod.__name__:
+                    continue
+                # Minimal adapter contract
+                if all(hasattr(obj, attr) for attr in ('name', 'objectives', 'run_on_directory')):
+                    try:
+                        name = getattr(obj, 'name')
+                        if isinstance(name, str) and name and name not in adapters:
+                            adapters[name] = obj
+                    except Exception:
+                        pass
+    except Exception as e:
+        warnings.warn(f"Local adapter discovery failed: {e}")
+
+    return adapters
+
 def run_local(
         target_formula: Union[str, Composition],
         prototype_path: str
