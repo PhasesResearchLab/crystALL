@@ -1186,7 +1186,7 @@ class CrystALLSearch:
             mode: Literal['serial', 'parallel'] = 'serial'
     ) -> None:
         """
-        Predict properties for the prototype materials using pySIPFENN models and update the prototypes with the predictions.
+        Generate pySIPFENN predictors (features) and predict properties for the prototype materials using pySIPFENN models and update the prototypes with the predictions.
 
         Args:
             mode: Mode to run pySIPFENN: ``'serial'`` or ``'parallel'``. Defaults to 'serial'.
@@ -1197,9 +1197,11 @@ class CrystALLSearch:
 
         assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
         assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
-        assert self.model_status['pySIPFENN'], 'pySIPFENN models not found. Please run `download_models` first.'
+        assert 'pySIPFENN' in self.available_calculators and len(self.available_calculators.get('pySIPFENN', [])) > 0, \
+            'pySIPFENN models not found. Please run `download_pysipfenn` first.'
 
-        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.available_objectives)):
+        # Track which objectives (models) will be predicted by pySIPFENN
+        for model in self.available_calculators.get('pySIPFENN', []):
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
         
@@ -1217,9 +1219,6 @@ class CrystALLSearch:
                             prototype[key] = float(Decimal(prototype[key]).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
                     break
 
-        # Update average of the predictions
-        self.calculate_average()
-        
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN")
     
     def get_calculator_properties(
