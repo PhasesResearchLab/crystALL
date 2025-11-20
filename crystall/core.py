@@ -1339,7 +1339,8 @@ class CrystALLSearch:
     def filter_prototypes(
             self,
             max_prototypes: int,
-            cutoff: float = 0.5
+            cutoff: float = 0.5,
+            objective: str | None = None,
     ) -> None:
         """
         Filter the prototypes based on the Formation Energy cutoff value provided.
@@ -1347,6 +1348,8 @@ class CrystALLSearch:
         Args:
             max_prototypes: The maximum number of prototypes to keep.
             cutoff: The Formation Energy cutoff value. Defaults to 0.5.
+            objective: Name of the objective to use for filtering. If None,
+                the first entry in self.predicted_objectives is used.
 
         Raises:
             AssertionError: If no prototypes are identified or if no features are identified.
@@ -1355,12 +1358,18 @@ class CrystALLSearch:
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
         assert len(self.ks2022) > 0, 'No features identified. Please run `run_pysipfenn` first.'
 
+        objective = objective if objective is not None else self.predicted_objectives[0]        
+        assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
+
         if max_prototypes:
-            self.prototypes.sort(key=lambda prototype: (prototype['Avg_Formation_Energy'], prototype['index']))
+            self.prototypes.sort(key=lambda prototype: (prototype[objective], prototype['index']))
             self.prototypes = self.prototypes[:max_prototypes]
         else:
-            min_energy = min(prototype['Avg_Formation_Energy'] for prototype in self.prototypes)
-            self.prototypes = [prototype for prototype in self.prototypes if prototype['Avg_Formation_Energy'] < cutoff + min_energy]
+            min_energy = min(prototype[objective] for prototype in self.prototypes)
+            self.prototypes = [
+                prototype for prototype in self.prototypes
+                if prototype[objective] < cutoff + min_energy
+            ]
 
         # Delete files not in filtered self.prototypes
         for filename in os.listdir(self.prototype_path):
