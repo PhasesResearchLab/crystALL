@@ -889,7 +889,7 @@ def ordered_allowed_substitutions(
 
     return allAllowedSubstitutions
 
-# Convenience High-Level API Class ************************************************************
+# Convenience High-Level API Classes **********************************************************
 
 class CrystALLSearch:
     """
@@ -1381,36 +1381,6 @@ class CrystALLSearch:
         else:
             print(f"Filtered prototypes to {Fore.GREEN}{Style.BRIGHT}{len(self.prototypes)}{Style.RESET_ALL} based on the cutoff value of {cutoff}")
 
-    def __embed_features(
-            self,
-            same_composition: bool
-    ) -> None:
-        """
-        Embed the features in 2D t-SNE space.
-
-        Args:
-            same_composition: If True, only structural features are used. Defaults to False.
-
-        Raises:
-            AssertionError: If no features are identified.
-        """
-
-        assert len(self.prototypes) >= 5, 'At least 5 prototypes are required to run `cluster_prototypes`.'
-        assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
-
-        if same_composition:
-            features2use = np.array([onlyStructural(v) for v in self.ks2022])
-        else:
-            features2use = self.ks2022
-
-        # Select, Scale and Embed features in 2D and 3D t-SNE space
-        scaler = MinMaxScaler()
-        self.scaledks2022 = scaler.fit_transform(features2use)
-        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
-        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
-        tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
-        self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
-        
     def cluster_prototypes_KMeans(
             self,
             n_clusters: int = None,
@@ -1566,7 +1536,7 @@ class CrystALLSearch:
             self.cluster_affiliation[objective] = {cluster_mapping[old_label]: index for old_label, index in self.cluster_affiliation[objective].items()}
 
         # Print the updated cluster information
-        print(f"List of prototypes selected per energy of each cluster:")
+        print("List of prototypes selected per energy of each cluster:")
         for objective in self.predicted_objectives:
             print(f"\nObjective: {objective}")
             for new_label in sorted(self.cluster_affiliation[objective].keys()):
@@ -1607,7 +1577,7 @@ class CrystALLSearch:
         assert not any(value not in ['all-prototypes', 'top-candidates'] for value in content), 'Content should contain only `all_prototypes` and/or `top_candidates`'
 
         if 'top-candidates' in content and not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all-prototypes' only.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all-prototypes' only.")
             content = ['all-prototypes']
 
         if 'all-prototypes' in content:
