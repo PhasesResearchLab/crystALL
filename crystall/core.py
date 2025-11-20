@@ -1085,23 +1085,27 @@ class CrystALLSearch:
                 else:
                     raise
         
-        print(f"Downloading models for MPDD-alignn..")
-        for attempt in range(retries):
-            try:
-                pretrained.download_default_models(parallel=(mode == 'parallel'))
-                self.model_status['MPDD-ALIGNN'] = True
-                break  # Exit the loop if successful
-            except HTTPError as e:
-                print(f"HTTPError: {e.code} - {e.reason}")
-                if attempt < retries - 1:
-                    print(f"Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    raise
-        
-        print(f"Done! Models are ready to use.")
+        print("Done! Models are ready to use.")
+        self.__update_objectives(self.Calculator, False)
+    
+    def setup_calculator(
+        self, 
+        calculator_name: str
+    ) -> None:
+        """Stub to setup an external calculator adapter.
 
-        self.update_objectives(self.Calculator, False)
+        For now, this just registers the adapter's declared objectives into
+        available_calculators so they appear in the objective list.
+
+        Args:
+            calculator_name: Name of the calculator (adapter key).
+        """
+        adapter_cls = getattr(self, 'supported_calculators', {}).get(calculator_name)
+        if adapter_cls is None:
+            return
+        objectives = getattr(adapter_cls, 'objectives', []) or []
+        if calculator_name not in self.available_calculators:
+            self.available_calculators[calculator_name] = list(objectives)
 
     def connect_MPDD(
             self,
