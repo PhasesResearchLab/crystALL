@@ -1,21 +1,15 @@
-# Compiled Python files
-*.pyc
-**/__pycache__
-curated*
-/local/
-runner*
+# Skip test and documentation artifacts
+docs/_build
+*coverage*
 
-# Python egg metadata
+# Python compiled files and cache
+**/__pycache__
+**/.pytest_cache
+*.pyc
 *.egg-info
 
-# crystaALL test outputs
-**/localTest-*
-**/curated-Ni26Ru8
+# Test and temporary files
+**/*-prototypes*
 
 # General
 .DS_Store
-
-# Some extras for user convenience. Uncomment as needed.
-#*.POSCAR
-#*.CIF
-#*.xyz
