@@ -252,7 +252,7 @@ def run_MPDD(
         target_formula: The target formula as a string or pymatgen Composition object.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
-        target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
 
@@ -267,8 +267,8 @@ def run_MPDD(
     assert len(collections) > 0, 'At least one collection must be specified'
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
     
-    print(f'\nSearching for structure prototypes for: {target_formula}')
-    print('Using MPDD Database with collections: '+', '.join(collections))
+    print(f'\nSearching for structure prototypes for: {Fore.YELLOW}{Style.BRIGHT}{target_formula}{Style.RESET_ALL}')
+    print(f'Using MPDD Database with collections: {Fore.MAGENTA}{Style.BRIGHT}{", ".join(collections)}{Style.RESET_ALL}')
 
     if isinstance(target_formula, str):
         # Formula to pymatgen Composition
@@ -366,20 +366,18 @@ def run_MPDD(
 
     elif target_prototypes == 'non-native':
 
-        print('\nDetecting Input Structures:')
+        print('\nDetecting Matching Input Structures:')
         foundTotal = 0
         for col in collections:
             foundN = MPDD[col].count_documents({'material.anonymizedFormula' : aFormula})
             foundTotal += foundN
-            print('Found ' + str(foundN) + ' in ' + col)
+            print(f'Found {Fore.GREEN}{Style.BRIGHT}{str(foundN)}{Style.RESET_ALL} in {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
 
-        print('\nTotal of '+str(foundTotal) + ' structures available.\n')
+        print(f'\nTotal of {Fore.GREEN}{Style.BRIGHT}{str(foundTotal)}{Style.RESET_ALL} structures available.\n')
 
         # Substitution elements combination.
-        print('{0:*^80}'.format(' Substituting elements in the prototypes '))
         sEL = sorted_elements_list(composition)
         sELtarget = [item for sublist in sEL for item in sublist]
-        print('\nTarget Element Combination: ' + str(sELtarget))
 
         # Verify need for permutations
         permN = 1
@@ -387,25 +385,24 @@ def run_MPDD(
             permN = permN * math.factorial(multiples.__len__())
 
         if permN > 1:
-            print('\nTarget composition has degenerate anonymous formula thus requires permutations.')
-            print('Up to ' + str(permN) + ' per structure.')
-            print('Total number of prototypes increased up to: ' + str(foundTotal * permN) + '\n')
+            print('Target composition has degenerate anonymous formula thus requires permutations.')
+            print(f'Up to {Fore.BLUE}{Style.BRIGHT}{str(permN)}{Style.RESET_ALL} per structure.\n')
         else:
-            print('\nTarget composition indicates discrete element substitution.')
+            print('Target composition indicates discrete element substitution.\n')
 
         out_dir = f"{formula_str}-{source_str}-prototypes"
         print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
 
         try:
-            os.mkdir(finPath)
-            print('Final directory created.')
+            os.mkdir(out_dir)
+            print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
         except FileExistsError:
-            print('Final directory already exist.\nPrototypes will be overwritten/updated.')
+            print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
         # Substitute over all prototypes over all of their permutations
         allS = 0
         for col in collections:
-            print('Looking through: ' + col)
+            print(f'Looking through: {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
 
             pipeline = [
                 {"$match": {"material.anonymizedFormula": aFormula}},
@@ -508,7 +505,7 @@ def run_MPDD_devs(
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
-        target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
 
@@ -633,7 +630,7 @@ def run_MPDD_devs(
 
         # ************************************** Count prototypes ********************************************************
 
-        print('\nDetecting Input Structures:')
+        print('\nDetecting Matching Input Structures:')
         foundTotal = 0
         for col in collections:
             foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
@@ -829,7 +826,7 @@ def comp2acomp_q(
     result = dict()
     for eVal, c in zip(eVals, range(eVals.__len__())):
         result.update({f'material.sortedFractionsDict.c{c+1}': {'$gte': (eVal[0]-eVal[1]), '$lte': (eVal[0]+eVal[1])}})
-    result.update({f'material.nComponents': len(eVals)})
+    result.update({'material.nComponents': len(eVals)})
     return result
 
 def comp2comp_q(
