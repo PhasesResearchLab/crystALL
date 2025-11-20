@@ -306,10 +306,41 @@ def run_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline))
+            _msgs = (
+                'rɛplacing elɛments in thɛ prototypes',
+                'replacing ɛlemɛnts in the prototypɛs',
+                'rɛplacing ɛlɛments in the prototypes',
+                'replacing elemɛnts in thɛ prototypɛs',
+            )
+            with yaspin(text=_msgs[0]) as sp:
+                _stop_evt = threading.Event()
+                def _cycle():
+                    i = 0
+                    while not _stop_evt.is_set():
+                        sp.text = _msgs[i % len(_msgs)]
+                        i += 1
+                        time.sleep(0.6)
+                _t = threading.Thread(target=_cycle, daemon=True)
+                _t.start()
+                try:
+                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
+                finally:
+                    _stop_evt.set()
+                    _t.join(timeout=2)
+
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -383,10 +414,42 @@ def run_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}))
+            _msgs = (
+                'rɛplacing elɛments in thɛ prototypes',
+                'replacing ɛlemɛnts in the prototypɛs',
+                'rɛplacing ɛlɛments in the prototypes',
+                'replacing elemɛnts in thɛ prototypɛs',
+            )
+            with yaspin(text=_msgs[0]) as sp:
+                _stop_evt = threading.Event()
+                def _cycle():
+                    i = 0
+                    while not _stop_evt.is_set():
+                        sp.text = _msgs[i % len(_msgs)]
+                        i += 1
+                        time.sleep(0.6)
+                _t = threading.Thread(target=_cycle, daemon=True)
+                _t.start()
+                try:
+                    facet_out = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}, allowDiskUse=True))
+                finally:
+                    _stop_evt.set()
+                    _t.join(timeout=2)
+            
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -488,10 +551,41 @@ def run_compositional_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline))
+            _msgs = (
+                'rɛplacing elɛments in thɛ prototypes',
+                'replacing ɛlemɛnts in the prototypɛs',
+                'rɛplacing ɛlɛments in the prototypes',
+                'replacing elemɛnts in thɛ prototypɛs',
+            )
+            with yaspin(text=_msgs[0]) as sp:
+                _stop_evt = threading.Event()
+                def _cycle():
+                    i = 0
+                    while not _stop_evt.is_set():
+                        sp.text = _msgs[i % len(_msgs)]
+                        i += 1
+                        time.sleep(0.6)
+                _t = threading.Thread(target=_cycle, daemon=True)
+                _t.start()
+                try:
+                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
+                finally:
+                    _stop_evt.set()
+                    _t.join(timeout=2)
+
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -564,10 +658,30 @@ def run_compositional_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline, hint={
+            _msgs = (
+                'rɛplacing elɛments in thɛ prototypes',
+                'replacing ɛlemɛnts in the prototypɛs',
+                'rɛplacing ɛlɛments in the prototypes',
+                'replacing elemɛnts in thɛ prototypɛs',
+            )
+            with yaspin(text=_msgs[0]) as sp:
+                _stop_evt = threading.Event()
+                def _cycle():
+                    i = 0
+                    while not _stop_evt.is_set():
+                        sp.text = _msgs[i % len(_msgs)]
+                        i += 1
+                        time.sleep(0.6)
+                _t = threading.Thread(target=_cycle, daemon=True)
+                _t.start()
+                try:
+                    facet_out = list(MPDD[col].aggregate(pipeline, hint={
                 'material.sortedFractionsDict.c1': 1,
                 'material.sortedFractionsDict.c2': 1,
                 'material.sortedFractionsDict.c3': 1,
@@ -576,7 +690,18 @@ def run_compositional_MPDD(
                 'material.sortedFractionsDict.c6': 1,
                 'material.sortedFractionsDict.c7': 1,
                 'material.sortedFractionsDict.c8': 1
-            }))
+            }, allowDiskUse=True))
+                finally:
+                    _stop_evt.set()
+                    _t.join(timeout=2)
+
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
