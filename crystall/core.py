@@ -1318,23 +1318,92 @@ class CrystALLSearch:
             prototype.update({'MPDD_Stability': stability})
             entriesForPD.pop()
 
-    def calculate_average(
-            self
+    def define_objective(
+            self,
+            name: str,
+            objectives: List[str],
+            definition: str
     ) -> None:
         """
-        Calculate the average of the predicted properties for each prototype material.
+        Define a new objective as an arithmetic combination of existing objectives.
+
+        The expression in `definition` supports the following tokens:
+        - +, -, *, /, **
+        - Parentheses: (...)
+        - Indexed objectives: [X] where X is the 0-based index in `objectives`
+
+        Examples:
+            name = 'Avg_Formation_Energy', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '([0] + [1]) / 2'
+            name = 'Scaled_Energy', objectives = ['EF_SIPFENN_NN30'], definition = '[0]*3.18'
+            name = 'Energy_Diff', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '[0]-[1]'
+
+        Args:
+            name: The name of the new objective to create/update on each prototype.
+            objectives: Ordered list of objective names referenced by [1], [2], ... in definition.
+            definition: Arithmetic expression combining the objectives. Whitespaces are ignored.
 
         Raises:
-            AssertionError: If no features are identified or if less than two models are available for averaging.
+            AssertionError: If prerequisites are not met or inputs are invalid.
         """
 
+        # Basic validations
+        assert isinstance(name, str) and len(name) > 0, "Objective name must be a non-empty string"
+        assert isinstance(objectives, list) and len(objectives) >= 1 and all(isinstance(o, str) for o in objectives), \
+            "`objectives` must be a non-empty list of strings"
+        assert isinstance(definition, str) and len(definition) > 0, "`definition` must be a non-empty string"
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert self.predicted_objectives, 'No objective predictions identified. Please run `run_pysipfenn` or `get_alignn_properties` first.'
 
-        # Calculate the average of the predictions
+        # Ensure all referenced objectives exist among predictions
+        missing = [o for o in objectives if o not in self.predicted_objectives]
+        assert not missing, f"All objectives must exist in predicted objectives. Missing: {missing}"
+
+        import re  # Local import to avoid global pollution if not already imported
+
+        expr_template = definition.replace(' ', '')
+
+        # Validate and transform [X] tokens -> values[X] (0-based)
+        indices = re.findall(r"\[(\d+)\]", expr_template)
+        if not indices:
+            # Expression doesn't reference any objective; allow constants-only expressions
+            pass
+        else:
+            # Check bounds
+            for idx_str in indices:
+                idx = int(idx_str)
+                assert 0 <= idx < len(objectives), \
+                    f"Index [{idx}] in definition out of range for provided objectives (0..{len(objectives)-1})"
+
+        expr = re.sub(r"\[(\d+)\]", lambda m: f"values[{int(m.group(1))}]", expr_template)
+
+        # Safety check: only allow numbers, parentheses, operators, decimal points, 'values' and index brackets
+        # Replace allowed token 'values[<num>]' with '0' and then validate remaining characters
+        tmp = re.sub(r"values\[\d+\]", "0", expr)
+        # Allow digits, decimal points, scientific notation (e/E), operators, parentheses
+        allowed_pattern = r"^[0-9eE\.+\-*/()\s]*$"  # ** is covered by * twice
+        assert re.match(allowed_pattern, tmp) is not None, \
+            "Definition contains invalid characters. Allowed: +, -, *, /, **, (), and [X] references."
+
+        computed_count = 0
         for i, prototype in enumerate(self.prototypes):
-            average_prediction = round(sum(prototype[pred] for pred in self.predicted_objectives) / len(self.predicted_objectives), 4)
-            self.prototypes[i].update({f'Avg_Formation_Energy': average_prediction})
+            # Gather values for this prototype
+            values = [prototype.get(obj) for obj in objectives]
+            # All referenced values must be numeric
+            if not all(isinstance(v, (int, float)) for v in values):
+                # Skip this prototype if any required value missing or non-numeric
+                continue
+            try:
+                result = eval(expr, {"__builtins__": {}}, {"values": values})
+            except Exception:
+                # If evaluation fails for any reason, skip updating this prototype
+                continue
+            if isinstance(result, (int, float)) and not (isinstance(result, float) and (result != result)):  # exclude NaN
+                # Round to 4 decimal places for consistency with existing outputs
+                prototype[name] = round(float(result), 4)
+                computed_count += 1
+
+        # Register the new objective name only if at least one value was computed
+        if computed_count > 0 and name not in self.predicted_objectives:
+            self.predicted_objectives.append(name)
 
     def filter_prototypes(
             self,
