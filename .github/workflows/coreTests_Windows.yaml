@@ -11,34 +11,55 @@ jobs:
   coreTest:
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
       fail-fast: false
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Start MongoDB (Windows)
         run: |
           Set-Service mongodb -StartupType Automatic          
           Start-Service -Name mongodb
-    
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: 'pyproject.toml'
-      
-      - name: Install dependencies
+          auto-activate-base: false
+          miniconda-version: "latest"
+
+      - name: Create conda environment
+        shell: powershell
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools
-          python -m pip install wheel flask pytest pytest-order
-          python -m pip install -e .
+          $envName = "ci-${{ matrix.python-version }}"
+          conda create -y -n $envName python=${{ matrix.python-version }}
+
+      - name: Install PyTorch (CPU) into env
+        shell: powershell
+        run: |
+          $envName = "ci-${{ matrix.python-version }}"
+          conda run -n $envName conda install -y -c pytorch -c conda-forge pytorch cpuonly
+
+      - name: Install DGL via conda (dglteam)
+        shell: powershell
+        run: |
+          $envName = "ci-${{ matrix.python-version }}"
+          conda run -n $envName conda install -y -c dglteam "dgl>=2.0.0"
+
+      - name: Install remaining Python deps and the project (editable mode)
+        shell: powershell
+        run: |
+          $envName = "ci-${{ matrix.python-version }}"
+          conda run -n $envName python -m pip install --upgrade pip setuptools
+          conda run -n $envName python -m pip install wheel flask pytest pytest-order
+          conda run -n $envName python -m pip install -e .
 
       - name: Test with pytest
+        shell: powershell
         run: |
-          pytest -s --durations=0
+          $envName = "ci-${{ matrix.python-version }}"
+          conda run -n $envName pytest -s --durations=0
 
       - name: Delay next job
         if: ${{ matrix.python-version != '3.11' }}
