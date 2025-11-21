@@ -18,6 +18,6 @@ pip install -e .
 
 🚧 **Linux users:** First install DGL for torch >=2.3 🚧
 ``` shell
-python -m pip install "dgl>=2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html
+python -m pip install "dgl==2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html
 pip install crystall
 ```
