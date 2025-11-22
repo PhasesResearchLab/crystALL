@@ -11,8 +11,7 @@ import contextlib
 import logging
 import numpy as np
 from itertools import repeat
-
-CHGNET_DEVICE = os.getenv("CHGNET_DEVICE", "cpu")
+import traceback
 
 energy_reference_data = {
     "_reference_provenance": {
@@ -498,7 +497,7 @@ class CHGNetStaticAdapter(BaseCalculator):
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                         from chgnet.model import CHGNet
-                        _CHGNET_STATIC_MODEL = CHGNet.load(device=CHGNET_DEVICE)
+                        _CHGNET_STATIC_MODEL = CHGNet.load()
                 finally:
                     logger.setLevel(prev_level)
             chgnet = _CHGNET_STATIC_MODEL
@@ -546,6 +545,7 @@ class CHGNetStaticAdapter(BaseCalculator):
             # Return stub result with name so caller can still match, and print error for debugging
             try:
                 print(f"[CHGNetStaticAdapter] Error processing {name}: {e}")
+                traceback.print_exc()
             except Exception:
                 pass
             return {"name": name, "properties": {}}
@@ -606,7 +606,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                         from chgnet.model import StructOptimizer
-                        _CHGNET_RELAXER = StructOptimizer(device=CHGNET_DEVICE)
+                        _CHGNET_RELAXER = StructOptimizer()
                 finally:
                     logger.setLevel(prev_level)
             relaxer = _CHGNET_RELAXER
@@ -670,6 +670,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
             # Return stub result with name so caller can still match, and print error for debugging
             try:
                 print(f"[CHGNetRelaxAdapter] Error processing {name}: {e}")
+                traceback.print_exc()
             except Exception:
                 pass
             return ({"name": name, "properties": {}}, None)
