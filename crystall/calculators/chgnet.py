@@ -493,14 +493,18 @@ class CHGNetStaticAdapter(BaseCalculator):
         logger.setLevel(logging.ERROR)
         try:
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                device = os.getenv("CHGNET_DEVICE") or None
+                preferred_device = os.getenv("CHGNET_DEVICE") or None
                 try:
-                    _CHGNET_STATIC_MODEL = CHGNet.load(device=device) if device else CHGNet.load()
+                    model = CHGNet.load()
+                    if preferred_device:
+                        model = model.to(preferred_device)
                 except RuntimeError as exc:
                     if _MPS_ERROR_TOKEN in str(exc):
-                        _CHGNET_STATIC_MODEL = CHGNet.load(device="cpu")
+                        model = CHGNet.load()
+                        model = model.to("cpu")
                     else:
                         raise
+                _CHGNET_STATIC_MODEL = model
         finally:
             logger.setLevel(prev_level)
 
@@ -621,14 +625,21 @@ class CHGNetRelaxAdapter(BaseCalculator):
         logger.setLevel(logging.ERROR)
         try:
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                device = os.getenv("CHGNET_DEVICE") or None
+                preferred_device = os.getenv("CHGNET_DEVICE") or None
                 try:
-                    _CHGNET_RELAXER = StructOptimizer(device=device) if device else StructOptimizer()
+                    relaxer = StructOptimizer()
+                    if preferred_device and hasattr(relaxer, "calculator") and hasattr(relaxer.calculator, "model"):
+                        relaxer.calculator.model = relaxer.calculator.model.to(preferred_device)
+                        relaxer.calculator.device = preferred_device
                 except RuntimeError as exc:
                     if _MPS_ERROR_TOKEN in str(exc):
-                        _CHGNET_RELAXER = StructOptimizer(device="cpu")
+                        relaxer = StructOptimizer()
+                        if hasattr(relaxer, "calculator") and hasattr(relaxer.calculator, "model"):
+                            relaxer.calculator.model = relaxer.calculator.model.to("cpu")
+                            relaxer.calculator.device = "cpu"
                     else:
                         raise
+                _CHGNET_RELAXER = relaxer
         finally:
             logger.setLevel(prev_level)
 
