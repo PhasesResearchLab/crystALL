@@ -12,13 +12,13 @@ from alignn import pretrained
 class TestAlignnAdapter(unittest.TestCase):
     """Tests for the AlignnAdapter adapter implementation.
 
-    These tests exercise `setup_calculator` and `run_on_directory` by
+    These tests exercise `load_calculator` and `run_on_directory` by
     patching `alignn.pretrained` internals.
     """
 
     @skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
-    def test_setup_calculator(self):
-        """Cover present-models and user-decline branches of `setup_calculator`."""
+    def test_load_calculator(self):
+        """Cover present-models and user-decline branches of `load_calculator`."""
         adapter = AlignnAdapter()
 
         # Case 1: models appear present -> should return without prompting
@@ -32,7 +32,7 @@ class TestAlignnAdapter(unittest.TestCase):
         with patch.object(pretrained, 'get_default_models', return_value=fake_model_list), \
              patch('crystall.calculators.alignn.resources.files', return_value=fake_root):
             # Should not raise or prompt
-            adapter.setup_calculator()
+            adapter.load_calculator()
 
         # Case 2: models not present and user declines -> raises RuntimeError
         # Simulate get_default_models returning no usable paths so the prompt is shown
@@ -40,7 +40,7 @@ class TestAlignnAdapter(unittest.TestCase):
              patch('crystall.calculators.alignn.resources.files', return_value=fake_root), \
              patch('builtins.input', return_value='n'):
             with self.assertRaises(RuntimeError):
-                adapter.setup_calculator()
+                adapter.load_calculator()
 
         # Case 3: user accepts download; simulate transient HTTPError failures then success
         # Ensure resources.files yields no existing files so download is attempted
@@ -50,7 +50,7 @@ class TestAlignnAdapter(unittest.TestCase):
              patch.object(pretrained, 'download_default_models', side_effect=[HTTPError('url', 500, 'err', None, None), HTTPError('url', 502, 'err', None, None), None]), \
              patch('crystall.calculators.alignn.time.sleep', return_value=None):
             # Should not raise after transient failures and eventual success
-            adapter.setup_calculator()
+            adapter.load_calculator()
 
     @skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
     def test_run_on_directory(self):
@@ -73,7 +73,7 @@ class TestAlignnAdapter(unittest.TestCase):
 
         # Patch the real pretrained.run_models_from_directory and the adapter setup
         with patch.object(pretrained, 'run_models_from_directory', return_value=fake_results), \
-             patch.object(AlignnAdapter, 'setup_calculator', return_value=None):
+             patch.object(AlignnAdapter, 'load_calculator', return_value=None):
 
             out = adapter.run_on_directory(test_path)
 
@@ -90,7 +90,7 @@ class TestAlignnAdapter(unittest.TestCase):
 
         # Now validate that unknown objectives raise before calling pretrained
         with patch.object(pretrained, 'run_models_from_directory', return_value=[]), \
-             patch.object(AlignnAdapter, 'setup_calculator', return_value=None):
+             patch.object(AlignnAdapter, 'load_calculator', return_value=None):
             with self.assertRaises(ValueError):
                 adapter.run_on_directory(test_path, objectives=['UNKNOWN-OBJECTIVE'])
 

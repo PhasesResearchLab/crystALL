@@ -6,10 +6,20 @@ from unittest import skipIf
 from unittest.mock import patch
 
 from crystall.calculators.chgnet import CHGNetStaticAdapter, CHGNetRelaxAdapter
+from crystall.calculators import chgnet as chgnet_module
 from chgnet.model import CHGNet, StructOptimizer
 
 
+def _clear_chgnet_cache() -> None:
+    for attr in ("_CHGNET_STATIC_MODEL", "_CHGNET_RELAXER"):
+        if hasattr(chgnet_module, attr):
+            delattr(chgnet_module, attr)
+
+
 class TestCHGNetStaticAdapter(unittest.TestCase):
+    def tearDown(self) -> None:
+        _clear_chgnet_cache()
+
     @skipIf(not hasattr(CHGNet, 'load'), 'CHGNet not available')
     def test_run_per_structure(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
@@ -32,6 +42,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
             self.assertIn('properties', out)
 
             # Subcase B: patch CHGNet.load to return a fake model that provides all keys
+            _clear_chgnet_cache()
             fake_model = type('M', (), {})()
             fake_model.predict_structure = lambda s: {
                 'e': -10.0,
@@ -87,6 +98,9 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
 
 
 class TestCHGNetRelaxAdapter(unittest.TestCase):
+    def tearDown(self) -> None:
+        _clear_chgnet_cache()
+
     @skipIf(not hasattr(StructOptimizer, 'relax'), 'StructOptimizer not available')
     def test_run_per_structure(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
@@ -117,6 +131,7 @@ class TestCHGNetRelaxAdapter(unittest.TestCase):
             def fake_relax(s, verbose=False):
                 return {'trajectory': DummyTraj(len(s)), 'final_structure': s}
 
+            _clear_chgnet_cache()
             fake_relax_instance = type('R', (), {'relax': staticmethod(lambda s, verbose=False: fake_relax(s))})()
             with patch.object(StructOptimizer, '__new__', return_value=fake_relax_instance):
                 res2, pos2 = CHGNetRelaxAdapter.run_per_structure(tmp, name, requested)

@@ -20,7 +20,7 @@ class AlignnAdapter(BaseCalculator):
         "ALIGNN-Alexandria Volume Per Atom [A^3]",
     ]
 
-    def setup_calculator(self, mode: str = "serial", retries: int = 3, delay: int = 5) -> None:
+    def load_calculator(self, mode: str = "serial", retries: int = 3, delay: int = 5) -> None:
         """Set up and download ALIGNN models"""
         # First, attempt the concise presence check
         try:
@@ -66,7 +66,7 @@ class AlignnAdapter(BaseCalculator):
         - properties: mapping objective -> value
         """
         # Ensure models exist (prompt to download if needed)
-        self.setup_calculator(mode=mode)
+        self.load_calculator(mode=mode)
         from alignn import pretrained  # local import to avoid hard dependency at core import time
         # Determine which objectives to return
         requested = list(self.objectives if objectives is None else objectives)

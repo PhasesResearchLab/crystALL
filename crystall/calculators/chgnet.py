@@ -13,6 +13,8 @@ import numpy as np
 from itertools import repeat
 import traceback
 
+_MPS_ERROR_TOKEN = "MPS backend"
+
 energy_reference_data = {
     "_reference_provenance": {
         "source": "matbench_discovery",
@@ -476,6 +478,32 @@ class CHGNetStaticAdapter(BaseCalculator):
         "CHGNet Static Volume [A^3/atom]",
     ]
 
+    @classmethod
+    def load_calculator(cls) -> None:
+        """Ensure the static CHGNet model is cached and ready."""
+        global _CHGNET_STATIC_MODEL
+
+        if "_CHGNET_STATIC_MODEL" in globals():
+            return
+
+        from chgnet.model import CHGNet
+
+        logger = logging.getLogger("chgnet")
+        prev_level = logger.level
+        logger.setLevel(logging.ERROR)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                device = os.getenv("CHGNET_DEVICE") or None
+                try:
+                    _CHGNET_STATIC_MODEL = CHGNet.load(device=device) if device else CHGNet.load()
+                except RuntimeError as exc:
+                    if _MPS_ERROR_TOKEN in str(exc):
+                        _CHGNET_STATIC_MODEL = CHGNet.load(device="cpu")
+                    else:
+                        raise
+        finally:
+            logger.setLevel(prev_level)
+
     @staticmethod
     def run_per_structure(path: str, name: str, requested: Sequence[str]) -> Optional[Dict[str, Any]]:
         """Compute CHGNet static properties for a single structure file.
@@ -486,20 +514,7 @@ class CHGNetStaticAdapter(BaseCalculator):
             fp = os.path.join(path, name)
             s = Structure.from_file(fp)
 
-            # Lazy load model per process (cached globally to avoid reloading in same process)
-            global _CHGNET_STATIC_MODEL
-            try:
-                _CHGNET_STATIC_MODEL
-            except NameError:
-                logger = logging.getLogger("chgnet")
-                prev_level = logger.level
-                logger.setLevel(logging.ERROR)
-                try:
-                    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                        from chgnet.model import CHGNet
-                        _CHGNET_STATIC_MODEL = CHGNet.load()
-                finally:
-                    logger.setLevel(prev_level)
+            CHGNetStaticAdapter.load_calculator()
             chgnet = _CHGNET_STATIC_MODEL
 
             num_atoms = len(s)
@@ -556,6 +571,8 @@ class CHGNetStaticAdapter(BaseCalculator):
         if unknown:
             raise ValueError(f"Unknown CHGNet Static objectives requested: {unknown}. Available: {self.objectives}")
 
+        self.load_calculator()
+
         file_names: List[str] = []
         for f in os.listdir(path):
             fp = os.path.join(path, f)
@@ -589,6 +606,32 @@ class CHGNetRelaxAdapter(BaseCalculator):
         "CHGNet Relaxed Volume [A^3/atom]",
     ]
 
+    @classmethod
+    def load_calculator(cls) -> None:
+        """Ensure the relax optimizer is cached and ready."""
+        global _CHGNET_RELAXER
+
+        if "_CHGNET_RELAXER" in globals():
+            return
+
+        from chgnet.model import StructOptimizer
+
+        logger = logging.getLogger("chgnet")
+        prev_level = logger.level
+        logger.setLevel(logging.ERROR)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                device = os.getenv("CHGNET_DEVICE") or None
+                try:
+                    _CHGNET_RELAXER = StructOptimizer(device=device) if device else StructOptimizer()
+                except RuntimeError as exc:
+                    if _MPS_ERROR_TOKEN in str(exc):
+                        _CHGNET_RELAXER = StructOptimizer(device="cpu")
+                    else:
+                        raise
+        finally:
+            logger.setLevel(prev_level)
+
     @staticmethod
     def run_per_structure(path: str, name: str, requested: Sequence[str]) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Compute CHGNet relaxation for a single structure returning (result_dict, final_structure)."""
@@ -596,19 +639,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
             fp = os.path.join(path, name)
             s = Structure.from_file(fp)
 
-            global _CHGNET_RELAXER
-            try:
-                _CHGNET_RELAXER
-            except NameError:
-                logger = logging.getLogger("chgnet")
-                prev_level = logger.level
-                logger.setLevel(logging.ERROR)
-                try:
-                    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                        from chgnet.model import StructOptimizer
-                        _CHGNET_RELAXER = StructOptimizer()
-                finally:
-                    logger.setLevel(prev_level)
+            CHGNetRelaxAdapter.load_calculator()
             relaxer = _CHGNET_RELAXER
 
             num_atoms = len(s)
@@ -680,6 +711,8 @@ class CHGNetRelaxAdapter(BaseCalculator):
         unknown = [o for o in requested if o not in self.objectives]
         if unknown:
             raise ValueError(f"Unknown CHGNet Relax objectives requested: {unknown}. Available: {self.objectives}")
+
+        self.load_calculator()
 
         file_names: List[str] = []
         for f in os.listdir(path):
