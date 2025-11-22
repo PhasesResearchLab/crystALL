@@ -12,6 +12,8 @@ import logging
 import numpy as np
 from itertools import repeat
 
+CHGNET_DEVICE = os.getenv("CHGNET_DEVICE", "cpu")
+
 energy_reference_data = {
     "_reference_provenance": {
         "source": "matbench_discovery",
@@ -496,7 +498,7 @@ class CHGNetStaticAdapter(BaseCalculator):
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                         from chgnet.model import CHGNet
-                        _CHGNET_STATIC_MODEL = CHGNet.load()
+                        _CHGNET_STATIC_MODEL = CHGNet.load(device=CHGNET_DEVICE)
                 finally:
                     logger.setLevel(prev_level)
             chgnet = _CHGNET_STATIC_MODEL
@@ -604,7 +606,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
                 try:
                     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                         from chgnet.model import StructOptimizer
-                        _CHGNET_RELAXER = StructOptimizer()
+                        _CHGNET_RELAXER = StructOptimizer(device=CHGNET_DEVICE)
                 finally:
                     logger.setLevel(prev_level)
             relaxer = _CHGNET_RELAXER
