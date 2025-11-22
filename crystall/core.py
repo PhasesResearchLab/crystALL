@@ -1062,7 +1062,7 @@ class CrystALLSearch:
                     try:
                         print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                     except UnicodeEncodeError:
-                        print(f"{Fore.GREEN}√ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}v {Style.BRIGHT}{obj}{Style.RESET_ALL}")
 
     def download_pysipfenn(
             self,
