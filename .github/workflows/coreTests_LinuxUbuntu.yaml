@@ -9,6 +9,7 @@ on:
 
 jobs:
   coreTest:
+    timeout-minutes: 90
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
