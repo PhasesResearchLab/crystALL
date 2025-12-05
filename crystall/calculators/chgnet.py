@@ -529,7 +529,14 @@ class CHGNetStaticAdapter(BaseCalculator):
                     raise KeyError(f"Missing CHGNet elemental reference for element '{el}'")
                 energy_reference += energy_reference_data[el]["chgnet_relaxed"] * float(amt)
 
-            static = chgnet.predict_structure(s)
+            try:
+                static = chgnet.predict_structure(s)
+            except RuntimeError as exc:
+                if _MPS_ERROR_TOKEN in str(exc):
+                    chgnet = chgnet.to("cpu")
+                    static = chgnet.predict_structure(s)
+                else:
+                    raise
             props: Dict[str, Any] = {}
 
             if "CHGNet Static Energy [eV/atom]" in requested and static.get("e") is not None:
@@ -661,7 +668,15 @@ class CHGNetRelaxAdapter(BaseCalculator):
                     raise KeyError(f"Missing CHGNet elemental reference for element '{el}'")
                 energy_reference += energy_reference_data[el]["chgnet_relaxed"] * float(amt)
 
-            relax = relaxer.relax(s, verbose=False)
+            try:
+                relax = relaxer.relax(s, verbose=False)
+            except RuntimeError as exc:
+                if _MPS_ERROR_TOKEN in str(exc) and hasattr(relaxer, "calculator") and hasattr(relaxer.calculator, "model"):
+                    relaxer.calculator.model = relaxer.calculator.model.to("cpu")
+                    relaxer.calculator.device = "cpu"
+                    relax = relaxer.relax(s, verbose=False)
+                else:
+                    raise
             props: Dict[str, Any] = {}
 
             final_structure = None
