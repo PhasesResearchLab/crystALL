@@ -18,8 +18,7 @@
         "ms-toolsai.jupyter",
         "hansvn.instant-mongo"
       ]
-    }
-    ,
+    },
     "codespaces": {
       "openFiles": [
         "tutorial/01.QuickStart.ipynb"
