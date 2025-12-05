@@ -1,17 +1,17 @@
+import os  
+import io  
+import contextlib  
+import logging  
+from decimal import Decimal, ROUND_DOWN  
+import numpy as np  
+from tqdm import tqdm  
+from tqdm.contrib.concurrent import process_map  
+from pymatgen.core import Structure  
+from pymatgen.io.vasp import Poscar  
+from typing import Dict, Any, List, Optional, Sequence  
+from itertools import repeat  
+import traceback  
 from crystall import BaseCalculator
-from tqdm import tqdm
-from tqdm.contrib.concurrent import process_map
-from pymatgen.core import Structure
-from pymatgen.io.vasp import Poscar
-from decimal import Decimal, ROUND_DOWN
-import os
-from typing import Dict, Any, List, Optional, Sequence
-import io
-import contextlib
-import logging
-import numpy as np
-from itertools import repeat
-import traceback
 
 _MPS_ERROR_TOKEN = "MPS backend"
 
