@@ -10,6 +10,7 @@ docs/_build
 
 # Test and temporary files
 **/*-prototypes*
+**/*-candidates*
 
 # General
 .DS_Store
