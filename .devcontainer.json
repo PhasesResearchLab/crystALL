@@ -8,12 +8,21 @@
     "vscode": {
       "settings": {
         "remote.autoForwardPortsSource": "process",
-        "remote.localPortHost": "localhost"
+        "remote.localPortHost": "localhost",
+        "workbench.editorAssociations": {
+          "*.ipynb": "jupyter-notebook"
+        }
       },
       "extensions": [
         "ms-python.python",
         "ms-toolsai.jupyter",
         "hansvn.instant-mongo"
+      ]
+    }
+    ,
+    "codespaces": {
+      "openFiles": [
+        "tutorial/01.QuickStart.ipynb"
       ]
     }
   },
@@ -22,5 +31,5 @@
     "memory": "16gb",
     "storage": "16gb"
   },
-  "postCreateCommand": "pip install yaspin; code tutorial/01.QuickStart.ipynb --reuse-window"
+  "postCreateCommand": "pip install yaspin"
 }
