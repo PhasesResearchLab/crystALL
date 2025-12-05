@@ -14,3 +14,4 @@ docs/_build
 
 # General
 .DS_Store
+.vscode
