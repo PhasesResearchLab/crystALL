@@ -1536,9 +1536,14 @@ class CrystALLSearch:
                     mask[j] = False
 
         filtered_data = self.embeddedks2022[mask] # Filter out overlapping embeddings
-        
+
         sil_dict = {}
-        k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(filtered_data) - 1, 40).astype(int))
+        if n_clusters is not None:
+            k_range = [n_clusters]
+        else:
+            stop = max(2, len(filtered_data) - 1)
+            k_range = np.unique(np.geomspace(2, stop, 40).astype(int))
+            k_range = k_range[k_range >= 2] if k_range.size else np.array([2])
         for k in tqdm(k_range, desc="Processing", ncols=100, bar_format="{l_bar}{bar}{r_bar}"):
             kmeans = KMeans(n_clusters=k, n_init=500, max_iter=500, random_state=580)
             clusterData = kmeans.fit(self.embeddedks2022)
