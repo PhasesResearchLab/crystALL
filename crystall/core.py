@@ -826,7 +826,7 @@ def comp2acomp_q(
     result = dict()
     for eVal, c in zip(eVals, range(eVals.__len__())):
         result.update({f'material.sortedFractionsDict.c{c+1}': {'$gte': (eVal[0]-eVal[1]), '$lte': (eVal[0]+eVal[1])}})
-    result.update({'material.nComponents': len(eVals)})
+    result.update({f'material.nComponents': len(eVals)})
     return result
 
 def comp2comp_q(
