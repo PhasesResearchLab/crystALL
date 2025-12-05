@@ -1214,9 +1214,12 @@ class CrystALLSearch:
 
         # Track which objectives (models) will be predicted by pySIPFENN
         for model in self.available_calculators.get('pySIPFENN', []):
+            stdout, sys.stdout = sys.stdout, io.StringIO()
+            self.Calculator.loadModels(network = model)
+            sys.stdout = stdout
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
-        
+
         self.Calculator.runFromDirectory(self.prototype_path, 'KS2022', mode=mode, max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDictsWithNames(), np.array(self.Calculator.descriptorData)
         assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
