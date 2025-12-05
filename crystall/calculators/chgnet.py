@@ -496,12 +496,13 @@ class CHGNetStaticAdapter(BaseCalculator):
                 preferred_device = os.getenv("CHGNET_DEVICE") or None
                 try:
                     model = CHGNet.load()
-                    if preferred_device:
+                    if preferred_device and hasattr(model, "to"):
                         model = model.to(preferred_device)
                 except RuntimeError as exc:
                     if _MPS_ERROR_TOKEN in str(exc):
                         model = CHGNet.load()
-                        model = model.to("cpu")
+                        if hasattr(model, "to"):
+                            model = model.to("cpu")
                     else:
                         raise
                 _CHGNET_STATIC_MODEL = model
@@ -532,7 +533,7 @@ class CHGNetStaticAdapter(BaseCalculator):
             try:
                 static = chgnet.predict_structure(s)
             except RuntimeError as exc:
-                if _MPS_ERROR_TOKEN in str(exc):
+                if _MPS_ERROR_TOKEN in str(exc) and hasattr(chgnet, "to"):
                     chgnet = chgnet.to("cpu")
                     static = chgnet.predict_structure(s)
                 else:
@@ -671,7 +672,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
             try:
                 relax = relaxer.relax(s, verbose=False)
             except RuntimeError as exc:
-                if _MPS_ERROR_TOKEN in str(exc) and hasattr(relaxer, "calculator") and hasattr(relaxer.calculator, "model"):
+                if _MPS_ERROR_TOKEN in str(exc) and hasattr(relaxer, "calculator") and hasattr(relaxer.calculator, "model") and hasattr(relaxer.calculator.model, "to"):
                     relaxer.calculator.model = relaxer.calculator.model.to("cpu")
                     relaxer.calculator.device = "cpu"
                     relax = relaxer.relax(s, verbose=False)
