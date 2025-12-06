@@ -71,6 +71,16 @@ jobs:
           echo "=== Docker containers ==="; docker ps -a || true
           echo "=== Ulimits ==="; ulimit -a || true
 
+      - name: Start resource sampler
+        run: |
+          (while true; do
+            date
+            ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 12
+            free -h
+            sleep 10
+          done) > /tmp/resource.log &
+          echo $! > /tmp/sampler.pid
+
       - name: Test with pytest
         env:
           OMP_NUM_THREADS: 1
@@ -91,6 +101,16 @@ jobs:
         with:
           name: coverage-xml-${{ github.run_id }}-${{ matrix.python-version }}
           path: coverage.xml
+
+      - name: Stop sampler and show log
+        if: always()
+        run: |
+          if [ -f /tmp/sampler.pid ]; then
+            kill $(cat /tmp/sampler.pid) || true
+          fi
+          if [ -f /tmp/resource.log ]; then
+            tail -n 200 /tmp/resource.log
+          fi
 
       - name: Delay next job
         run: sleep 15
