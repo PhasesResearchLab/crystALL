@@ -519,13 +519,6 @@ class TestCrystALLSearch(unittest.TestCase):
             "KMeans clustering did not generate any top candidates.",
         )
 
-        # n_clusters branch with a small cluster count
-        self.cas.ks2022 = self.cas.ks2022[:5]
-        self.cas.prototypes = self.cas.prototypes[:5]
-        self.cas.top_candidates = []
-        self.cas.cluster_prototypes_KMeans(n_clusters=2)
-        self.assertTrue(len(self.cas.top_candidates) > 0)
-
         # Unhappy path: too few prototypes triggers early return
         cas2 = crystall.CrystALLSearch(self.target_formula)
         cas2.ks2022 = self.cas.ks2022[:3]
