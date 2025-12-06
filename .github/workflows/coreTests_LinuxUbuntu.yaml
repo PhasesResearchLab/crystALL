@@ -34,7 +34,7 @@ jobs:
         run: |
           sudo apt-get clean
           sudo rm -rf /usr/local/lib/android
-          docker image prune -af || true
+          docker rmi $(docker images -q) || true
           sudo rm -rf /opt/ghc
           df -h
 
@@ -47,41 +47,9 @@ jobs:
           python -m pip install --no-deps 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
           python -m pip install -e .
 
-      - name: Download pysipfenn models (with retry)
+      - name: Download pysipfenn models
         run: |
-          set -euo pipefail
-          retry() {
-            local max=5 delay=5 n=0
-            until [ $n -ge $max ]; do
-              "$@" && return 0
-              n=$((n+1))
-              echo "Attempt $n/$max failed — retrying in $delay s..."
-              sleep $delay
-              delay=$((delay*2))
-            done
-            return 1
-          }
-          retry python -c "from pysipfenn import Calculator; Calculator().downloadModels('SIPFENN_Krajewski2022_NN30')"
-
-      - name: Diagnostics before tests
-        run: |
-          echo "=== Disk ==="; df -h
-          echo "=== Free memory ==="; free -h
-          echo "=== Top (mem) ==="; ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 12
-          echo "=== Docker containers ==="; docker ps -a || true
-          echo "=== Ulimits ==="; ulimit -a || true
-
-      - name: Start resource sampler
-        run: |
-          stdbuf -oL -eL bash -c '
-            while true; do
-              date
-              ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 12
-              free -h
-              sleep 10
-            done
-          ' | tee /tmp/resource.log &
-          echo $! > /tmp/sampler.pid
+          python -c "from pysipfenn import Calculator; Calculator().downloadModels('SIPFENN_Krajewski2022_NN30')"
 
       - name: Test with pytest
         env:
@@ -103,23 +71,6 @@ jobs:
         with:
           name: coverage-xml-${{ github.run_id }}-${{ matrix.python-version }}
           path: coverage.xml
-
-      - name: Stop sampler and show log
-        if: always()
-        run: |
-          if [ -f /tmp/sampler.pid ]; then
-            kill $(cat /tmp/sampler.pid) || true
-          fi
-          if [ -f /tmp/resource.log ]; then
-            tail -n 200 /tmp/resource.log
-          fi
-
-      - name: Upload sampler log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: resource-log-${{ github.run_id }}-${{ matrix.python-version }}
-          path: /tmp/resource.log
 
       - name: Delay next job
         run: sleep 15
