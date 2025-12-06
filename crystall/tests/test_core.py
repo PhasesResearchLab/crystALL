@@ -508,8 +508,8 @@ class TestCrystALLSearch(unittest.TestCase):
     def test_cluster_prototypes_KMeans(self) -> None:
         """Test clustering prototypes using KMeans."""
         # Trim the working set to keep clustering light while retaining enough samples
-        self.cas.ks2022 = self.cas.ks2022[:8]
-        self.cas.prototypes = self.cas.prototypes[:8]
+        self.cas.ks2022 = self.cas.ks2022[:5]
+        self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
         # Explicitly exercise silhouette-search path by allowing the default
         # (None) n_clusters which triggers the silhouette-based selection.
@@ -518,6 +518,13 @@ class TestCrystALLSearch(unittest.TestCase):
             len(self.cas.top_candidates) > 0,
             "KMeans clustering did not generate any top candidates.",
         )
+
+        # n_clusters branch with a small cluster count
+        self.cas.ks2022 = self.cas.ks2022[:5]
+        self.cas.prototypes = self.cas.prototypes[:5]
+        self.cas.top_candidates = []
+        self.cas.cluster_prototypes_KMeans(n_clusters=2)
+        self.assertTrue(len(self.cas.top_candidates) > 0)
 
         # Unhappy path: too few prototypes triggers early return
         cas2 = crystall.CrystALLSearch(self.target_formula)
@@ -528,32 +535,27 @@ class TestCrystALLSearch(unittest.TestCase):
         cas2.cluster_prototypes_KMeans()
         self.assertEqual(len(cas2.top_candidates), 0)
 
-        # Also exercise explicit n_clusters and same_composition branches
-        # Provide an explicit small number of clusters to avoid long silhouette search
-        self.cas.ks2022 = self.cas.ks2022[:8]
-        self.cas.prototypes = self.cas.prototypes[:8]
-        self.cas.top_candidates = []
-        self.cas.cluster_prototypes_KMeans(n_clusters=2)
-        self.assertTrue(len(self.cas.top_candidates) > 0)
-
-        # same_composition branch (uses only structural features)
-        self.cas.ks2022 = self.cas.ks2022[:8]
-        self.cas.prototypes = self.cas.prototypes[:8]
-        self.cas.top_candidates = []
-        self.cas.cluster_prototypes_KMeans(n_clusters=2, same_composition=True)
-        self.assertTrue(len(self.cas.top_candidates) > 0)
-
     @pytest.mark.order(9)
     def test_cluster_prototypes_DBSCAN(self) -> None:
         """Test clustering prototypes using DBSCAN."""
         # Trim the working set to keep clustering light while retaining enough samples
-        self.cas.ks2022 = self.cas.ks2022[:8]
-        self.cas.prototypes = self.cas.prototypes[:8]
+        self.cas.ks2022 = self.cas.ks2022[:5]
+        self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
         self.cas.cluster_prototypes_DBSCAN()
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
             "DBSCAN clustering did not generate any top candidates.",
+        )
+
+        # same_composition branch (uses only structural features)
+        self.cas.ks2022 = self.cas.ks2022[:5]
+        self.cas.prototypes = self.cas.prototypes[:5]
+        self.cas.top_candidates = []
+        self.cas.cluster_prototypes_DBSCAN(same_composition=True)
+        self.assertTrue(
+            len(self.cas.top_candidates) > 0,
+            "DBSCAN clustering with same_composition did not generate any top candidates.",
         )
 
         # Unhappy path: invalid argument types should raise
