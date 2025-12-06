@@ -6,11 +6,13 @@ import pytest
 import crystall
 import unittest
 import warnings
+from functools import partial
 
 from unittest.mock import patch
 from urllib.error import HTTPError
 from pymatgen.core import Composition
 from pymongo import MongoClient
+from sklearn.cluster import KMeans
 
 
 class TestTopLevelFunctions(unittest.TestCase):
@@ -511,13 +513,16 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        # Explicitly exercise silhouette-search path by allowing the default
-        # (None) n_clusters which triggers the silhouette-based selection.
-        self.cas.cluster_prototypes_KMeans(n_clusters=None)
-        self.assertTrue(
-            len(self.cas.top_candidates) > 0,
-            "KMeans clustering did not generate any top candidates.",
-        )
+        # Patch KMeans to a lightweight configuration to avoid timeouts while
+        # still exercising the silhouette search path in core logic.
+        with patch("crystall.core.KMeans", partial(KMeans, n_init=5, max_iter=100, random_state=580)):
+            # Explicitly exercise silhouette-search path by allowing the default
+            # (None) n_clusters which triggers the silhouette-based selection.
+            self.cas.cluster_prototypes_KMeans(n_clusters=None)
+            self.assertTrue(
+                len(self.cas.top_candidates) > 0,
+                "KMeans clustering did not generate any top candidates.",
+            )
 
         # Unhappy path: too few prototypes triggers early return
         cas2 = crystall.CrystALLSearch(self.target_formula)
