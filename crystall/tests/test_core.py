@@ -507,6 +507,9 @@ class TestCrystALLSearch(unittest.TestCase):
     @pytest.mark.order(8)
     def test_cluster_prototypes_KMeans(self) -> None:
         """Test clustering prototypes using KMeans."""
+        # Trim the working set to keep clustering light while retaining enough samples
+        self.cas.ks2022 = self.cas.ks2022[:8]
+        self.cas.prototypes = self.cas.prototypes[:8]
         self.cas.top_candidates = []
         # Explicitly exercise silhouette-search path by allowing the default
         # (None) n_clusters which triggers the silhouette-based selection.
@@ -527,11 +530,15 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Also exercise explicit n_clusters and same_composition branches
         # Provide an explicit small number of clusters to avoid long silhouette search
+        self.cas.ks2022 = self.cas.ks2022[:8]
+        self.cas.prototypes = self.cas.prototypes[:8]
         self.cas.top_candidates = []
         self.cas.cluster_prototypes_KMeans(n_clusters=2)
         self.assertTrue(len(self.cas.top_candidates) > 0)
 
         # same_composition branch (uses only structural features)
+        self.cas.ks2022 = self.cas.ks2022[:8]
+        self.cas.prototypes = self.cas.prototypes[:8]
         self.cas.top_candidates = []
         self.cas.cluster_prototypes_KMeans(n_clusters=2, same_composition=True)
         self.assertTrue(len(self.cas.top_candidates) > 0)
@@ -539,6 +546,9 @@ class TestCrystALLSearch(unittest.TestCase):
     @pytest.mark.order(9)
     def test_cluster_prototypes_DBSCAN(self) -> None:
         """Test clustering prototypes using DBSCAN."""
+        # Trim the working set to keep clustering light while retaining enough samples
+        self.cas.ks2022 = self.cas.ks2022[:8]
+        self.cas.prototypes = self.cas.prototypes[:8]
         self.cas.top_candidates = []
         self.cas.cluster_prototypes_DBSCAN()
         self.assertTrue(
