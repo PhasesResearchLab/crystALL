@@ -52,6 +52,12 @@ jobs:
           python -c "from pysipfenn import Calculator; Calculator().downloadModels('SIPFENN_Krajewski2022_NN30')"
 
       - name: Test with pytest
+        env:
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          PYTORCH_NUM_THREADS: 1
+          CHGNET_DEVICE: cpu
         run: |
           if [ "${{ matrix.python-version }}" = "3.11" ]; then
             pytest -s --durations=0 --cov=crystall --cov-report=xml;
