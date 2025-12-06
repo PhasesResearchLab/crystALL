@@ -43,7 +43,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools
           python -m pip install wheel flask pytest pytest-order pytest-cov
-          python -m pip install 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
+          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.3.0+cpu" "torchvision==0.18.0+cpu" "torchdata==0.9.0"
+          python -m pip install --no-deps 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
           python -m pip install -e .
 
       - name: Download pysipfenn models
