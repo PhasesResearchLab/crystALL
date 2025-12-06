@@ -73,12 +73,14 @@ jobs:
 
       - name: Start resource sampler
         run: |
-          (while true; do
-            date
-            ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 12
-            free -h
-            sleep 10
-          done) > /tmp/resource.log &
+          stdbuf -oL -eL bash -c '
+            while true; do
+              date
+              ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 12
+              free -h
+              sleep 10
+            done
+          ' | tee /tmp/resource.log &
           echo $! > /tmp/sampler.pid
 
       - name: Test with pytest
@@ -111,6 +113,13 @@ jobs:
           if [ -f /tmp/resource.log ]; then
             tail -n 200 /tmp/resource.log
           fi
+
+      - name: Upload sampler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-log-${{ github.run_id }}-${{ matrix.python-version }}
+          path: /tmp/resource.log
 
       - name: Delay next job
         run: sleep 15
