@@ -6,6 +6,7 @@ import pytest
 import crystall
 import unittest
 import warnings
+import numpy as np
 from functools import partial
 
 from unittest.mock import patch
@@ -513,9 +514,25 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        # Patch KMeans to a lightweight configuration to avoid timeouts while
-        # still exercising the silhouette search path in core logic.
-        with patch("crystall.core.KMeans", partial(KMeans, n_init=5, max_iter=100, random_state=580)):
+        
+        class DummyTSNE:
+            """Lightweight stand-in to avoid expensive TSNE in tests."""
+
+            def __init__(self, n_components=2, **kwargs):
+                self.n_components = n_components
+
+            def fit_transform(self, X):
+                arr = np.asarray(X)
+                if arr.shape[1] < self.n_components:
+                    pad = np.zeros((arr.shape[0], self.n_components - arr.shape[1]))
+                    arr = np.hstack([arr, pad])
+                return arr[:, : self.n_components]
+
+        # Patch KMeans, TSNE, and the k-range to keep the silhouette search light
+        light_kmeans = partial(KMeans, n_init=5, max_iter=100, random_state=580)
+        with patch("crystall.core.KMeans", light_kmeans), \
+             patch("crystall.core.TSNE", DummyTSNE), \
+             patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
             # Explicitly exercise silhouette-search path by allowing the default
             # (None) n_clusters which triggers the silhouette-based selection.
             self.cas.cluster_prototypes_KMeans(n_clusters=None)
