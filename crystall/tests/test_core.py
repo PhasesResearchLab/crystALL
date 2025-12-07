@@ -528,10 +528,25 @@ class TestCrystALLSearch(unittest.TestCase):
                     arr = np.hstack([arr, pad])
                 return arr[:, : self.n_components]
 
-        # Patch KMeans, TSNE, and the k-range to keep the silhouette search light
+        def cheap_embed(self, same_composition: bool) -> None:
+            # Use scaled features with minimal projection to avoid TSNE cost
+            feats = np.asarray(self.ks2022)
+            if feats.ndim == 1:
+                feats = feats.reshape(-1, 1)
+            if same_composition:
+                feats = feats[:, :1]
+            self.scaledks2022 = feats
+            # 2D/3D embeddings as thin slices
+            pad2 = np.zeros((feats.shape[0], max(0, 2 - feats.shape[1])))
+            emb2 = np.hstack([feats, pad2])[:, :2]
+            self.embeddedks2022 = emb2
+            pad3 = np.zeros((feats.shape[0], max(0, 3 - emb2.shape[1])))
+            self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
+
+        # Patch KMeans, __embed_features, and the k-range to keep silhouette search light
         light_kmeans = partial(KMeans, n_init=5, max_iter=100, random_state=580)
         with patch("crystall.core.KMeans", light_kmeans), \
-             patch("crystall.core.TSNE", DummyTSNE), \
+             patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
              patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
             # Explicitly exercise silhouette-search path by allowing the default
             # (None) n_clusters which triggers the silhouette-based selection.
@@ -557,7 +572,22 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        self.cas.cluster_prototypes_DBSCAN()
+        # Patch embed to avoid TSNE cost during tests
+        def cheap_embed(self, same_composition: bool) -> None:
+            feats = np.asarray(self.ks2022)
+            if feats.ndim == 1:
+                feats = feats.reshape(-1, 1)
+            if same_composition:
+                feats = feats[:, :1]
+            self.scaledks2022 = feats
+            pad2 = np.zeros((feats.shape[0], max(0, 2 - feats.shape[1])))
+            emb2 = np.hstack([feats, pad2])[:, :2]
+            self.embeddedks2022 = emb2
+            pad3 = np.zeros((feats.shape[0], max(0, 3 - emb2.shape[1])))
+            self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
+
+        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed):
+            self.cas.cluster_prototypes_DBSCAN()
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
             "DBSCAN clustering did not generate any top candidates.",
@@ -567,7 +597,8 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        self.cas.cluster_prototypes_DBSCAN(same_composition=True)
+        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed):
+            self.cas.cluster_prototypes_DBSCAN(same_composition=True)
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
             "DBSCAN clustering with same_composition did not generate any top candidates.",
