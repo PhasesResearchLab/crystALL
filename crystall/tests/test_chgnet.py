@@ -2,7 +2,6 @@ import os
 import shutil
 import tempfile
 import unittest
-from unittest import skipIf
 from unittest.mock import patch
 
 from crystall.calculators.chgnet import CHGNetStaticAdapter, CHGNetRelaxAdapter
@@ -20,7 +19,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
     def tearDown(self) -> None:
         _clear_chgnet_cache()
 
-    @skipIf(not hasattr(CHGNet, 'load'), 'CHGNet not available')
+    @unittest.skipIf(not hasattr(CHGNet, 'load'), 'CHGNet not available')
     def test_run_per_structure(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
         files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
@@ -68,7 +67,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
         finally:
             shutil.rmtree(tmp)
 
-    @skipIf(not hasattr(CHGNet, 'load'), 'CHGNet not available')
+    @unittest.skipIf(not hasattr(CHGNet, 'load'), 'CHGNet not available')
     def test_run_on_directory(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
         files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
@@ -101,7 +100,7 @@ class TestCHGNetRelaxAdapter(unittest.TestCase):
     def tearDown(self) -> None:
         _clear_chgnet_cache()
 
-    @skipIf(not hasattr(StructOptimizer, 'relax'), 'StructOptimizer not available')
+    @unittest.skipIf(not hasattr(StructOptimizer, 'relax'), 'StructOptimizer not available')
     def test_run_per_structure(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
         files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
@@ -141,7 +140,7 @@ class TestCHGNetRelaxAdapter(unittest.TestCase):
         finally:
             shutil.rmtree(tmp)
 
-    @skipIf(not hasattr(StructOptimizer, 'relax'), 'StructOptimizer not available')
+    @unittest.skipIf(not hasattr(StructOptimizer, 'relax'), 'StructOptimizer not available')
     def test_run_on_directory(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
         files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]

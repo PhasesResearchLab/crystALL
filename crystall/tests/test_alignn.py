@@ -1,6 +1,5 @@
 import os
 import unittest
-from unittest import skipIf
 from urllib.error import HTTPError
 from decimal import Decimal, ROUND_DOWN
 from unittest.mock import patch, MagicMock
@@ -16,7 +15,7 @@ class TestAlignnAdapter(unittest.TestCase):
     patching `alignn.pretrained` internals.
     """
 
-    @skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
+    @unittest.skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
     def test_load_calculator(self):
         """Cover present-models and user-decline branches of `load_calculator`."""
         adapter = AlignnAdapter()
@@ -52,7 +51,7 @@ class TestAlignnAdapter(unittest.TestCase):
             # Should not raise after transient failures and eventual success
             adapter.load_calculator()
 
-    @skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
+    @unittest.skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
     def test_run_on_directory(self):
         """Exercise normal run and unknown-objective validation."""
         adapter = AlignnAdapter()
