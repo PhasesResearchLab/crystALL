@@ -9,7 +9,7 @@ ALIGNN
    :undoc-members:
    :show-inheritance:
 
-CGHNet
+CHGNet
 ---------
 
 .. automodule:: crystall.calculators.chgnet
