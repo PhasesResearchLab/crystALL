@@ -508,64 +508,6 @@ class TestCrystALLSearch(unittest.TestCase):
             self.cas.filter_prototypes(max_prototypes=1, objective="nonexistent_objective")
 
     @pytest.mark.order(8)
-    def test_cluster_prototypes_KMeans(self) -> None:
-        """Test clustering prototypes using KMeans."""
-        # Trim the working set to keep clustering light while retaining enough samples
-        self.cas.ks2022 = self.cas.ks2022[:5]
-        self.cas.prototypes = self.cas.prototypes[:5]
-        self.cas.top_candidates = []
-        
-        class DummyTSNE:
-            """Lightweight stand-in to avoid expensive TSNE in tests."""
-
-            def __init__(self, n_components=2, **kwargs):
-                self.n_components = n_components
-
-            def fit_transform(self, X):
-                arr = np.asarray(X)
-                if arr.shape[1] < self.n_components:
-                    pad = np.zeros((arr.shape[0], self.n_components - arr.shape[1]))
-                    arr = np.hstack([arr, pad])
-                return arr[:, : self.n_components]
-
-        def cheap_embed(self, same_composition: bool) -> None:
-            # Use scaled features with minimal projection to avoid TSNE cost
-            feats = np.asarray(self.ks2022)
-            if feats.ndim == 1:
-                feats = feats.reshape(-1, 1)
-            if same_composition:
-                feats = feats[:, :1]
-            self.scaledks2022 = feats
-            # 2D/3D embeddings as thin slices
-            pad2 = np.zeros((feats.shape[0], max(0, 2 - feats.shape[1])))
-            emb2 = np.hstack([feats, pad2])[:, :2]
-            self.embeddedks2022 = emb2
-            pad3 = np.zeros((feats.shape[0], max(0, 3 - emb2.shape[1])))
-            self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
-
-        # Patch KMeans, __embed_features, and the k-range to keep silhouette search light
-        light_kmeans = partial(KMeans, n_init=5, max_iter=100, random_state=580)
-        with patch("crystall.core.KMeans", light_kmeans), \
-             patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
-             patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
-            # Explicitly exercise silhouette-search path by allowing the default
-            # (None) n_clusters which triggers the silhouette-based selection.
-            self.cas.cluster_prototypes_KMeans(n_clusters=None)
-            self.assertTrue(
-                len(self.cas.top_candidates) > 0,
-                "KMeans clustering did not generate any top candidates.",
-            )
-
-        # Unhappy path: too few prototypes triggers early return
-        cas2 = crystall.CrystALLSearch(self.target_formula)
-        cas2.ks2022 = self.cas.ks2022[:3]
-        cas2.prototypes = self.cas.prototypes[:3]
-        cas2.available_calculators = {"dummy_calc": [self.cas.predicted_objectives[0]]}
-        cas2.predicted_objectives = [self.cas.predicted_objectives[0]]
-        cas2.cluster_prototypes_KMeans()
-        self.assertEqual(len(cas2.top_candidates), 0)
-
-    @pytest.mark.order(9)
     def test_cluster_prototypes_DBSCAN(self) -> None:
         """Test clustering prototypes using DBSCAN."""
         # Trim the working set to keep clustering light while retaining enough samples
@@ -615,6 +557,50 @@ class TestCrystALLSearch(unittest.TestCase):
             cas2.cluster_prototypes_DBSCAN(eps="0.3")
         with self.assertRaises(AssertionError):
             cas2.cluster_prototypes_DBSCAN(eps=0.3, min_samples=1.5)
+
+    @pytest.mark.order(9)
+    def test_cluster_prototypes_KMeans(self) -> None:
+        """Test clustering prototypes using KMeans."""
+        # Trim the working set to keep clustering light while retaining enough samples
+        self.cas.ks2022 = self.cas.ks2022[:5]
+        self.cas.prototypes = self.cas.prototypes[:5]
+        self.cas.top_candidates = []
+        
+        def cheap_embed(self, same_composition: bool) -> None:
+            # Use scaled features with minimal projection to avoid TSNE cost
+            feats = np.asarray(self.ks2022)
+            if feats.ndim == 1:
+                feats = feats.reshape(-1, 1)
+            if same_composition:
+                feats = feats[:, :1]
+            self.scaledks2022 = feats
+            # 2D/3D embeddings as thin slices
+            pad2 = np.zeros((feats.shape[0], max(0, 2 - feats.shape[1])))
+            emb2 = np.hstack([feats, pad2])[:, :2]
+            self.embeddedks2022 = emb2
+            pad3 = np.zeros((feats.shape[0], max(0, 3 - emb2.shape[1])))
+            self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
+
+        # Patch KMeans, __embed_features, and the k-range to keep silhouette search light
+        light_kmeans = partial(KMeans, n_init=5, max_iter=100, random_state=580)
+        with patch("crystall.core.KMeans", light_kmeans), \
+             patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
+             patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
+            # Explicitly exercise silhouette-search path with fixed small cluster count
+            self.cas.cluster_prototypes_KMeans(n_clusters=2)
+            self.assertTrue(
+                len(self.cas.top_candidates) > 0,
+                "KMeans clustering did not generate any top candidates.",
+            )
+
+        # Unhappy path: too few prototypes triggers early return
+        cas2 = crystall.CrystALLSearch(self.target_formula)
+        cas2.ks2022 = self.cas.ks2022[:3]
+        cas2.prototypes = self.cas.prototypes[:3]
+        cas2.available_calculators = {"dummy_calc": [self.cas.predicted_objectives[0]]}
+        cas2.predicted_objectives = [self.cas.predicted_objectives[0]]
+        cas2.cluster_prototypes_KMeans()
+        self.assertEqual(len(cas2.top_candidates), 0)
 
     @pytest.mark.order(10)
     def test_export_table(self) -> None:
