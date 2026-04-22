@@ -2,12 +2,14 @@ import os
 import glob
 import json
 import shutil
+import tempfile
 import pytest
 import crystall
 import unittest
 import warnings
 import numpy as np
 from functools import partial
+from pathlib import Path
 
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -35,7 +37,7 @@ class TestTopLevelFunctions(unittest.TestCase):
         """Set up shared state for local and MPDD-related top-level functions."""
         # Local test setup mirrors previous TestLocal
         self.target_formula_local = "Ni22Ru8"
-        self.prototype_path_local = "crystall/tests/testFiles/localTest"
+        self.prototype_path_local = "tests/testFiles/localTest"
 
         # Ensure the output directories are not present before each test
         if os.path.exists("Ni22Ru8-local-prototypes"):
@@ -64,7 +66,7 @@ class TestTopLevelFunctions(unittest.TestCase):
             self.collection.create_index([(hint, 1)], name=hint)
 
         # Populate the collection with the test data
-        with open("crystall/tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
+        with open("tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
             for entry in json.loads(f.read()):
                 entry["_id"] = entry["_id"]["$oid"]
                 self.collection.insert_one(entry)
@@ -219,7 +221,7 @@ class TestCrystALLSearch(unittest.TestCase):
             cls.collection.create_index([(hint, 1)], name=hint)
 
         # Populate the collection with the test data
-        with open("crystall/tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
+        with open("tests/testFiles/MPDD_A4B11or13or17.json", "r") as f:
             for entry in json.loads(f.read()):
                 entry["_id"] = entry["_id"]["$oid"]
                 cls.collection.insert_one(entry)
@@ -667,12 +669,46 @@ class TestCrystALLSearch(unittest.TestCase):
 class TestBaseCalculator(unittest.TestCase):
     """Tests for BaseCalculator helpers and abstract behavior."""
 
+    class DummyEnvCalculator(crystall.BaseCalculator):
+        """Small test adapter used for micro-environment lifecycle tests."""
+
+        name = "dummy-env"
+        objectives_map = {}
+
+        def __init__(self, env_path: Path, fail_layer2: bool = False) -> None:
+            self._test_env_path = Path(env_path)
+            self._fail_layer2 = fail_layer2
+
+        def _env_path(self) -> Path:
+            return self._test_env_path
+
+        def _install_layer2(self, env: dict) -> None:
+            if self._fail_layer2:
+                raise RuntimeError("layer2-failure")
+
+        def setup_commands(self) -> list[str]:
+            return []
+
+        def _run_code(self) -> str:
+            return "print('noop')"
+
+    @staticmethod
+    def _fake_uv_venv_run(cmd, env=None, check=False, **kwargs):
+        """Mock uv venv creation by laying down an executable micro-Python."""
+        target = Path(cmd[-1])
+        bin_dir = target / ("Scripts" if os.name == "nt" else "bin")
+        py_name = "python.exe" if os.name == "nt" else "python"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        py = bin_dir / py_name
+        py.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+        py.chmod(0o755)
+
     def test_run_on_directory(self) -> None:
         """BaseCalculator.run_on_directory should raise NotImplementedError by default."""
 
         class DummyBase(crystall.BaseCalculator):
             name = "dummy"
-            objectives = []
+            objectives_map = {}
 
         dummy = DummyBase()
         with self.assertRaises(NotImplementedError):
@@ -703,6 +739,56 @@ class TestBaseCalculator(unittest.TestCase):
 
         # Invalid type should return None gracefully
         self.assertIsNone(crystall.BaseCalculator.vector_to_scalar("unknown", tensor_6))
+
+    def test_setup_env_writes_sentinel_and_is_env_ready_requires_it(self) -> None:
+        """setup_env should write readiness sentinel and is_env_ready should require it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / "dummy_env"
+            calc = self.DummyEnvCalculator(env_path=env_path)
+
+            with patch("subprocess.run", side_effect=self._fake_uv_venv_run):
+                calc.setup_env()
+
+            sentinel = env_path / ".crystall_env_ready"
+            self.assertTrue(sentinel.exists())
+            self.assertTrue(calc.is_env_ready())
+
+            sentinel.unlink()
+            self.assertFalse(calc.is_env_ready())
+
+    def test_setup_env_rebuilds_incomplete_env(self) -> None:
+        """setup_env should remove/rebuild env when Python exists but sentinel is missing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / "dummy_env"
+            calc = self.DummyEnvCalculator(env_path=env_path)
+
+            old_py = calc._micro_python()
+            old_py.parent.mkdir(parents=True, exist_ok=True)
+            old_py.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+            old_py.chmod(0o755)
+            stale_file = env_path / "stale-marker.txt"
+            stale_file.write_text("stale", encoding="utf-8")
+
+            with patch("subprocess.run", side_effect=self._fake_uv_venv_run):
+                calc.setup_env()
+
+            sentinel = env_path / ".crystall_env_ready"
+            self.assertTrue(sentinel.exists())
+            self.assertTrue(calc.is_env_ready())
+            self.assertFalse(stale_file.exists())
+
+    def test_setup_env_cleans_up_after_layer2_failure(self) -> None:
+        """setup_env should remove partial env when layer-2 install fails."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / "dummy_env"
+            calc = self.DummyEnvCalculator(env_path=env_path, fail_layer2=True)
+
+            with patch("subprocess.run", side_effect=self._fake_uv_venv_run):
+                with self.assertRaises(RuntimeError):
+                    calc.setup_env()
+
+            self.assertFalse(env_path.exists())
+            self.assertFalse((env_path / ".crystall_env_ready").exists())
 
 if __name__ == '__main__':
     unittest.main()
