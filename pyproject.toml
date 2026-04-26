@@ -55,6 +55,4 @@ packages = { find = { exclude = ["paper", "oldfiles"] } }
 "Repository" = "https://github.com/PhasesResearchLab/crystALL"
 
 [project.entry-points."crystall.calculators"]
-ALIGNN = "crystall.calculators.alignn:AlignnAdapter"
-CHGNetStatic = "crystall.calculators.chgnet:CHGNetStaticAdapter"
-CHGNetRelax = "crystall.calculators.chgnet:CHGNetRelaxAdapter"
+ALIGNN = "crystall.adapters.alignn:AlignnAdapter"

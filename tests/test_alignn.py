@@ -1,98 +1,117 @@
+"""Tests for ALIGNN static inference adapter.
+
+Covers the micro-environment adapter contract:
+  - objectives_map / objectives property
+  - _run_code() returns a non-empty worker script
+  - run_on_directory() dispatches the worker correctly (mocked subprocess)
+"""
+
 import os
+import tempfile
 import unittest
-from urllib.error import HTTPError
-from decimal import Decimal, ROUND_DOWN
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from crystall.calculators.alignn import AlignnAdapter
-from alignn import pretrained
+from crystall.calculators import AlignnAdapter
 
 
-class TestAlignnAdapter(unittest.TestCase):
-    """Tests for the AlignnAdapter adapter implementation.
+class TestAlignnAdapterContract(unittest.TestCase):
+    """Validate the BaseCalculator adapter contract for AlignnAdapter."""
 
-    These tests exercise `load_calculator` and `run_on_directory` by
-    patching `alignn.pretrained` internals.
-    """
+    def setUp(self):
+        self.adapter = AlignnAdapter()
 
-    @unittest.skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
-    def test_load_calculator(self):
-        """Cover present-models and user-decline branches of `load_calculator`."""
-        adapter = AlignnAdapter()
+    # -- Objectives ----------------------------------------------------------
 
-        # Case 1: models appear present -> should return without prompting
-        fake_model_list = [{'model': 'some/model/path'}]
-        fake_root = MagicMock()
-        # joinpath(...) -> object with is_file() -> True
-        fake_child = MagicMock()
-        fake_child.is_file.return_value = True
-        fake_root.joinpath.return_value = fake_child
+    def test_objectives_map_keys(self):
+        """objectives_map must contain the expected ALIGNN objectives."""
+        expected = {
+            "ALIGNN-MP Formation Energy [eV/atom]",
+            "ALIGNN-MP PBE Bandgap [eV]",
+            "ALIGNN-JARVIS Formation Energy [eV/atom]",
+            "ALIGNN-JARVIS MBJ Bandgap [eV]",
+            "ALIGNN-JARVIS Shear Modulus [GPa]",
+            "ALIGNN-JARVIS Bulk Modulus [GPa]",
+            "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
+            "ALIGNN-Alexandria Bandgap [eV]",
+            "ALIGNN-Alexandria Formation Energy [eV/atom]",
+            "ALIGNN-Alexandria Volume Per Atom [A^3]",
+        }
+        self.assertEqual(set(self.adapter.objectives_map.keys()), expected)
 
-        with patch.object(pretrained, 'get_default_models', return_value=fake_model_list), \
-             patch('crystall.calculators.alignn.resources.files', return_value=fake_root):
-            # Should not raise or prompt
-            adapter.load_calculator()
+    def test_objectives_property_matches_map(self):
+        """objectives property must equal objectives_map keys."""
+        self.assertEqual(
+            sorted(self.adapter.objectives),
+            sorted(self.adapter.objectives_map.keys()),
+        )
 
-        # Case 2: models not present and user declines -> raises RuntimeError
-        # Simulate get_default_models returning no usable paths so the prompt is shown
-        with patch.object(pretrained, 'get_default_models', return_value=[]), \
-             patch('crystall.calculators.alignn.resources.files', return_value=fake_root), \
-             patch('builtins.input', return_value='n'):
-            with self.assertRaises(RuntimeError):
-                adapter.load_calculator()
+    def test_name(self):
+        self.assertEqual(self.adapter.name, "ALIGNN")
 
-        # Case 3: user accepts download; simulate transient HTTPError failures then success
-        # Ensure resources.files yields no existing files so download is attempted
-        with patch.object(pretrained, 'get_default_models', return_value=[]), \
-             patch('crystall.calculators.alignn.resources.files', return_value=fake_root), \
-             patch('builtins.input', return_value='y'), \
-             patch.object(pretrained, 'download_default_models', side_effect=[HTTPError('url', 500, 'err', None, None), HTTPError('url', 502, 'err', None, None), None]), \
-             patch('crystall.calculators.alignn.time.sleep', return_value=None):
-            # Should not raise after transient failures and eventual success
-            adapter.load_calculator()
+    def test_calculator_type_is_inference(self):
+        self.assertEqual(self.adapter.calculator_type, "inference")
 
-    @unittest.skipIf(not (hasattr(pretrained, 'run_models_from_directory') and hasattr(pretrained, 'get_default_models')), 'alignn.pretrained missing required API')
-    def test_run_on_directory(self):
-        """Exercise normal run and unknown-objective validation."""
-        adapter = AlignnAdapter()
-        test_path = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
+    # -- Worker script -------------------------------------------------------
 
-        # Prepare fake results returned by the real pretrained.run_models_from_directory
-        fake_results = [
-            {
-                'name': 'proto1.POSCAR',
-                AlignnAdapter.objectives[0]: 1.234567,
-                AlignnAdapter.objectives[1]: 0.987654,
-            },
-            {
-                'name': 'proto2.POSCAR',
-                AlignnAdapter.objectives[0]: 2.345678,
-            },
-        ]
+    def test_run_code_is_non_empty(self):
+        script = self.adapter._run_code()
+        self.assertIsInstance(script, str)
+        self.assertGreater(len(script), 100)
 
-        # Patch the real pretrained.run_models_from_directory and the adapter setup
-        with patch.object(pretrained, 'run_models_from_directory', return_value=fake_results), \
-             patch.object(AlignnAdapter, 'load_calculator', return_value=None):
+    def test_run_code_contains_alignn_runner(self):
+        """Worker script must call the ALIGNN directory runner."""
+        script = self.adapter._run_code()
+        self.assertIn("run_models_from_directory", script)
 
-            out = adapter.run_on_directory(test_path)
+    # -- Micro-env path and setup hooks -------------------------------------
 
-            self.assertIsInstance(out, list)
-            self.assertGreaterEqual(len(out), 2)
+    def test_env_path_contains_alignn(self):
+        env_path = self.adapter._env_path()
+        self.assertIn("alignn", str(env_path))
 
-            first = out[0]
-            self.assertIn('name', first)
-            self.assertIn('properties', first)
-            self.assertIsInstance(first['properties'], dict)
+    def test_python_version(self):
+        self.assertEqual(self.adapter.python_version(), "3.11")
 
-            expected_val = float(Decimal(1.234567).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
-            self.assertAlmostEqual(first['properties'][adapter.objectives[0]], expected_val)
+    def test_layer2_dependencies_non_empty(self):
+        deps = self.adapter.layer2_dependencies()
+        self.assertIsInstance(deps, list)
+        self.assertGreaterEqual(len(deps), 1)
+        self.assertTrue(any("torch" in d for d in deps))
 
-        # Now validate that unknown objectives raise before calling pretrained
-        with patch.object(pretrained, 'run_models_from_directory', return_value=[]), \
-             patch.object(AlignnAdapter, 'load_calculator', return_value=None):
-            with self.assertRaises(ValueError):
-                adapter.run_on_directory(test_path, objectives=['UNKNOWN-OBJECTIVE'])
+    def test_setup_commands_non_empty(self):
+        cmds = self.adapter.setup_commands()
+        self.assertIsInstance(cmds, list)
+        self.assertGreaterEqual(len(cmds), 1)
+        self.assertTrue(any("mpdd-alignn" in c for c in cmds))
+
+    # -- run_on_directory (mocked worker) -----------------------------------
+
+    def test_run_on_directory_dispatches_worker(self):
+        """run_on_directory delegates to _dispatch_worker with correct kwargs."""
+        fake_results = [{"name": "POSCAR", "properties": {"dummy": 1.23}}]
+
+        with (
+            patch.object(self.adapter, "_dispatch_worker", return_value=fake_results) as mock_dw,
+            tempfile.TemporaryDirectory() as tmp,
+        ):
+            # Create a dummy structure file so the directory is not empty.
+            open(os.path.join(tmp, "POSCAR"), "w").close()
+
+            results = self.adapter.run_on_directory(tmp)
+
+        mock_dw.assert_called_once()
+        self.assertEqual(results, fake_results)
+
+    def test_run_on_directory_empty_dir_returns_empty(self):
+        """Empty directory should return an empty list (with a warning)."""
+        with tempfile.TemporaryDirectory() as tmp, self.assertWarns(UserWarning):
+            results = self.adapter.run_on_directory(tmp)
+        self.assertEqual(results, [])
+
+    def test_run_on_directory_missing_dir_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            self.adapter.run_on_directory("/nonexistent/path/xyz")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
