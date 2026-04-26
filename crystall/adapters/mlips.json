@@ -1,0 +1,196 @@
+{
+    "CHGNet": {
+        "setup": [
+            "pip install 'chgnet~=0.4.0'"
+        ],
+        "calculator": [
+            "from chgnet.model import CHGNet",
+            "from chgnet.model.dynamics import CHGNetCalculator",
+            "chgnet_model = CHGNet.load(model_name='{model}')",
+            "calc = CHGNetCalculator(model=chgnet_model, use_device='{device}')"
+        ],
+        "model": "0.3.0",
+        "device": "cpu",
+        "os": [
+            "windows",
+            "macos",
+            "linux"
+        ]
+    },
+    "FAIRChem-oc": {
+        "setup": [
+            "pip install 'fairchem-core~=2.16.0' huggingface_hub",
+            "export HF_HOME='{SFY_PATH}'; hf auth login --token {hf_token}"
+        ],
+        "calculator": [
+            "import os",
+            "os.environ['HF_HOME'] = '{SFY_PATH}'",
+            "os.environ['FAIRCHEM_CACHE_DIR'] = '{SFY_PATH}'",
+            "from fairchem.core import FAIRChemCalculator, pretrained_mlip",
+            "predictor = pretrained_mlip.get_predict_unit('{model}', device='{device}')",
+            "calc = FAIRChemCalculator(predictor, task_name='{task_name}')"
+        ],
+        "model": "uma-s-1p2",
+        "device": "cpu",
+        "os": [
+            "macos",
+            "linux"
+        ],
+        "custom": {
+            "task_name": "oc25",
+            "hf_token": "request/access/at/huggingface.co/facebook/UMA"
+        }
+    },
+    "GRACE": {
+        "setup": [
+            "pip install 'tensorpotential~=0.5.0'",
+            "export GRACE_CACHE={SFY_PATH}; grace_models download {model}"
+        ],
+        "calculator": [
+            "import os; os.environ['GRACE_CACHE'] = '{SFY_PATH}'",
+            "import os; os.environ['CUDA_VISIBLE_DEVICES'] = '' if '{device}' == 'cpu' else '0'",
+            "from tensorpotential.calculator import grace_fm",
+            "calc = grace_fm(model='{model}', device='{device}')"
+        ],
+        "model": "GRACE-2L-SMAX-OMAT-large",
+        "device": "cpu",
+        "os": [
+            "macos",
+            "linux"
+        ]
+    },
+    "MACE-mh": {
+        "setup": [
+            "pip install 'mace-torch~=0.3.0'"
+        ],
+        "calculator": [
+            "import os; os.environ['XDG_CACHE_HOME'] = '{SFY_PATH}'",
+            "from mace.calculators import mace_mp",
+            "calc = mace_mp(model='{model}', head='{head}', device='{device}', default_dtype='float64')"
+        ],
+        "model": "mh-1",
+        "device": "cpu",
+        "os": [
+            "macos",
+            "linux"
+        ],
+        "custom": {
+            "head": "omat_pbe"
+        }
+    },
+    "MatterSim": {
+        "setup": [
+            "pip install 'mattersim~=1.2.0'",
+            "[ -f '{SFY_PATH}/{model}.pth' ] || python -c \"from mattersim.utils.download_utils import download_checkpoint; download_checkpoint('{model}.pth', save_folder='{SFY_PATH}')\""
+        ],
+        "calculator": [
+            "from mattersim.forcefield import MatterSimCalculator",
+            "calc = MatterSimCalculator(load_path='{SFY_PATH}/{model}.pth', device='{device}')"
+        ],
+        "model": "mattersim-v1.0.0-5M",
+        "device": "cpu",
+        "os": [
+            "macos",
+            "linux"
+        ]
+    },
+    "NequIP": {
+        "setup": [
+            "pip install 'nequip~=0.17.0' torch==2.9",
+            "export NEQUIP_CACHE_DIR='{SFY_PATH}'",
+            "[ -f '{SFY_PATH}/{model}:{version}.nequip.zip' ] || curl -k -s -L -o '{SFY_PATH}/{model}:{version}.nequip.zip' 'https://zenodo.org/api/records/18775904/files/{model}-{version}.nequip.zip/content'"
+        ],
+        "calculator": [
+            "import os; os.system(f\"export NEQUIP_CACHE_DIR='{SFY_PATH}' && [ -f '{SFY_PATH}/{model}:{version}.{device}.nequip.pth' ] || {SFY_PATH}/bin/nequip-compile '{SFY_PATH}/{model}:{version}.nequip.zip' '{SFY_PATH}/{model}:{version}.{device}.nequip.pth' --mode torchscript --device {device} --target ase\")",
+            "from nequip.integrations.ase import NequIPCalculator",
+            "calc = NequIPCalculator.from_compiled_model(compile_path='{SFY_PATH}/{model}:{version}.{device}.nequip.pth', device='{device}', chemical_species_to_atom_type_map=True)"
+        ],
+        "model": "NequIP-OAM-XL",
+        "device": "cpu",
+        "custom": {
+            "version": "0.1"
+        }
+    },
+    "ORB": {
+        "python_version": "3.12",
+        "setup": [
+            "pip install 'orb-models~=0.6.0'"
+        ],
+        "calculator": [
+            "import os; os.environ['CACHED_PATH_CACHE_ROOT'] = '{SFY_PATH}'",
+            "from orb_models.forcefield.inference.calculator import ORBCalculator",
+            "from orb_models.forcefield import pretrained",
+            "orbff, atoms_adapter = pretrained.{model}(device='{device}', precision='{precision}')",
+            "calc = ORBCalculator(orbff, atoms_adapter=atoms_adapter, device='{device}')"
+        ],
+        "model": "orb_v3_conservative_inf_omat",
+        "device": "cpu",
+        "os": [
+            "windows",
+            "linux"
+        ],
+        "custom": {
+            "precision": "float32-high"
+        }
+    },
+    "ORB-D3": {
+        "python_version": "3.12",
+        "setup": [
+            "pip install 'orb-models~=0.6.0'"
+        ],
+        "calculator": [
+            "import os; os.environ['CACHED_PATH_CACHE_ROOT'] = '{SFY_PATH}'",
+            "from orb_models.forcefield.inference.calculator import ORBCalculator",
+            "from orb_models.forcefield import pretrained",
+            "from orb_models.forcefield.inference.d3_model import D3SumModel, AlchemiDFTD3",
+            "orbff, atoms_adapter = pretrained.{model}(device='{device}', precision='{precision}')",
+            "orbff_d3 = D3SumModel(orbff, AlchemiDFTD3(functional='{functional}', damping='{damping}', compile=True))",
+            "calc = ORBCalculator(orbff_d3, atoms_adapter=atoms_adapter, device='{device}')"
+        ],
+        "model": "orb_v3_conservative_inf_omat",
+        "device": "cpu",
+        "os": [
+            "windows",
+            "linux"
+        ],
+        "custom": {
+            "precision": "float32-high",
+            "functional": "PBE",
+            "damping": "BJ"
+        }
+    },
+    "SevenNet": {
+        "setup": [
+            "pip install 'sevenn~=0.12.0'"
+        ],
+        "calculator": [
+            "from sevenn.calculator import SevenNetCalculator",
+            "calc = SevenNetCalculator(model='{model}', device='{device}', modal='{modal}')"
+        ],
+        "model": "sevennet-omni-i12",
+        "device": "cpu",
+        "os": [
+            "macos",
+            "linux"
+        ],
+        "custom": {
+            "modal": "omat24"
+        }
+    },
+    "UPET": {
+        "setup": [
+            "pip install 'upet~=0.2.0'"
+        ],
+        "calculator": [
+            "import os; os.environ['HF_HOME'] = '{SFY_PATH}'",
+            "from upet.calculator import UPETCalculator",
+            "calc = UPETCalculator(model='{model}', device='{device}')"
+        ],
+        "model": "pet-oam-xl",
+        "device": "cpu",
+        "os": [
+            "macos",
+            "linux"
+        ]
+    }
+}
