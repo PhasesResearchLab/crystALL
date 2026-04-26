@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crystall"
-version = "0.5.0"
+version = "0.6.0"
 authors = [
   { name="Adam Krajewski", email="adam@phaseslab.org" },
   { name="Ricardo Amaral", email="rna5137@psu.edu" },
@@ -27,12 +27,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pysipfenn>=0.16.0",
-    "mpdd-alignn>=1.0.6",
-    "chgnet==0.3.8",
-    "torch==2.3.0",
-    "torchdata==0.9.0",
-    "dgl>=2.2.0",
-    "pymatgen>=2024.2.20",
+        "pymatgen>=2024.2.20",
     "spglib==2.0.2",
     "numpy>=1.26.0",
     "tqdm>=4.65.0",
@@ -46,7 +41,8 @@ dependencies = [
     "ruamel.yaml",
     "distinctipy",
     "scipy",
-    "scikit-learn"
+    "scikit-learn",
+    "uv",
 ]
 
 [tool.setuptools]
