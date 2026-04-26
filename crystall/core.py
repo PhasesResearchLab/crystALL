@@ -140,24 +140,42 @@ class CrystALLSearch:
         self.supported_calculators: Dict[str, Any] = {'pySIPFENN': None}
         self.supported_calculators.update(load_adapters())
 
-        # Setup external calculators (stub: mark all supported adapters as available with their declared objectives)
-        for calc_name, adapter_cls in self.supported_calculators.items():
-            if calc_name == 'pySIPFENN':
+        # Check environment readiness for each adapter (without auto-installing)
+        for calc_name, adapter in list(self.supported_calculators.items()):
+            if calc_name == "pySIPFENN":
                 continue
-            self.setup_calculator(calc_name)
+
+            # Entry points may return classes; instantiate once and keep instance.
+            if isinstance(adapter, type):
+                try:
+                    adapter = adapter()
+                    self.supported_calculators[calc_name] = adapter
+                except Exception as e:
+                    warnings.warn(f"Could not instantiate adapter '{calc_name}': {e}")
+                    continue
+
+            # All adapters inherit BaseCalculator — check micro-env readiness.
+            if hasattr(adapter, "is_env_ready") and adapter.is_env_ready():
+                self.available_calculators[calc_name] = list(adapter.objectives)
 
         # Print the status of calculators (found if present in available_calculators)
         for calc_name in self.supported_calculators.keys():
             if calc_name in self.available_calculators:
                 try:
-                    print(f"{Fore.GREEN}✔ {calc_name} found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}✔ {calc_name} ready.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
-                    print(f"{Fore.GREEN}v {calc_name} found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}v {calc_name} ready.{Style.RESET_ALL}")
             else:
+                if calc_name == "pySIPFENN":
+                    continue
                 try:
-                    print(f"{Style.DIM}✘ {calc_name} not found.{Style.RESET_ALL}")
+                    print(
+                        f"{Style.DIM}✘ {calc_name} (run setup_calculator('{calc_name}')){Style.RESET_ALL}"
+                    )
                 except UnicodeEncodeError:
-                    print(f"{Style.DIM}x {calc_name} not found.{Style.RESET_ALL}")
+                    print(
+                        f"{Style.DIM}x {calc_name} (run setup_calculator('{calc_name}')){Style.RESET_ALL}"
+                    )
 
         # Update objectives with calculators found
         self.__update_objectives(self.Calculator)
@@ -178,22 +196,12 @@ class CrystALLSearch:
             AssertionError: If the calculator is not a pySIPFENN Calculator object.
         """
 
-        assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
+        assert isinstance(calculator, Calculator), (
+            "Calculator must be a Calculator object"
+        )
 
-        # pySIPFENN objectives already populated in available_calculators during init or download
-        if 'pySIPFENN' not in self.available_calculators:
-            print("\npySIPFENN objective required for calculation. Run `download_pysipfenn` first.")
-
-        # Add objectives from discovered adapters (classes expose class attribute 'objectives')
-        try:
-            for name, adapter_cls in getattr(self, "supported_calculators", {}).items():
-                if name == 'pySIPFENN' or adapter_cls is None:
-                    continue
-                objectives = getattr(adapter_cls, "objectives", []) or []
-                if name not in self.available_calculators:
-                    self.available_calculators[name] = list(objectives)
-        except Exception as e:
-            warnings.warn(f"Adapter objectives aggregation failed: {e}")
+        # available_calculators is already populated in __init__ by the
+        # readiness loop (only ready adapters are included).
 
         if len(self.available_calculators) >= 1 and verbose:
             print("\nObjectives available for calculation:")
