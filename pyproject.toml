@@ -24,7 +24,7 @@ classifiers = [
 description = "Pure data-driven structure prediction combining MPDD's Big Data (ALL 'crystals') from DFT with high-throughput substitutions, stability predictions, candidate selection, and DFT+experiment validation. Developed since 2021 and demonstrated in the identification of new atomic structures in Nd-Bi and Al-Fe systems."
 readme = "README.md"
 
-requires-python = ">=3.11"
+requires-python = ">=3.11, <3.13"
 dependencies = [
     "pysipfenn>=0.16.0",
     "mpdd-alignn>=1.0.6",
