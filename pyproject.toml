@@ -27,7 +27,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pysipfenn>=0.16.0",
-        "pymatgen>=2024.2.20",
+    "pymatgen>=2024.2.20",
     "spglib==2.0.2",
     "numpy>=1.26.0",
     "tqdm>=4.65.0",
@@ -44,7 +44,7 @@ dependencies = [
     "scikit-learn",
     "uv",
     "duecredit",
-"optimade[http_client]>=1.0",
+    "optimade[http_client]>=1.0",
 ]
 
 [tool.setuptools]
@@ -62,3 +62,4 @@ MEGNetStatic = "crystall.adapters.matgl:MEGNetStaticAdapter"
 M3GNetStatic = "crystall.adapters.matgl:M3GNetStaticAdapter"
 Phonax = "crystall.adapters.phonax:PhonaxAdapter"
 QETStatic = "crystall.adapters.matgl:QETStaticAdapter"
+UPET-DOS = "crystall.adapters.upetdos:UPETDosAdapter"
