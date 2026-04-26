@@ -756,57 +756,93 @@ class CrystALLSearch:
                     break
 
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN")
-    
+
     def get_calculator_properties(
         self,
         calculator: str,
         mode: Literal["serial", "parallel"] = "serial",
         max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
+        isif: int = 8,
+        optimizer: str = "FIRE",
+        **kwargs,
     ) -> None:
         """Run a pluggable calculator adapter over the prototype directory and merge results.
 
         Args:
             calculator: The adapter name as declared in entry points.
             mode: 'serial' or 'parallel' as supported by the adapter.
+            objectives: Optional subset of objective names to compute/return.
+            isif: ISIF relaxation setting (default 8). Ignored by non-relaxation adapters.
+            optimizer: ASE optimizer name ('FIRE' or 'LBFGS'). Ignored by non-relaxation adapters.
+            **kwargs: Additional keyword arguments passed to the adapter.
 
         Raises:
             AssertionError: if prototypes folder missing or unknown calculator name.
         """
-        assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
-        assert hasattr(self, "supported_calculators"), "Supported calculators not initialized."
-        assert calculator in self.supported_calculators and calculator != 'pySIPFENN', \
+        assert self.prototype_path is not None, (
+            "No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first."
+        )
+        assert isinstance(self.prototype_path, str), (
+            "Prototypes folder path must be a string"
+        )
+        assert hasattr(self, "supported_calculators"), (
+            "Supported calculators not initialized."
+        )
+        assert calculator in self.supported_calculators and calculator != "pySIPFENN", (
             f"Unknown calculator '{calculator}'. Available: {list(self.supported_calculators.keys())}"
+        )
 
-        adapter_cls = self.supported_calculators[calculator]
-        try:
-            adapter = adapter_cls()
-        except Exception as e:
-            raise RuntimeError(f"Failed to instantiate adapter '{calculator}': {e}")
+        adapter = self.supported_calculators[calculator]
 
-        results = adapter.run_on_directory(self.prototype_path, mode=mode, max_workers=max_workers, objectives=objectives)
+        # If the adapter is a class (legacy entry-point registration), instantiate it
+        if isinstance(adapter, type):
+            try:
+                adapter = adapter()
+            except Exception as e:
+                raise RuntimeError(f"Failed to instantiate adapter '{calculator}': {e}")
+
+        # Assert micro-env readiness for micro-env adapters
+        if hasattr(adapter, "is_env_ready"):
+            assert adapter.is_env_ready(), (
+                f"Micro-environment for '{calculator}' is not ready. "
+                f"Run setup_calculator('{calculator}') first."
+            )
+
+        results = adapter.run_on_directory(
+            self.prototype_path,
+            mode=mode,
+            max_workers=max_workers,
+            objectives=objectives,
+            isif=isif,
+            optimizer=optimizer,
+            **kwargs,
+        )
         # Be tolerant to partial results: merge what we have and warn on mismatch
         if len(results) != len(self.prototypes):
-            warnings.warn(f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names.")
+            warnings.warn(
+                f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names."
+            )
 
         # Build index for fast merge
-        name_to_index = {p.get('name'): i for i, p in enumerate(self.prototypes)}
+        name_to_index = {p.get("name"): i for i, p in enumerate(self.prototypes)}
         matched = 0
         for r in results:
-            name = r.get('name') if isinstance(r, dict) else None
-            props = r.get('properties', {}) if isinstance(r, dict) else {}
+            name = r.get("name") if isinstance(r, dict) else None
+            props = r.get("properties", {}) if isinstance(r, dict) else {}
             if name in name_to_index:
                 self.prototypes[name_to_index[name]].update(props)
                 matched += 1
 
         if matched == 0:
-            raise AssertionError("No calculator predictions matched any prototype names. Ensure filenames are preserved.")
+            raise AssertionError(
+                "No calculator predictions matched any prototype names. Ensure filenames are preserved."
+            )
 
         # Track only objectives actually produced (respecting user selection)
         produced_objectives = set()
         for r in results:
-            props = r.get('properties', {}) if isinstance(r, dict) else {}
+            props = r.get("properties", {}) if isinstance(r, dict) else {}
             for key, val in props.items():
                 if isinstance(val, (int, float)):
                     produced_objectives.add(key)
