@@ -363,18 +363,34 @@ class CrystALLSearch:
     ) -> None:
         """Stub to setup an external calculator adapter.
 
-        For now, this just registers the adapter's declared objectives into
-        available_calculators so they appear in the objective list.
+        For micro-env adapters, this calls ``adapter.setup_env()`` to create
+        the isolated venv and install dependencies. On success, the adapter
+        is registered in ``available_calculators``.
 
         Args:
             calculator_name: Name of the calculator (adapter key).
         """
-        adapter_cls = getattr(self, 'supported_calculators', {}).get(calculator_name)
-        if adapter_cls is None:
+        adapter = getattr(self, "supported_calculators", {}).get(calculator_name)
+        if adapter is None:
+            warnings.warn(
+                f"Calculator '{calculator_name}' not found in supported calculators."
+            )
             return
-        objectives = getattr(adapter_cls, 'objectives', []) or []
+
+        # Micro-env adapters: create environment
+        if hasattr(adapter, "setup_env"):
+            try:
+                adapter.setup_env()
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to set up micro-environment for '{calculator_name}': {e}"
+                )
+                return
+
+        objectives = list(adapter.objectives) if hasattr(adapter, "objectives") else []
         if calculator_name not in self.available_calculators:
             self.available_calculators[calculator_name] = list(objectives)
+            print(f"{Fore.GREEN}✔ {calculator_name} ready.{Style.RESET_ALL}")
 
     def connect_MPDD(
             self,
