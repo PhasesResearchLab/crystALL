@@ -28,7 +28,7 @@ from itertools import groupby, permutations, product, combinations
 from operator import itemgetter
 from statistics import mean
 from typing import Any, Sequence, List, Dict, Union, Literal, Optional, Tuple
-from importlib.metadata import entry_points
+from crystall.calculators import load_adapters
 
 # ML / Data
 from pymongo.database import Database
