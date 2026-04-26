@@ -44,6 +44,7 @@ dependencies = [
     "scikit-learn",
     "uv",
     "duecredit",
+"optimade[http_client]>=1.0",
 ]
 
 [tool.setuptools]

@@ -50,844 +50,18 @@ warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
 # Top-Level Functions *************************************************************************
 
-def load_adapters() -> Dict[str, Any]:
-    """Discover and load calculator adapters.
+from crystall.prototypes import (
+    run_local,
+    run_MPDD,
+    run_MPDD_devs,
+    run_optimade,
+    sorted_elements_list,
+    element_permutations,
+    comp2acomp_q,
+    comp2comp_q,
+    ordered_allowed_substitutions
+)
 
-    Primary mechanism: Python entry points under group 'crystall.calculators'.
-    Fallback (useful in editable/unchecked-out source trees): dynamically scan
-    local 'crystall.calculators' modules for classes exposing the minimal
-    adapter interface: attributes 'name', 'objectives', and method 'run_on_directory'.
-    Returns a mapping of adapter-name -> adapter class. Failures are warned and skipped.
-    """
-    adapters: Dict[str, Any] = {}
-    # 1) Entry points (preferred when package is installed)
-    try:
-        eps = entry_points(group="crystall.calculators")
-        for ep in eps:
-            try:
-                adapters[ep.name] = ep.load()
-            except Exception as e:
-                warnings.warn(f"Skipping calculator '{ep.name}' due to load error: {e}")
-    except Exception as e:
-        warnings.warn(f"Failed to read entry points for calculators: {e}")
-
-    if adapters:
-        return adapters
-
-    # 2) Fallback: scan local package modules
-    try:
-        import pkgutil
-        import importlib
-        import inspect
-        pkg = importlib.import_module('crystall.calculators')
-        for _, modname, ispkg in pkgutil.iter_modules(pkg.__path__):
-            if ispkg:
-                continue
-            try:
-                mod = importlib.import_module(f'crystall.calculators.{modname}')
-            except Exception as e:
-                warnings.warn(f"Could not import local calculator module '{modname}': {e}")
-                continue
-            for _, obj in inspect.getmembers(mod, inspect.isclass):
-                if getattr(obj, '__module__', '') != mod.__name__:
-                    continue
-                # Minimal adapter contract
-                if all(hasattr(obj, attr) for attr in ('name', 'objectives', 'run_on_directory')):
-                    try:
-                        name = getattr(obj, 'name')
-                        if isinstance(name, str) and name and name not in adapters:
-                            adapters[name] = obj
-                    except Exception:
-                        pass
-    except Exception as e:
-        warnings.warn(f"Local adapter discovery failed: {e}")
-
-    return adapters
-
-def run_local(
-        target_formula: Union[str, Composition],
-        prototype_path: str
-    ) -> str:
-    """
-    Run prototype identification and elemental substitution for permutations within the anonymous formula.
-
-    Args:
-        target_formula: The target formula as a string or pymatgen Composition object.
-        prototype_path: Path to the directory containing prototype files.
-
-    Returns:
-        Path to the directory containing the generated prototypes.
-
-    Raises:
-        ValueError: If the target formula is not a string or pymatgen Composition object.
-        AssertionError: If the prototype path is not a valid directory.
-    """
-
-    assert os.path.isdir(prototype_path), 'Prototype path must be a valid directory'
-
-    print(f'\nSearching for structure prototypes for: {target_formula}')
-    print('Structure prototype dataset:' + prototype_path)
-
-    if isinstance(target_formula, str):
-        # Formula to pymatgen Composition
-        composition = Composition(target_formula)
-    elif isinstance(target_formula, Composition):
-        composition = target_formula
-    else:
-        raise ValueError('Target formula must be a string or a pymatgen Composition object')
-    assert os.path.isdir(prototype_path), 'Prototype path must be a valid directory'
-
-    aFormula = composition.anonymized_formula
-    nElements = composition.to_data_dict['nelements']
-
-    # Initial prototype dataset scan – collect matching structures in memory only
-    fileList = natsorted(os.listdir(prototype_path))
-    total = len(fileList)
-
-    allS = 0           # total files inspected
-    nEl = 0            # structures with correct number of elements
-    aF = 0             # structures matching anonymized formula
-    # Keep both the original filename (base_name) and the Structure to avoid name collisions later
-    prototypeList: List[Tuple[str, Structure]] = []
-
-    for file in fileList:
-        allS += 1
-        if os.path.splitext(file)[1] != '.POSCAR':
-            continue
-
-        s = Structure.from_file(os.path.join(prototype_path, file))
-        if s.n_elems == nElements:
-            nEl += 1
-            if Composition(s.formula).anonymized_formula == aFormula:
-                base_name = os.path.splitext(os.path.basename(file))[0]
-                prototypeList.append((base_name, s))
-                aF += 1
-                if aF % 100 == 0:
-                    print(str(aF) + ' prototype structures identified.')
-
-        if total and allS % 5000 == 0:
-            print(str(round(allS / total * 100, 1)) + '% database scan completed.')
-
-    print('\nTotal structures detected: ' + str(allS))
-    print(str(nElements) + '-element structures: ' + str(nEl))
-    if total:
-        print(str(nElements) + '-element structures fraction: ' + str(round(nEl / total * 100)) + '%\n')
-    else:
-        print(str(nElements) + '-element structures fraction: 0%\n')
-    print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(aF))
-    if nEl:
-        print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%\n')
-    else:
-        print(aFormula + ' Fraction from ' + str(nElements) + '-element: 0%\n')
-
-    # Substitution elements combination.
-    sEL = sorted_elements_list(composition)
-    sELtarget = [item for sublist in sEL for item in sublist]
-
-    # Verify need for permutations
-    permN = 1
-    for multiples in sEL:
-        permN = permN * math.factorial(multiples.__len__())
-
-    if permN > 1:
-        print('Target composition has degenerate anonymous formula thus requires permutations.')
-        print(f'Up to {Fore.BLUE}{Style.BRIGHT}{str(permN)}{Style.RESET_ALL} per structure.\n')
-    else:
-        print('Target composition indicates discrete element substitution.\n')
-
-    # Standardized output directory naming: <formula>-local-prototypes
-    formula_str = str(target_formula).replace(' ', '')
-    out_dir = f"{formula_str}-local-prototypes"
-    # Ensure we are not writing back into the prototype source directory
-    assert os.path.abspath(out_dir) != os.path.abspath(prototype_path), 'Output directory must differ from prototype_path'
-
-    print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
-    try:
-        os.mkdir(out_dir)
-        print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
-    except FileExistsError:
-        print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
-
-    # Substitute over all candidates over all of their permutations
-    allS = 0
-    for base_name, s in prototypeList:
-
-        permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
-        spGroupA = SpacegroupAnalyzer(s)
-        # Preserve original base_name to avoid overwriting files from different prototypes
-        newNameRoot = 'local-' + str(spGroupA.get_crystal_system()) + '-' + base_name
-
-        p = 0
-        for permut in permuts:
-            d = {}
-            p = p + 1
-            st = s.copy()
-            for e in range(permut.__len__()):
-                d.update({Element(permut[e]): Element(sELtarget[e])})
-            st.replace_species(d)
-            if permuts.__len__() > 1:
-                newName = newNameRoot + '-p' + str(p) + '.POSCAR'
-            else:
-                newName = newNameRoot + '.POSCAR'
-            sP = Poscar(st)
-            sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
-        allS = allS + p
-        if allS % 100 == 0:
-            print(str(allS) + ' substitutions complete.')
-    print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
-    return out_dir
-
-def run_MPDD(
-        target_formula: Union[str, Composition],
-        MPDD: Database,
-        collections: List[str],
-        target_prototypes: Literal['native', 'non-native'],
-        filter_prototypes: Literal['material.structID', 'material.volNormStructID'],
-        limit: int
-    ) -> str:
-    """
-    Run prototype identification and elemental substitution for permutations within the anonymous formula using the MPDD database.
-
-    Args:
-        target_formula: The target formula as a string or pymatgen Composition object.
-        MPDD: A pymongo Database object corresponding to the MPDD database.
-        collections: List of collection names to search in.
-        target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
-        filter_prototypes: Specifies the prototype filter to use.
-        limit: The maximum number of prototypes to generate.
-
-    Returns:
-        Path to the directory containing the generated prototypes.
-
-    Raises:
-        ValueError: If the target formula is not a string or pymatgen Composition object.
-        AssertionError: If no collections are specified or if MPDD is not a pymongo Database object.
-    """
-
-    assert len(collections) > 0, 'At least one collection must be specified'
-    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
-    
-    print(f'\nSearching for structure prototypes for: {Fore.YELLOW}{Style.BRIGHT}{target_formula}{Style.RESET_ALL}')
-    print(f'Using MPDD Database with collections: {Fore.MAGENTA}{Style.BRIGHT}{", ".join(collections)}{Style.RESET_ALL}')
-
-    if isinstance(target_formula, str):
-        # Formula to pymatgen Composition
-        composition = Composition(target_formula)
-    elif isinstance(target_formula, Composition):
-        composition = target_formula
-    else:
-        raise ValueError('Target formula must be a string or a pymatgen Composition object')
-    assert len(collections) > 0, 'At least one collection must be specified'
-    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object corresponding to the MPDD database or another database following (at least partially) the same schema'
-
-    aFormula = composition.anonymized_formula
-    rFormula = composition.reduced_formula
-
-    formula_str = str(target_formula).replace(' ', '')
-    source_str = f"MPDD({'-'.join(collections)})"
-
-    if target_prototypes == 'native':
-
-        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
-
-        try:
-            os.mkdir(out_dir)
-            print('Directory created for MPDD prototypes: ' + out_dir)
-        except FileExistsError:
-            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
-
-        for col in collections:
-            print('Looking through: ' + col)
-
-            pipeline = [
-                {"$match": {"material.reducedFormula": rFormula}},
-                {"$group": {
-                    "_id": "$" + filter_prototypes,
-                    "document": {"$first": "$$ROOT"}
-                }},
-                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$facet": {
-                    "data": [ {"$limit": limit} ],
-                    "meta": [ {"$count": "total"} ]
-                }}
-            ]
-
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
-            )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
-
-            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
-            aggregated_data = facet.get("data", [])
-            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
-            print(
-                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
-                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
-            )
-
-            for entry in aggregated_data:
-
-                e = entry['document']
-
-                s = Structure.from_dict(json.loads(e['material']['mgJSON']))
-                spGroupA = SpacegroupAnalyzer(s)
-
-                name = e['material']['formula'].replace(' ', '') + '-' + str(
-                    spGroupA.get_crystal_system())
-
-                if 'parentDatabaseID' in e['metadata']:
-                    name = name + '-' + e['metadata']['parentDatabaseID']
-
-                else:
-                    name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
-
-                p = Poscar(s)
-                p.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
-        print('Done.\n')
-
-        return out_dir
-
-    elif target_prototypes == 'non-native':
-
-        print('\nDetecting Matching Input Structures:')
-        foundTotal = 0
-        for col in collections:
-            foundN = MPDD[col].count_documents({'material.anonymizedFormula' : aFormula})
-            foundTotal += foundN
-            print(f'Found {Fore.GREEN}{Style.BRIGHT}{str(foundN)}{Style.RESET_ALL} in {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
-
-        print(f'\nTotal of {Fore.GREEN}{Style.BRIGHT}{str(foundTotal)}{Style.RESET_ALL} structures available.\n')
-
-        # Substitution elements combination.
-        sEL = sorted_elements_list(composition)
-        sELtarget = [item for sublist in sEL for item in sublist]
-
-        # Verify need for permutations
-        permN = 1
-        for multiples in sEL:
-            permN = permN * math.factorial(multiples.__len__())
-
-        if permN > 1:
-            print('Target composition has degenerate anonymous formula thus requires permutations.')
-            print(f'Up to {Fore.BLUE}{Style.BRIGHT}{str(permN)}{Style.RESET_ALL} per structure.\n')
-        else:
-            print('Target composition indicates discrete element substitution.\n')
-
-        out_dir = f"{formula_str}-{source_str}-prototypes"
-        print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
-
-        try:
-            os.mkdir(out_dir)
-            print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
-        except FileExistsError:
-            print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
-
-        # Substitute over all prototypes over all of their permutations
-        allS = 0
-        for col in collections:
-            print(f'Looking through: {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
-
-            pipeline = [
-                {"$match": {"material.anonymizedFormula": aFormula}},
-                {"$group": {
-                    "_id": "$" + filter_prototypes,
-                    "document": {"$first": "$$ROOT"}
-                }},
-                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$facet": {
-                    "data": [ {"$limit": limit} ],
-                    "meta": [ {"$count": "total"} ]
-                }}
-            ]
-
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
-            )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
-            
-            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
-            aggregated_data = facet.get("data", [])
-            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
-            
-            print(
-                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
-                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
-            )
-
-            for entry in aggregated_data:
-
-                prototype = entry['document']
-
-                s = Structure.from_dict(json.loads(prototype['material']['mgJSON']))
-
-                permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
-                spGroupA = SpacegroupAnalyzer(s)
-
-                nameRoot = prototype['material']['reducedFormula'] + '-' + str(
-                    spGroupA.get_crystal_system())
-
-                if 'parentDatabaseID' in prototype['metadata']:
-                    nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/','-').replace(':','-').replace('-','')
-
-                p = 0
-                for permut in permuts:
-                    d = {}
-                    p += 1
-                    st = s.copy()
-                    for e in range(permut.__len__()):
-                        d.update({Element(permut[e]): Element(sELtarget[e])})
-                    st.replace_species(d)
-                    if permuts.__len__() > 1:
-                        name = nameRoot + '-p' + str(p) + '.POSCAR'
-                    else:
-                        name = nameRoot + '.POSCAR'
-                    sP = Poscar(st)
-                    sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name))
-                allS = allS + p
-                if allS % 1000 == 0:
-                    print(str(allS) + ' substitutions complete.')
-
-        print(
-            f"Total number of unique prototypes: {Fore.GREEN}{Style.BRIGHT}{len(aggregated_data)}{Style.RESET_ALL} * {Fore.BLUE}{Style.BRIGHT}{permN}{Style.RESET_ALL} permutations each\n"
-            f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.'
-        )
-
-        return out_dir
-
-def run_MPDD_devs(
-        target_formula: Union[str, Composition],
-        devs: Dict[str, int],
-        MPDD: Database,
-        collections: List[str],
-        target_prototypes: Literal['native', 'non-native'],
-        filter_prototypes: Literal['material.structID', 'material.volNormStructID'],
-        limit: int
-    ) -> str:
-    """
-    Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
-
-    Args:
-        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
-        devs: Dictionary with element symbols as keys and their allowed deviations as values.
-        MPDD: A pymongo Database object corresponding to the MPDD database.
-        collections: List of collection names to search in.
-        target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
-        filter_prototypes: Specifies the prototype filter to use.
-        limit: The maximum number of prototypes to generate.
-
-    Returns:
-        Path to the directory containing the generated prototypes.
-    """
-    
-    assert len(collections) > 0, 'At least one collection must be specified'
-    assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
-    
-    if isinstance(target_formula, str):
-        # Formula to pymatgen Composition
-        composition = Composition(target_formula)
-    elif isinstance(target_formula, Composition):
-        composition = target_formula
-    else:
-        raise ValueError('Target formula must be a string or a pymatgen Composition object')
-    
-    # Target formula and standardized directory naming components
-    rangesStr = f"({','.join(str(r) for r in devs.values())})"
-    formula_str = f"{str(target_formula).replace(' ', '')}±{rangesStr}"
-    source_str = f"MPDD({'-'.join(collections)})"
-
-    target_composition_dict = {el: round(amt / composition.num_atoms * 1000, 0)
-                                    for el, amt in composition.as_dict().items()}
-
-    print('\nSearching for structure prototypes for: ' + formula_str)
-    print('Using MPDD Database with collections: ' + ', '.join(collections))
-
-    if target_prototypes == 'native':
-
-        # ************************* Try to find materials already in the MPDD database **********************************
-
-        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
-
-        try:
-            os.mkdir(out_dir)
-            print('Directory created for MPDD prototypes: ' + out_dir)
-        except FileExistsError:
-            print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
-
-        # Query for matching MPDD entries
-        nativeQuery = comp2comp_q(target_composition_dict, devs)
-
-        targetPresent = 0
-        for col in collections:
-            print('Looking through: ' + col)
-
-            pipeline = [
-                {"$match": nativeQuery},
-                {"$group": {
-                    "_id": "$" + filter_prototypes,
-                    "document": {"$first": "$$ROOT"}
-                }},
-                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$facet": {
-                    "data": [ {"$limit": limit} ],
-                    "meta": [ {"$count": "total"} ]
-                }}
-            ]
-
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
-            )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
-
-            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
-            aggregated_data = facet.get("data", [])
-            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
-            print(
-                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
-                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
-            )
-
-            for entry in aggregated_data:
-
-                e = entry['document']
-
-                s = Structure.from_dict(json.loads(e['material']['mgJSON']))
-                spGroupA = SpacegroupAnalyzer(s)
-
-                name = e['material']['formula'].replace(' ', '') + '-' + str(
-                    spGroupA.get_crystal_system())
-
-                if 'parentDatabaseID' in e['metadata']:
-                    name = name + '-' + e['metadata']['parentDatabaseID']
-
-                else:
-                    name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
-
-                p = Poscar(s)
-                p.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
-                targetPresent += 1
-
-        print('Done.')
-        print(f'{targetPresent} target materials found in MPDD.\n')
-
-        return out_dir
-
-    elif target_prototypes == 'non-native':
-        # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
-
-        # Sorted fractions dictionary query
-        sortedFractionsDictQuery = comp2acomp_q(target_composition_dict, devs)
-
-        # ************************************** Count prototypes ********************************************************
-
-        print('\nDetecting Matching Input Structures:')
-        foundTotal = 0
-        for col in collections:
-            foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
-            foundTotal += foundN
-            print('Found ' + str(foundN) + ' in ' + col)
-
-        print('\nTotal of ' + str(foundTotal) + ' structures available.\n')
-
-        # ********************************* Substitution elements combination ********************************************
-
-        out_dir = f"{formula_str}-{source_str}-prototypes"
-        print('Final Prototype Directory: ' + out_dir)
-
-        try:
-            os.mkdir(out_dir)
-            print('Final directory created.')
-        except FileExistsError:
-            print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
-
-        # All generated prototypes
-        allS = 0
-        # List of permutation numbers
-        permutNList = []
-
-        # Search all collections using the compound index for the first 8 components
-        for col in collections:
-            print('Looking through: ' + col)
-
-            pipeline = [
-                {"$match": sortedFractionsDictQuery},
-                {"$group": {
-                    "_id": "$" + filter_prototypes,
-                    "document": {"$first": "$$ROOT"}
-                }},
-                {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$facet": {
-                    "data": [ {"$limit": limit} ],
-                    "meta": [ {"$count": "total"} ]
-                }}
-            ]
-
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
-            )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, hint={
-                'material.sortedFractionsDict.c1': 1,
-                'material.sortedFractionsDict.c2': 1,
-                'material.sortedFractionsDict.c3': 1,
-                'material.sortedFractionsDict.c4': 1,
-                'material.sortedFractionsDict.c5': 1,
-                'material.sortedFractionsDict.c6': 1,
-                'material.sortedFractionsDict.c7': 1,
-                'material.sortedFractionsDict.c8': 1
-            }, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
-
-            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
-            aggregated_data = facet.get("data", [])
-            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
-            print(
-                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
-                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
-            )
-
-            for entry in aggregated_data:
-
-                prototype = entry['document']
-
-                s = Structure.from_dict(json.loads(prototype['material']['mgJSON']))
-                c = Composition(s.formula)
-
-                cDict = dict(c.fractional_composition.as_dict())
-                for e in cDict:
-                    cDict[e] = int(cDict[e] * 1000)
-
-                elements = [element for element in cDict]
-
-                oAS = ordered_allowed_substitutions(target_composition_dict, devs, cDict)
-
-                permutNList += [len(oAS)]
-
-                spGroupA = SpacegroupAnalyzer(s)
-
-                nameRoot = prototype['material']['reducedFormula'] + '-' + \
-                        str(spGroupA.get_crystal_system())
-
-                if 'parentDatabaseID' in prototype['metadata']:
-                    nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/', '-').replace(':','-').replace('-', '')
-
-                p = 1
-                for substitutions in oAS:
-                    d = {}
-                    st = s.copy()
-                    for o, r in zip(elements, substitutions):
-                        d.update({Element(o): Element(r)})
-                    st.replace_species(d)
-
-                    if len(oAS) > 1:
-                        name = nameRoot + '-p' + str(p) + '.POSCAR'
-                        p += 1
-                    else:
-                        name = nameRoot + '.POSCAR'
-                    sP = Poscar(st)
-                    sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name))
-                allS = allS + p
-                if allS % 50 == 0:
-                    print(str(allS) + ' substitutions complete.')
-
-        if allS>0:
-            print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {formula_str} prototypes.')
-            print(f'Mean number of permutations: {mean(permutNList)}')
-            print(f'Min / Max number of permutations: {min(permutNList)} / {max(permutNList)}')
-        else:
-            print('No prototypes were generated.')
-
-        return out_dir
-
-def sorted_elements_list(
-        comp: Composition
-    ) -> List[List[str]]:
-    """
-    Return elements grouped by their occurrence in the formula, starting from the least common.
-
-    Args:
-        comp: A pymatgen Composition object.
-
-    Returns:
-        List of lists of element symbols grouped by their occurrence in the formula.
-    """
-
-    fractions = re.sub(r'[A-z]+', '', comp.formula).split()
-    elements = re.sub(r'[0-9]+', '', comp.formula).split()
-    compl = []
-    for i in range(elements.__len__()):
-        compl.append([elements[i],int(fractions[i])])
-    compl.sort(key=itemgetter(1))
-    sortedEL = [[x for x, _ in g]
-           for _, g in groupby(compl,key=itemgetter(1))]
-    return sortedEL
-
-def element_permutations(
-        sEL: List[List[str]]
-    ) -> List[List[str]]:
-    """
-    Return all permutations of elements within the groups that conserve the anonymous formula of the compound.
-
-    Args:
-        sEL: List of lists of element symbols grouped by their occurrence in the formula.
-
-    Returns:
-        List of lists of element symbols representing all permutations.
-    """
-
-    generatingList = [[list(i) for i in permutations(lev)] for lev in sEL]
-    outList = [[item for sublist in list(permutation) for item in sublist] for permutation in product(*generatingList)]
-    return outList
-
-def comp2acomp_q(
-        comp_dict: Dict[str, int],
-        devs: Dict[str, int]
-    ) -> Dict[str, Union[Dict[str, int], int]]:
-    """
-    Return a MPDD query for anonymous composition space with N components.
-
-    Args:
-        comp_dict: Dictionary with element symbols as keys and their amounts as values.
-        devs: Dictionary with element symbols as keys and their allowed deviations as values.
-
-    Returns:
-        Dictionary representing the MPDD query.
-    """
-
-    eVals = []
-    for e in comp_dict:
-        eVals.append([comp_dict[e], devs[e]])
-    eVals.sort(key = lambda x: x[0], reverse=True)
-    result = dict()
-    for eVal, c in zip(eVals, range(eVals.__len__())):
-        result.update({f'material.sortedFractionsDict.c{c+1}': {'$gte': (eVal[0]-eVal[1]), '$lte': (eVal[0]+eVal[1])}})
-    result.update({f'material.nComponents': len(eVals)})
-    return result
-
-def comp2comp_q(
-        comp_dict: Dict[str, int],
-        devs: Dict[str, int]
-    ) -> Dict[str, Union[Dict[str, int], int]]:
-    """
-    Return a MPDD query for the given composition dictionary with permil fractions.
-
-    Args:
-        comp_dict: Dictionary with element symbols as keys and their amounts as values.
-        devs: Dictionary with element symbols as keys and their allowed deviations as values.
-
-    Returns:
-        Dictionary representing the MPDD query.
-    """
-
-    meanComposition = Composition(' '.join(''.join((key, str(val))) for (key, val) in comp_dict.items()))
-    mpddQuery = dict()
-    mpddQuery.update({'material.system': meanComposition.chemical_system})
-    for e in comp_dict:
-        key = 'material.compositionDictionary.' + e
-        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] - devs[e]) / 1000}})
-    return mpddQuery
-
-def ordered_allowed_substitutions(
-        target_comp_dict: Dict[str, int],
-        devs: Dict[str, int],
-        prototype_comp_dict: Dict[str, int]
-    ) -> List[List[str]]:
-    """
-    Return elements grouped by their occurrence in the formula, starting from the least common.
-
-    Args:
-        target_comp_dict: Dictionary with element symbols as keys and their amounts as values.
-        devs: Dictionary with element symbols as keys and their allowed deviations as values.
-        prototype_comp_dict: Dictionary with element symbols as keys and their amounts as values for the prototype.
-
-    Returns:
-        List of lists of element symbols representing allowed substitutions.
-    """
-
-    # Finds what elements can be used for substitution
-    allInRangeSubstitutions = []
-    for c in prototype_comp_dict:
-        inRangeSubstitutions = []
-        val = prototype_comp_dict[c]
-        for e in target_comp_dict:
-            if target_comp_dict[e] - devs[e] <= val and target_comp_dict[e] + devs[e] >= val:
-                inRangeSubstitutions += [str(e)]
-        allInRangeSubstitutions.append(inRangeSubstitutions)
-
-    # E.g. [['Al', 'Fe', 'N'], ['Al', 'Fe', 'N'], ['N']]
-    allInRangeSubstitutionPermutations = list(product(*allInRangeSubstitutions))
-    allAllowedSubstitutions = []
-    for irsp in allInRangeSubstitutionPermutations:
-        if len(irsp)==len(set(irsp)):
-            allAllowedSubstitutions += [irsp]
-    # E.g. [('Al', 'Fe', 'N'), ('Fe', 'Al', 'N')]
-
-    return allAllowedSubstitutions
 
 # Convenience High-Level API Classes **********************************************************
 
@@ -930,6 +104,9 @@ class CrystALLSearch:
         sys.stdout = stdout
 
         self.MPDD = None
+        self.prototype_path: Optional[str] = None
+        self._optimade_provider_registry: Dict[str, Dict[str, str]] = {}
+        self._optimade_active_base_urls: List[str] = []
         
         # Internal parameters to use during the processing steps
         self.available_calculators: Dict[str, List[str]] = {}
@@ -1142,6 +319,175 @@ class CrystALLSearch:
         self.collections = collections
         print(f"Using collections: {Fore.GREEN}{Style.BRIGHT}{', '.join(collections)}{Style.RESET_ALL}")
         
+    def setup_OPTIMADE(
+            self,
+            providers: List[str] = None,
+            base_urls: List[str] = None,
+            exclude_providers: List[str] = None,
+            check_reachable: bool = False
+    ) -> List[Dict[str, Union[str, bool, None]]]:
+        """
+        Configure OPTIMADE providers for use in generate_optimade().
+
+        On first call (or any subsequent call), fetches the full provider registry
+        via optimade.utils.get_providers() and builds an internal registry. The
+        selected providers are stored as self._optimade_active_base_urls and passed
+        directly to OptimadeClient(base_urls=...) in run_optimade, bypassing the
+        expensive per-provider HTTP cascade that get_all_databases() performs at
+        query time.
+
+        Args:
+            providers: List of provider IDs/aliases to activate (e.g. ['mp', 'cod']).
+                If None and base_urls is also None, defaults to ['mp'] (Materials
+                Project) — the most widely-used OPTIMADE provider and the natural
+                analogue of crystALL's existing MPDD integration.
+            base_urls: Explicit provider base URLs to use directly (advanced use).
+                If provided, bypasses registry lookup for those entries. These are
+                appended to any resolved provider URLs from `providers`.
+            exclude_providers: Provider IDs to explicitly deactivate, regardless of
+                what `providers` specifies.
+            check_reachable: If True, performs a lightweight GET /v1/info ping on
+                each provider base_url and sets the `reachable` flag accordingly.
+                Opt-in because it requires one HTTP call per provider.
+
+        Returns:
+            List of dicts, one per known provider in the registry, each containing:
+                id          : provider identifier string (e.g. 'mp')
+                name        : human-readable provider name
+                base_url    : provider index base URL
+                description : short description from the registry
+                active      : True if currently selected for querying
+                reachable   : True/False if check_reachable=True, else None
+        """
+
+        try:
+            from crystall.optimade import list_optimade_providers
+        except ImportError as e:
+            raise ImportError(
+                "setup_OPTIMADE requires the 'optimade[http_client]' package. "
+                "Install it with: pip install 'optimade[http_client]'"
+            ) from e
+
+        try:
+            provider_status = list_optimade_providers(check_reachable=check_reachable)
+        except Exception as e:
+            if self._optimade_provider_registry:
+                provider_status = [
+                    {
+                        'id': provider_id,
+                        'name': provider.get('name', provider_id),
+                        'description': provider.get('description', ''),
+                        'base_url': provider.get('base_url', ''),
+                        'reachable': None,
+                    }
+                    for provider_id, provider in self._optimade_provider_registry.items()
+                ]
+                print(
+                    f"{Style.DIM}[crystALL] Could not refresh OPTIMADE provider registry; using cached registry. ({e}){Style.RESET_ALL}"
+                )
+            else:
+                raise RuntimeError(
+                    'Failed to fetch the OPTIMADE provider registry and no cached registry is available.'
+                ) from e
+
+        registry: Dict[str, Dict[str, str]] = {
+            provider['id']: {
+                'name': provider['name'],
+                'description': provider['description'],
+                'base_url': provider['base_url'],
+            }
+            for provider in provider_status
+        }
+
+        if not registry:
+            raise RuntimeError('OPTIMADE provider registry is empty or could not be parsed.')
+
+        self._optimade_provider_registry = registry
+
+        exclude_ids = set(exclude_providers or [])
+        if providers is None and base_urls is None:
+            active_ids = {'mp'}
+        elif providers is None:
+            active_ids = set()
+        else:
+            active_ids = set(providers)
+
+        unknown_ids = sorted(active_ids.difference(registry.keys()))
+        if unknown_ids:
+            known_ids = ', '.join(sorted(registry.keys()))
+            raise ValueError(
+                f"Unknown OPTIMADE provider ID(s): {', '.join(unknown_ids)}. Known provider IDs: {known_ids}"
+            )
+
+        active_ids.difference_update(exclude_ids)
+
+        resolved_base_urls: List[str] = [registry[provider_id]['base_url'] for provider_id in sorted(active_ids)]
+        custom_base_urls = []
+        for url in base_urls or []:
+            normalized = str(url).rstrip('/')
+            if normalized and normalized not in resolved_base_urls and normalized not in custom_base_urls:
+                custom_base_urls.append(normalized)
+        self._optimade_active_base_urls = resolved_base_urls + custom_base_urls
+
+        reachability = {}
+        if check_reachable:
+            from urllib.request import Request, urlopen
+
+            for provider_id, provider in registry.items():
+                info_url = provider['base_url'].rstrip('/') + '/v1/info'
+                try:
+                    request = Request(info_url, headers={'User-Agent': 'crystALL'})
+                    with urlopen(request, timeout=3):
+                        reachability[provider_id] = True
+                except Exception:
+                    reachability[provider_id] = False
+
+        provider_status = []
+        for provider_id in sorted(registry.keys()):
+            provider = registry[provider_id]
+            provider_status.append({
+                'id': provider_id,
+                'name': provider['name'],
+                'base_url': provider['base_url'],
+                'description': provider['description'],
+                'active': provider_id in active_ids,
+                'reachable': reachability.get(provider_id) if check_reachable else None,
+            })
+
+        for url in custom_base_urls:
+            provider_status.append({
+                'id': None,
+                'name': 'custom',
+                'base_url': url,
+                'description': 'Custom provider base URL',
+                'active': True,
+                'reachable': None,
+            })
+
+        print('\nOPTIMADE provider configuration:')
+        header = f"{'ID':<12} {'Name':<36} {'Status':<12}"
+        if check_reachable:
+            header += ' Reachable'
+        print(header)
+
+        for provider in provider_status:
+            provider_id = provider['id'] if provider['id'] is not None else 'custom'
+            name = provider['name'][:36]
+            status = f"{Fore.GREEN}{Style.BRIGHT}✓ active{Style.RESET_ALL}" if provider['active'] else f"{Style.DIM}— inactive{Style.RESET_ALL}"
+            line = f"{provider_id:<12} {name:<36} {status:<12}"
+            if check_reachable:
+                reachable = provider['reachable']
+                if reachable is True:
+                    reachable_text = f"{Fore.GREEN}{Style.BRIGHT}yes{Style.RESET_ALL}"
+                elif reachable is False:
+                    reachable_text = f"{Fore.RED}{Style.BRIGHT}no{Style.RESET_ALL}"
+                else:
+                    reachable_text = f"{Style.DIM}n/a{Style.RESET_ALL}"
+                line += f" {reachable_text}"
+            print(line)
+
+        return provider_status
+        
     def generate_MPDD(
             self,
             target_prototypes: Literal['native', 'non-native'] = 'non-native',
@@ -1162,7 +508,7 @@ class CrystALLSearch:
             AssertionError: If no connection to the MPDD has been established, or if no collections have been specified.
         """
 
-        assert self.MPDD is not None, 'No database connection identified. Please run `connect_MPDD` first.'
+        assert self.MPDD is not None, 'No database connection identified. Please run `setup_MPDD` first.'
         assert self.collections, 'No collections identified. Please provide a list of collections to search in.'
         assert devs is None or isinstance(devs, dict), 'Deviations must be a dictionary with element symbols as keys and integer values as deviations'
         
@@ -1172,6 +518,53 @@ class CrystALLSearch:
             self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
         inputFiles = natsorted(os.listdir(self.prototype_path))
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
+
+
+    def generate_optimade(
+        self,
+        target_prototypes: Literal['native', 'non-native'] = 'non-native',
+        limit: int = 1000,
+        parallel: bool = True,
+    ) -> None:
+        """
+        Generate prototype structures from OPTIMADE-registered databases.
+
+        Fetches structures matching the target composition from the OPTIMADE
+        providers configured via setup_OPTIMADE(). If setup_OPTIMADE() has not
+        been called, defaults to the Materials Project provider (mp).
+
+        Provider selection is exclusively managed by setup_OPTIMADE() — this
+        method accepts no provider-related arguments by design.
+
+        Args:
+            target_prototypes: 'native' to fetch structures already in the target
+                composition (written as-is), or 'non-native' to fetch anonymous-
+                formula matches and apply elemental substitution (default).
+            limit: Maximum number of structures to fetch per provider. Default 1000.
+            parallel: Whether to parallelise the substitution + write stage.
+
+        Returns:
+            None. Sets self.prototype_path and populates self.prototypes.
+        """
+        assert self.formula is not None, 'No target formula identified. Please run `setup_search` first.'
+        
+        if not getattr(self, '_optimade_active_base_urls', None):
+            print(
+                "[crystALL] OPTIMADE providers not configured — defaulting to Materials Project (mp).\n"
+                "Run CrystALLSearch.setup_OPTIMADE() to customise provider selection."
+            )
+            self.setup_OPTIMADE()  # activates 'mp' default
+
+        self.prototype_path = run_optimade(
+            target_formula=self.formula, 
+            base_urls=self._optimade_active_base_urls, 
+            target_prototypes=target_prototypes, 
+            limit=limit, 
+            parallel=parallel
+        )
+        inputFiles = natsorted(os.listdir(self.prototype_path))
+        self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
+
 
     def generate_local(
             self,
@@ -1192,6 +585,50 @@ class CrystALLSearch:
         self.prototype_path = run_local(self.target_formula, self.prototype_path)
         inputFiles = natsorted(os.listdir(self.prototype_path))
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
+
+    def generate_optimade(
+            self,
+            target_prototypes: Literal['native', 'non-native'] = 'non-native',
+            limit: int = 1000,
+            parallel: bool = True
+    ) -> None:
+        """
+        Generate prototype materials from OPTIMADE providers based on the target formula.
+
+        Provider selection is exclusively the responsibility of setup_OPTIMADE(). This method
+        accepts no provider-related arguments. If setup_OPTIMADE() has not been called,
+        it is called automatically with no arguments, activating the Materials Project
+        (mp) as the default provider.
+
+        Args:
+            target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
+                Defaults to 'non-native'.
+            limit: The maximum number of prototypes to retrieve per provider. Defaults to 1000.
+            parallel: If True, process candidate structures in parallel. Defaults to True.
+
+        Raises:
+            ImportError: If the 'optimade[http_client]' package is not installed.
+        """
+
+        assert self.target_formula is not None, 'No target formula identified. Please provide a formula first.'
+
+        if not self._optimade_active_base_urls:
+            print(
+                "[crystALL] OPTIMADE providers not configured — defaulting to Materials Project (mp).\n"
+                "Run CrystALLSearch.setup_OPTIMADE() to customise provider selection."
+            )
+            self.setup_OPTIMADE()
+
+        from crystall.prototypes import run_optimade
+        self.prototype_path = run_optimade(
+            target_formula=self.target_formula,
+            base_urls=self._optimade_active_base_urls,
+            target_prototypes=target_prototypes,
+            limit=limit,
+            parallel=parallel,
+        )
+        inputFiles = natsorted(os.listdir(self.prototype_path))
+        self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(
             self,
