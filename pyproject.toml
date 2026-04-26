@@ -43,6 +43,7 @@ dependencies = [
     "scipy",
     "scikit-learn",
     "uv",
+    "duecredit",
 ]
 
 [tool.setuptools]
