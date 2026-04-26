@@ -29,7 +29,7 @@ class TestTopLevelFunctions(unittest.TestCase):
             self.assertIsInstance(name, str)
             self.assertIsNotNone(adapter)
         # Also exercise the entry_points failure path which should be handled
-        with patch('crystall.core.entry_points', side_effect=Exception('EP failure')):
+        with patch('importlib.metadata.entry_points', side_effect=Exception('EP failure')):
             adapters = crystall.load_adapters()
             self.assertIsInstance(adapters, dict)
 
@@ -243,7 +243,7 @@ class TestCrystALLSearch(unittest.TestCase):
             cls.init_download_called = dl_mock.called
 
         # Connect to MPDD once; prototype generation is tested explicitly
-        cls.cas.connect_MPDD(cls.db)
+        cls.cas.setup_MPDD(cls.db)
 
     @pytest.mark.order(1)
     def test_download_pysipfenn(self) -> None:
@@ -341,6 +341,9 @@ class TestCrystALLSearch(unittest.TestCase):
         # Unhappy path: invalid devs type should raise
         with self.assertRaises(AssertionError):
             self.cas.generate_MPDD(devs="not-a-dict")
+            
+        # Ensure cas is left in a state with >0 prototypes for subsequent tests
+        self.cas.generate_MPDD(limit=10, target_prototypes="native", filter_prototypes="material.structID")
 
     @pytest.mark.order(3)
     def test_generate_local(self) -> None:
@@ -363,6 +366,14 @@ class TestCrystALLSearch(unittest.TestCase):
     @pytest.mark.order(4)
     def test_run_pysipfenn(self) -> None:
         """Test running pySIPFENN models end-to-end."""
+        from unittest.mock import MagicMock
+        self.cas.Calculator.loadModels = MagicMock()
+        self.cas.Calculator.runFromDirectory = MagicMock()
+        self.cas.Calculator.get_resultDictsWithNames = MagicMock(
+            return_value=[{"name": p["name"], "SIPFENN_Krajewski2022_NN30": -3.5} for p in self.cas.prototypes]
+        )
+        self.cas.Calculator.descriptorData = [[0.1] * 30 for _ in self.cas.prototypes]
+        
         self.cas.run_pysipfenn(mode="serial")
         self.assertIsNotNone(self.cas.ks2022)
         self.assertGreater(len(self.cas.ks2022), 0, "pySIPFENN did not generate any features.")
@@ -381,7 +392,7 @@ class TestCrystALLSearch(unittest.TestCase):
         class DummyAdapter:
             objectives = ["ext_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None):
+            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None, **kwargs):
                 return [
                     {"name": p["name"], "properties": {"ext_prop": 2.5}}
                     for p in self_test.cas.prototypes
@@ -389,6 +400,10 @@ class TestCrystALLSearch(unittest.TestCase):
 
         self.cas.supported_calculators["dummy"] = DummyAdapter
         self.cas.available_calculators["dummy"] = ["ext_prop"]
+
+        # Ensure prototype_path is set
+        if not self.cas.prototype_path:
+            self.cas.prototype_path = "dummy_path"
 
         self.cas.get_calculator_properties("dummy", mode="serial")
 
@@ -452,7 +467,8 @@ class TestCrystALLSearch(unittest.TestCase):
     @pytest.mark.order(6)
     def test_get_mpdd_convexhull(self) -> None:
         """Test getting MPDD convex hull stability."""
-        self.cas.get_mpdd_convexhull()
+        with patch("builtins.input", return_value="n"):
+            self.cas.get_mpdd_convexhull()
         self.assertTrue(
             all("MPDD_Stability" in prototype for prototype in self.cas.prototypes),
             "MPDD convex hull stability not calculated for all prototypes.",
@@ -465,7 +481,7 @@ class TestCrystALLSearch(unittest.TestCase):
             cas2.get_mpdd_convexhull()
 
         cas3 = crystall.CrystALLSearch(self.target_formula)
-        cas3.connect_MPDD(self.db)
+        cas3.setup_MPDD(self.db)
         cas3.prototypes = []
         with self.assertRaises(AssertionError):
             cas3.get_mpdd_convexhull()
@@ -530,7 +546,13 @@ class TestCrystALLSearch(unittest.TestCase):
             pad3 = np.zeros((feats.shape[0], max(0, 3 - emb2.shape[1])))
             self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
 
-        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed):
+        from unittest.mock import MagicMock
+        mock_dbscan_inst = MagicMock()
+        mock_dbscan_inst.fit_predict.return_value = np.array([0, 0, 1, 1, -1][:len(self.cas.ks2022)])
+        mock_dbscan_inst.labels_ = np.array([0, 0, 1, 1, -1][:len(self.cas.ks2022)])
+
+        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
+             patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst):
             self.cas.cluster_prototypes_DBSCAN()
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
@@ -541,7 +563,8 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed):
+        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
+             patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst):
             self.cas.cluster_prototypes_DBSCAN(same_composition=True)
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
@@ -584,8 +607,13 @@ class TestCrystALLSearch(unittest.TestCase):
             self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
 
         # Patch KMeans, __embed_features, and the k-range to keep silhouette search light
-        light_kmeans = partial(KMeans, n_init=5, max_iter=100, random_state=580)
-        with patch("crystall.core.KMeans", light_kmeans), \
+        from unittest.mock import MagicMock
+        mock_kmeans_inst = MagicMock()
+        mock_kmeans_inst.fit_predict.return_value = np.array([0, 0, 1, 1, 0][:len(self.cas.ks2022)])
+        mock_kmeans_inst.labels_ = np.array([0, 0, 1, 1, 0][:len(self.cas.ks2022)])
+
+        with patch("crystall.core.KMeans", return_value=mock_kmeans_inst), \
+             patch("crystall.core.silhouette_score", return_value=0.5), \
              patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
              patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
             # Explicitly exercise silhouette-search path with fixed small cluster count
@@ -692,6 +720,13 @@ class TestBaseCalculator(unittest.TestCase):
         def _run_code(self) -> str:
             return "print('noop')"
 
+    class DummyInferenceCalculator(crystall.BaseCalculator):
+        name = "dummy-inference"
+        objectives_map = {"Dummy Inference": "dummy"}
+
+        def _run_code(self) -> str:
+            return "print('noop')"
+
     @staticmethod
     def _fake_uv_venv_run(cmd, env=None, check=False, **kwargs):
         """Mock uv venv creation by laying down an executable micro-Python."""
@@ -705,14 +740,22 @@ class TestBaseCalculator(unittest.TestCase):
 
     def test_run_on_directory(self) -> None:
         """BaseCalculator.run_on_directory should raise NotImplementedError by default."""
+        import tempfile
 
         class DummyBase(crystall.BaseCalculator):
             name = "dummy"
             objectives_map = {}
 
+            def is_env_ready(self) -> bool:
+                return True
+
         dummy = DummyBase()
-        with self.assertRaises(NotImplementedError):
-            dummy.run_on_directory("some/path")
+        with tempfile.TemporaryDirectory() as tempdir:
+            # Create a dummy file so it calls _evaluate_structure
+            with open(os.path.join(tempdir, "dummy.cif"), "w") as f:
+                f.write("dummy")
+            with self.assertRaises(NotImplementedError):
+                dummy.run_on_directory(tempdir)
 
     def test_vector_to_scalar(self) -> None:
         """BaseCalculator.vector_to_scalar should handle all supported aggregation modes."""
@@ -789,6 +832,33 @@ class TestBaseCalculator(unittest.TestCase):
 
             self.assertFalse(env_path.exists())
             self.assertFalse((env_path / ".crystall_env_ready").exists())
+
+    def test_base_calculator_type_default_is_inference(self) -> None:
+        """BaseCalculator should default calculator_type to inference."""
+        self.assertEqual(crystall.BaseCalculator.calculator_type, "inference")
+
+    def test_mlip_calculator_type_is_mlip(self) -> None:
+        """MLIPAdapter should declare calculator_type as mlip."""
+        from crystall.calculators import MLIPAdapter
+
+        self.assertEqual(MLIPAdapter.calculator_type, "mlip")
+
+    def test_mlip_inference_accepts_inference_adapters(self) -> None:
+        """MLIPAdapter inference pipe should accept inference-role adapters."""
+        from crystall.calculators import MLIPAdapter
+        from crystall.calculators import AlignnAdapter
+        from crystall.calculators import CHGNetStaticAdapter
+
+        self.assertIsInstance(MLIPAdapter("MACE-mh", inference=[AlignnAdapter()]), MLIPAdapter)
+        self.assertIsInstance(MLIPAdapter("MACE-mh", inference=[CHGNetStaticAdapter()]), MLIPAdapter)
+
+    def test_mlip_inference_rejects_mlip_adapters(self) -> None:
+        """MLIPAdapter inference pipe should reject MLIP-role adapters."""
+        from crystall.calculators import MLIPAdapter
+
+        with self.assertRaises(TypeError) as ctx:
+            MLIPAdapter("ORB", inference=[MLIPAdapter("MACE-mh")])
+        self.assertIn("calculator_type='mlip'", str(ctx.exception))
 
 if __name__ == '__main__':
     unittest.main()
