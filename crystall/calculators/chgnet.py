@@ -528,7 +528,7 @@ class CHGNetStaticAdapter(BaseCalculator):
             for el, amt in comp.items():
                 if el not in energy_reference_data:
                     raise KeyError(f"Missing CHGNet elemental reference for element '{el}'")
-                energy_reference += energy_reference_data[el]["chgnet_relaxed"] * float(amt)
+                energy_reference += energy_reference_data[el]["chgnet_static"] * float(amt)
 
             try:
                 static = chgnet.predict_structure(s)
