@@ -364,9 +364,7 @@ class PhonaxAdapter(BaseCalculator):
         freqs_cm1 = np.array(payload["frequencies_cm1"], dtype=np.float64)
         freqs_thz = freqs_cm1 * 0.02998  # cm⁻¹ → THz
 
-        qpoints = [
-            Kpoint(kpt, lattice_rec) for kpt in payload["qpoints"]
-        ]
+        qpoints = [Kpoint(kpt, lattice_rec) for kpt in payload["qpoints"]]
 
         labels_raw = payload.get("labels", {})
         labels_dict: Dict[str, Any] = {}
