@@ -94,7 +94,9 @@ class _BaseMatGLStaticAdapter(BaseCalculator):
         return result
 
     @classmethod
-    def _deserialize_results(cls, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _deserialize_results(
+        cls, results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         return [cls._deserialize_result(r) for r in results]
 
     @staticmethod
