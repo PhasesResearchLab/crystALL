@@ -1060,16 +1060,16 @@ class CrystALLSearch:
         The expression in `definition` supports the following tokens:
         - +, -, *, /, **
         - Parentheses: (...)
-        - Indexed objectives: [X] where X is the 0-based index in `objectives`
+        - Indexed objectives: #X where X is the 0-based index in `objectives`
 
         Examples:
-            name = 'Avg_Formation_Energy', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '([0] + [1]) / 2'
-            name = 'Scaled_Energy', objectives = ['EF_SIPFENN_NN30'], definition = '[0]*3.18'
-            name = 'Energy_Diff', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '[0]-[1]'
+            name = 'Avg_Formation_Energy', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '(#0 + #1) / 2'
+            name = 'Scaled_Energy', objectives = ['EF_SIPFENN_NN30'], definition = '#0*3.18'
+            name = 'Energy_Diff', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '#0-#1'
 
         Args:
             name: The name of the new objective to create/update on each prototype.
-            objectives: Ordered list of objective names referenced by [1], [2], ... in definition.
+            objectives: Ordered list of objective names referenced by #0, #1, ... in definition.
             definition: Arithmetic expression combining the objectives. Whitespaces are ignored.
 
         Raises:
@@ -1102,8 +1102,8 @@ class CrystALLSearch:
 
         expr_template = definition.replace(" ", "")
 
-        # Validate and transform [X] tokens -> values[X] (0-based)
-        indices = re.findall(r"\[(\d+)\]", expr_template)
+        # Validate and transform #X tokens -> values[X] (0-based)
+        indices = re.findall(r"#(\d+)", expr_template)
         if not indices:
             # Expression doesn't reference any objective; allow constants-only expressions
             pass
@@ -1112,12 +1112,10 @@ class CrystALLSearch:
             for idx_str in indices:
                 idx = int(idx_str)
                 assert 0 <= idx < len(objectives), (
-                    f"Index [{idx}] in definition out of range for provided objectives (0..{len(objectives) - 1})"
+                    f"Index #{idx} in definition out of range for provided objectives (0..{len(objectives) - 1})"
                 )
 
-        expr = re.sub(
-            r"\[(\d+)\]", lambda m: f"values[{int(m.group(1))}]", expr_template
-        )
+        expr = re.sub(r"#(\d+)", lambda m: f"values[{int(m.group(1))}]", expr_template)
 
         # Safety check: only allow numbers, parentheses, operators, decimal points, 'values' and index brackets
         # Replace allowed token 'values[<num>]' with '0' and then validate remaining characters
@@ -1125,7 +1123,7 @@ class CrystALLSearch:
         # Allow digits, decimal points, scientific notation (e/E), operators, parentheses
         allowed_pattern = r"^[0-9eE\.+\-*/()\s]*$"  # ** is covered by * twice
         assert re.match(allowed_pattern, tmp) is not None, (
-            "Definition contains invalid characters. Allowed: +, -, *, /, **, (), and [X] references."
+            "Definition contains invalid characters. Allowed: +, -, *, /, **, (), and #X references."
         )
 
         computed_count = 0
@@ -2125,6 +2123,6 @@ except (FileNotFoundError, ModuleNotFoundError):
     __version__ = "X.X.X"
     __release__ = "YYYY-MM"
     __authors__ = "Adam Krajewski, Ricardo Amaral"
-    __doc__ = "crystALL.readthedocs.io"
+    __doc__ = "crystALL.mpdd.org"
     __rep__ = "github.com/PhasesResearchLab/crystALL"
     __doi__ = "doi.org/10.xxxx/xxxxx"

@@ -152,7 +152,7 @@ def run_local(target_formula: Union[str, Composition], prototype_path: str) -> s
     assert os.path.isdir(prototype_path), "Prototype path must be a valid directory"
 
     print(f"\nSearching for structure prototypes for: {target_formula}")
-    print("Structure prototype dataset:" + prototype_path)
+    print("Structure prototype dataset: " + prototype_path)
 
     if isinstance(target_formula, str):
         # Formula to pymatgen Composition
