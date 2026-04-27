@@ -74,8 +74,7 @@ class DeePAWAdapter(BaseCalculator):
         current = self._current_os()
         if current != "linux":
             raise RuntimeError(
-                f"{self.name} is only supported on Linux. "
-                f"Current OS: '{current}'."
+                f"{self.name} is only supported on Linux. Current OS: '{current}'."
             )
 
     def _assert_gpu_runtime_supported(self) -> None:
@@ -231,12 +230,14 @@ class DeePAWAdapter(BaseCalculator):
 
         existing_parts = sorted(downloads.glob("deepaw-cpp-v1.tar.gz.part*"))
         if len(existing_parts) >= 32:
-            print(f"[DeePAW] Found {len(existing_parts)} split parts (skipping download)")
+            print(
+                f"[DeePAW] Found {len(existing_parts)} split parts (skipping download)"
+            )
             return
 
         print("[DeePAW] Downloading 32 split parts from Zenodo...")
         part_names = [
-            f"deepaw-cpp-v1.tar.gz.part{chr(97+i)}{chr(97+j)}"
+            f"deepaw-cpp-v1.tar.gz.part{chr(97 + i)}{chr(97 + j)}"
             for i in range(4)
             for j in range(26)
             if not (i == 3 and j > 1)
@@ -281,7 +282,9 @@ class DeePAWAdapter(BaseCalculator):
                     while chunk := in_f.read(1024 * 1024):
                         out_f.write(chunk)
 
-        print(f"[DeePAW] Assembled archive: {archive_path.stat().st_size // (1024*1024)} MB")
+        print(
+            f"[DeePAW] Assembled archive: {archive_path.stat().st_size // (1024 * 1024)} MB"
+        )
         return archive_path
 
     def _extract_archive(self, archive_path: Path) -> None:
@@ -302,7 +305,11 @@ class DeePAWAdapter(BaseCalculator):
 
         extracted_files = list(container_dir.glob("*.tar*"))
         inner_tar = next(
-            (f for f in extracted_files if f.suffix in (".tar", ".gz") and "deepaw" in f.name),
+            (
+                f
+                for f in extracted_files
+                if f.suffix in (".tar", ".gz") and "deepaw" in f.name
+            ),
             None,
         )
         if not inner_tar:
@@ -362,9 +369,7 @@ class DeePAWAdapter(BaseCalculator):
         result = sp.run(build_cmd, capture_output=True, text=True, cwd=container_dir)
 
         if result.returncode != 0:
-            raise RuntimeError(
-                f"DeePAW container build failed:\n{result.stderr}"
-            )
+            raise RuntimeError(f"DeePAW container build failed:\n{result.stderr}")
 
         sif_path.rename(container_path)
         print(f"[DeePAW] Built container: {container_path.name}")
@@ -376,9 +381,7 @@ class DeePAWAdapter(BaseCalculator):
         container_path = self._container_path()
 
         if not container_path.exists():
-            raise RuntimeError(
-                "DeePAW cleanup failed: container image not found"
-            )
+            raise RuntimeError("DeePAW cleanup failed: container image not found")
 
         print("[DeePAW] Cleaning up obsolete build artifacts...")
 
@@ -473,7 +476,9 @@ class DeePAWAdapter(BaseCalculator):
                     except Exception:
                         return value
                 return value
-            return {k: DeePAWAdapter._deserialize_worker_value(v) for k, v in value.items()}
+            return {
+                k: DeePAWAdapter._deserialize_worker_value(v) for k, v in value.items()
+            }
 
         if isinstance(value, list):
             return [DeePAWAdapter._deserialize_worker_value(v) for v in value]
