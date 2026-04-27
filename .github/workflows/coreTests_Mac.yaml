@@ -2,9 +2,17 @@ name: Mac M1
 
 on: 
   push:
+    branches: [main]
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_Mac.yaml'
+  
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_Mac.yaml'
+
   workflow_dispatch:
 
 jobs:
@@ -21,8 +29,8 @@ jobs:
       - name: Install and run MongoDB
         run: |
           brew tap mongodb/brew
-          brew install mongodb-community@6.0
-          brew services start mongodb/brew/mongodb-community@6.0
+          brew install mongodb-community@8.0
+          brew services start mongodb/brew/mongodb-community@8.0
     
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
