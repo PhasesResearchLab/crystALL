@@ -2282,6 +2282,6 @@ except (FileNotFoundError, ModuleNotFoundError):
     __version__ = "X.X.X"
     __release__ = "YYYY-MM"
     __authors__ = "Adam Krajewski, Ricardo Amaral"
-    __doc__ = "crystALL.readthedocs.io"
+    __doc__ = "crystALL.mpdd.org"
     __rep__ = "github.com/PhasesResearchLab/crystALL"
     __doi__ = "doi.org/10.xxxx/xxxxx"
