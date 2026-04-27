@@ -22,6 +22,7 @@ from duecredit import BibTeX, Doi, due
 
 # ── Citation registration ─────────────────────────────────────────────────────
 
+
 def _register_citations() -> None:
     """Register duecredit citations for all external scientific tools exposed by crystALL calculators.
 
@@ -97,6 +98,7 @@ _register_citations()
 
 # ── Adapter discovery ────────────────────────────────────────────────────────
 
+
 def load_adapters() -> Dict[str, Any]:
     """Discover and load calculator adapters.
 
@@ -130,22 +132,28 @@ def load_adapters() -> Dict[str, Any]:
             import pkgutil
             import importlib
             import inspect
-            pkg = importlib.import_module('crystall.adapters')
+
+            pkg = importlib.import_module("crystall.adapters")
             for _, modname, ispkg in pkgutil.iter_modules(pkg.__path__):
-                if ispkg or modname == 'mlips':
+                if ispkg or modname == "mlips":
                     continue
                 try:
-                    mod = importlib.import_module(f'crystall.adapters.{modname}')
+                    mod = importlib.import_module(f"crystall.adapters.{modname}")
                 except Exception as e:
-                    warnings.warn(f"Could not import local calculator module '{modname}': {e}")
+                    warnings.warn(
+                        f"Could not import local calculator module '{modname}': {e}"
+                    )
                     continue
                 for _, obj in inspect.getmembers(mod, inspect.isclass):
-                    if getattr(obj, '__module__', '') != mod.__name__:
+                    if getattr(obj, "__module__", "") != mod.__name__:
                         continue
                     # Minimal adapter contract
-                    if all(hasattr(obj, attr) for attr in ('name', 'objectives', 'run_on_directory')):
+                    if all(
+                        hasattr(obj, attr)
+                        for attr in ("name", "objectives", "run_on_directory")
+                    ):
                         try:
-                            name = getattr(obj, 'name')
+                            name = getattr(obj, "name")
                             if isinstance(name, str) and name and name not in adapters:
                                 adapters[name] = obj
                         except Exception:
@@ -156,6 +164,7 @@ def load_adapters() -> Dict[str, Any]:
     # 3) MLIP adapters from mlips.json (always attempted)
     try:
         from crystall.adapters.mlips import discover_mlip_adapters
+
         mlip_adapters = discover_mlip_adapters()
         for name, adapter in mlip_adapters.items():
             if name not in adapters:
@@ -167,6 +176,7 @@ def load_adapters() -> Dict[str, Any]:
 
 
 # ── BaseCalculator ───────────────────────────────────────────────────────────
+
 
 class BaseCalculator:
     """Base class and micro-environment orchestrator for all calculator adapters.
@@ -226,6 +236,7 @@ class BaseCalculator:
         Default implementation places the env under ``<env_root>/<name>/``.
         """
         from pathlib import Path
+
         return self._env_root() / self.name.lower()
 
     def _micro_python(self) -> "Path":
@@ -353,8 +364,15 @@ class BaseCalculator:
         try:
             # Layer 1: Create venv
             sp.run(
-                [self._uv_bin(), "venv", "--python", self.python_version(), str(target)],
-                env=env, check=True,
+                [
+                    self._uv_bin(),
+                    "venv",
+                    "--python",
+                    self.python_version(),
+                    str(target),
+                ],
+                env=env,
+                check=True,
             )
 
             # Layer 2: Base framework dependencies
@@ -412,10 +430,19 @@ class BaseCalculator:
             try:
                 print(f"Installing layer-2 deps with CUDA 12.6: {deps}")
                 sp.run(
-                    [self._uv_bin(), "pip", "install", *deps,
-                     "--extra-index-url", "https://download.pytorch.org/whl/cu126",
-                     "--python", micro_py],
-                    env=env, check=True, capture_output=True,
+                    [
+                        self._uv_bin(),
+                        "pip",
+                        "install",
+                        *deps,
+                        "--extra-index-url",
+                        "https://download.pytorch.org/whl/cu126",
+                        "--python",
+                        micro_py,
+                    ],
+                    env=env,
+                    check=True,
+                    capture_output=True,
                 )
                 print("✅ Layer 2 installed (CUDA 12.6)")
                 return
@@ -425,9 +452,9 @@ class BaseCalculator:
         # Fallback: CPU for all platforms
         print(f"Installing layer-2 deps: {deps}")
         sp.run(
-            [self._uv_bin(), "pip", "install", *deps,
-             "--python", micro_py],
-            env=env, check=True,
+            [self._uv_bin(), "pip", "install", *deps, "--python", micro_py],
+            env=env,
+            check=True,
         )
         print("✅ Layer 2 installed (CPU)")
 
@@ -445,12 +472,15 @@ class BaseCalculator:
         print(f"Running setup: {cmd}")
 
         if cmd.startswith("pip install") or cmd.startswith("uv pip install"):
-            packages_str = cmd.replace("pip install ", "").replace("uv pip install ", "")
+            packages_str = cmd.replace("pip install ", "").replace(
+                "uv pip install ", ""
+            )
             packages = [pkg.strip("'\"") for pkg in packages_str.split()]
             print(f"Installing packages: {packages}")
             sp.run(
                 [self._uv_bin(), "pip", "install", *packages, "--python", micro_py],
-                env=env, check=True,
+                env=env,
+                check=True,
             )
 
         elif cmd.startswith("python -c"):
@@ -459,7 +489,9 @@ class BaseCalculator:
             sp.run([micro_py, "-c", code], env=env, check=True)
 
         else:
-            micro_env_path = str(self._micro_python().parent) + os.pathsep + env.get("PATH", "")
+            micro_env_path = (
+                str(self._micro_python().parent) + os.pathsep + env.get("PATH", "")
+            )
             shell_env = env.copy()
             shell_env["PATH"] = micro_env_path
             sp.run(cmd, env=shell_env, shell=True, check=True)
@@ -484,8 +516,7 @@ class BaseCalculator:
         import tempfile
 
         assert self.is_env_ready(), (
-            f"Micro-environment for '{self.name}' is not ready. "
-            f"Call setup_env() first."
+            f"Micro-environment for '{self.name}' is not ready. Call setup_env() first."
         )
 
         code = self._run_code()
@@ -532,10 +563,13 @@ class BaseCalculator:
 
             if verbose and result.stderr:
                 import sys
+
                 print(result.stderr, end="", file=sys.stderr)
 
             if result.returncode != 0:
-                detail = result.stderr.strip() if result.stderr else "(no stderr captured)"
+                detail = (
+                    result.stderr.strip() if result.stderr else "(no stderr captured)"
+                )
                 raise RuntimeError(
                     f"Worker script for '{self.name}' failed with exit code "
                     f"{result.returncode}.\n{detail}"
@@ -647,7 +681,7 @@ class BaseCalculator:
         Returns a float or None if conversion fails.
         """
         try:
-            if type == 'rms':
+            if type == "rms":
                 arr = np.array(data)
                 if arr.ndim == 0:
                     return float(abs(arr))
@@ -657,14 +691,14 @@ class BaseCalculator:
                 mags_sq = np.sum(arr.astype(float) ** 2, axis=-1)
                 return float(np.sqrt(np.mean(mags_sq)))
 
-            if type == 'sum':
+            if type == "sum":
                 try:
                     return float(np.sum(np.array(data, dtype=float)))
                 except Exception:
                     # Fallback for mixed types (e.g., list of numbers)
                     return float(sum(data))
 
-            if type == 'norm':
+            if type == "norm":
                 arr = np.array(data, dtype=float)
                 if arr.ndim == 0:
                     return float(abs(arr))
@@ -674,25 +708,36 @@ class BaseCalculator:
                 norms = np.linalg.norm(arr, axis=-1)
                 return float(np.mean(norms))
 
-            if type == 'mean':
+            if type == "mean":
                 arr = np.array(data, dtype=float)
                 return float(np.mean(arr))
 
-            if type == 'vonMises':
+            if type == "vonMises":
                 s = np.array(data)
                 if s.shape == (3, 3):
                     sigma_xx, sigma_yy, sigma_zz = s[0, 0], s[1, 1], s[2, 2]
                     sigma_xy, sigma_xz, sigma_yz = s[0, 1], s[0, 2], s[1, 2]
                 elif s.shape == (6,):
-                    sigma_xx, sigma_yy, sigma_zz, sigma_xy, sigma_xz, sigma_yz = s.tolist()
+                    sigma_xx, sigma_yy, sigma_zz, sigma_xy, sigma_xz, sigma_yz = (
+                        s.tolist()
+                    )
                 else:
                     flat = s.flatten()
                     if flat.size >= 6:
-                        sigma_xx, sigma_yy, sigma_zz, sigma_xy, sigma_xz, sigma_yz = flat[:6]
+                        sigma_xx, sigma_yy, sigma_zz, sigma_xy, sigma_xz, sigma_yz = (
+                            flat[:6]
+                        )
                     else:
                         return None
-                vm = (((sigma_xx - sigma_yy) ** 2 + (sigma_yy - sigma_zz) ** 2 + (sigma_zz - sigma_xx) ** 2) / 2.0 +
-                      3.0 * (sigma_xy ** 2 + sigma_xz ** 2 + sigma_yz ** 2)) ** 0.5
+                vm = (
+                    (
+                        (sigma_xx - sigma_yy) ** 2
+                        + (sigma_yy - sigma_zz) ** 2
+                        + (sigma_zz - sigma_xx) ** 2
+                    )
+                    / 2.0
+                    + 3.0 * (sigma_xy**2 + sigma_xz**2 + sigma_yz**2)
+                ) ** 0.5
                 return float(vm)
 
             return None
