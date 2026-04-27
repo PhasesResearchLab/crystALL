@@ -32,6 +32,7 @@ _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
 # ── Configuration helpers ───────────────────────────────────────────────────
 
+
 def _load_mlips_config() -> dict:
     """Load the MLIP configuration from ``mlips.json``."""
     json_path = Path(__file__).parent / "mlips.json"
@@ -52,6 +53,7 @@ def discover_mlip_adapters() -> Dict[str, "MLIPAdapter"]:
 
 
 # ── Adapter class ───────────────────────────────────────────────────────────
+
 
 class MLIPAdapter(BaseCalculator):
     """Adapter for running MLIP models via ASE inside micro-environments.
@@ -210,7 +212,11 @@ class MLIPAdapter(BaseCalculator):
 
         try:
             result = sp.run(
-                [str(self._micro_python()), "-c", "import torch; print(int(torch.cuda.is_available()))"],
+                [
+                    str(self._micro_python()),
+                    "-c",
+                    "import torch; print(int(torch.cuda.is_available()))",
+                ],
                 text=True,
                 capture_output=True,
                 check=True,
@@ -223,8 +229,10 @@ class MLIPAdapter(BaseCalculator):
 
     def layer2_dependencies(self) -> List[str]:
         return [
-            "torch==2.9.1", "torch-geometric==2.7.0",
-            "ase>=3.27.0", "setuptools",
+            "torch==2.9.1",
+            "torch-geometric==2.7.0",
+            "ase>=3.27.0",
+            "setuptools",
         ]
 
     def setup_commands(self) -> List[str]:
@@ -261,7 +269,11 @@ class MLIPAdapter(BaseCalculator):
         **kwargs,
     ) -> Dict[str, Any]:
         self._assert_os_supported()
-        if self._current_os() == "linux" and not self._device_override and self.is_env_ready():
+        if (
+            self._current_os() == "linux"
+            and not self._device_override
+            and self.is_env_ready()
+        ):
             self._resolved_device = None
         self._resolve_device()
         save_poscar = bool(kwargs.pop("save_poscar", False))
@@ -314,7 +326,9 @@ class MLIPAdapter(BaseCalculator):
                     except Exception:
                         return value
                 return value
-            return {k: MLIPAdapter._deserialize_worker_value(v) for k, v in value.items()}
+            return {
+                k: MLIPAdapter._deserialize_worker_value(v) for k, v in value.items()
+            }
 
         if isinstance(value, list):
             return [MLIPAdapter._deserialize_worker_value(v) for v in value]
@@ -335,7 +349,9 @@ class MLIPAdapter(BaseCalculator):
         return result
 
     @classmethod
-    def _deserialize_results(cls, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _deserialize_results(
+        cls, results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         return [cls._deserialize_result(r) for r in results]
 
     # ── Execution ───────────────────────────────────────────────────────────
@@ -359,7 +375,11 @@ class MLIPAdapter(BaseCalculator):
         relaxed structures and their results are merged with namespaced keys.
         """
         self._assert_os_supported()
-        if self._current_os() == "linux" and not self._device_override and self.is_env_ready():
+        if (
+            self._current_os() == "linux"
+            and not self._device_override
+            and self.is_env_ready()
+        ):
             self._resolved_device = None
         self._resolve_device()
         save_poscar = bool(kwargs.pop("save_poscar", False))
@@ -410,9 +430,7 @@ class MLIPAdapter(BaseCalculator):
             try:
                 inferred = adapter.run_on_directory(relaxed_dir)
             except Exception as exc:
-                warnings.warn(
-                    f"Inference adapter '{adapter.name}' failed: {exc}"
-                )
+                warnings.warn(f"Inference adapter '{adapter.name}' failed: {exc}")
                 continue
 
             for inf_result in inferred:
@@ -446,7 +464,7 @@ class MLIPAdapter(BaseCalculator):
 # Python interpreter.  It must be entirely self-contained (no crystall
 # imports, no pymatgen).
 
-_MLIP_WORKER_SCRIPT = '''\
+_MLIP_WORKER_SCRIPT = """\
 import sys
 import os
 import io
@@ -673,4 +691,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
+"""
