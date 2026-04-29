@@ -174,6 +174,60 @@ class TestTopLevelFunctions(unittest.TestCase):
         for tpl in subs:
             self.assertEqual(len(tpl), len(set(tpl)))
 
+    def test_other_targets_tag(self) -> None:
+        """_other_targets_tag must be empty for None/{}, deterministic, order-independent, and collision-resistant."""
+        from crystall.core import _other_targets_tag
+
+        # Empty / None → no tag
+        self.assertEqual(_other_targets_tag(None), "")
+        self.assertEqual(_other_targets_tag({}), "")
+
+        # Non-empty → starts with '-q' and is 8 chars total ('-q' + 6 hex)
+        t1 = _other_targets_tag({"material.dimensionality": 2})
+        self.assertTrue(t1.startswith("-q"))
+        self.assertEqual(len(t1), 8)
+
+        # Determinism: same input always produces the same tag
+        self.assertEqual(t1, _other_targets_tag({"material.dimensionality": 2}))
+
+        # Order independence: dict insertion order must not affect the tag
+        self.assertEqual(
+            _other_targets_tag({"material.dimensionality": 2, "material.spaceGroup": 191}),
+            _other_targets_tag({"material.spaceGroup": 191, "material.dimensionality": 2}),
+        )
+
+        # Different inputs → different tags
+        self.assertNotEqual(t1, _other_targets_tag({"material.dimensionality": 3}))
+
+    def test_write_query_sidecar(self) -> None:
+        """_write_query_sidecar writes a JSON sidecar next to (not inside) the output directory."""
+        import tempfile
+        from crystall.core import _write_query_sidecar
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = os.path.join(tmp, "Ni26Ru8-MPDD(curated)-prototypes(native)")
+            os.mkdir(out_dir)
+            _write_query_sidecar(
+                out_dir,
+                target_formula="Ni26Ru8",
+                target_prototypes="native",
+                limit=10,
+                other_targets={"material.dimensionality": 2},
+            )
+
+            # Sidecar lives as a sibling of the output directory, NOT inside it
+            sidecar = out_dir + "_query.json"
+            self.assertTrue(os.path.isfile(sidecar))
+            self.assertFalse(os.path.exists(os.path.join(out_dir, "_query.json")))
+
+            # Contents are valid JSON and include the passed fields
+            with open(sidecar) as f:
+                data = json.load(f)
+            self.assertEqual(data["target_formula"], "Ni26Ru8")
+            self.assertEqual(data["target_prototypes"], "native")
+            self.assertEqual(data["limit"], 10)
+            self.assertEqual(data["other_targets"], {"material.dimensionality": 2})
+
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
         # Local directories
