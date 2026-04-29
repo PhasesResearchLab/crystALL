@@ -598,6 +598,13 @@ def run_MPDD_devs(
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
+        # Query for matching MPDD entries
+        nativeQuery = comp2comp_q(target_composition_dict, devs)
+        if nativeQuery.keys() & other_targets.keys():
+            raise ValueError(
+                f'other_targets cannot contain keys produced by the composition query: {sorted(nativeQuery.keys() & other_targets.keys())}'
+            )
+
         out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes(native)"
 
         try:
@@ -616,13 +623,6 @@ def run_MPDD_devs(
             devs=devs,
             other_targets=other_targets,
         )
-
-        # Query for matching MPDD entries
-        nativeQuery = comp2comp_q(target_composition_dict, devs)
-        if nativeQuery.keys() & other_targets.keys():
-            raise ValueError(
-                f'other_targets cannot contain keys produced by the composition query: {sorted(nativeQuery.keys() & other_targets.keys())}'
-            )
 
         targetPresent = 0
         for col in collections:
