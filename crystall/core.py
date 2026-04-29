@@ -7,6 +7,7 @@ import re
 import json
 import csv
 import time
+import hashlib
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
@@ -103,6 +104,29 @@ def load_adapters() -> Dict[str, Any]:
         warnings.warn(f"Local adapter discovery failed: {e}")
 
     return adapters
+
+def _other_targets_tag(other_targets: Optional[Dict[str, Any]]) -> str:
+    """Return a deterministic short suffix encoding `other_targets`, or '' when empty/None.
+
+    Used to disambiguate output directories produced for different filter dicts so reruns
+    with the same filter update in place while reruns with a different filter land in a
+    distinct folder.
+    """
+    if not other_targets:
+        return ''
+    payload = json.dumps(other_targets, sort_keys=True, default=str)
+    digest = hashlib.md5(payload.encode()).hexdigest()[:6]
+    return f'-q{digest}'
+
+def _write_query_sidecar(out_dir: str, **fields: Any) -> None:
+    """Write a `<out_dir>_query.json` sidecar next to the output directory recording the run's parameters.
+
+    Lets a human (or future code) recover the exact inputs that produced a folder, even
+    when the directory name only encodes them via a short hash.
+    """
+    sidecar = f'{out_dir}_query.json'
+    with open(sidecar, 'w') as f:
+        json.dump(fields, f, indent=2, sort_keys=True, default=str)
 
 def run_local(
         target_formula: Union[str, Composition],
@@ -298,13 +322,23 @@ def run_MPDD(
 
     if target_prototypes == 'native':
 
-        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
+        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes(native)"
 
         try:
             os.mkdir(out_dir)
             print('Directory created for MPDD prototypes: ' + out_dir)
         except FileExistsError:
             print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
+
+        _write_query_sidecar(
+            out_dir,
+            target_formula=formula_str,
+            target_prototypes='native',
+            filter_prototypes=filter_prototypes,
+            collections=collections,
+            limit=limit,
+            other_targets=other_targets,
+        )
 
         for col in collections:
             print('Looking through: ' + col)
@@ -400,7 +434,7 @@ def run_MPDD(
         else:
             print('Target composition indicates discrete element substitution.\n')
 
-        out_dir = f"{formula_str}-{source_str}-prototypes"
+        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes"
         print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
 
         try:
@@ -408,6 +442,16 @@ def run_MPDD(
             print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
         except FileExistsError:
             print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
+
+        _write_query_sidecar(
+            out_dir,
+            target_formula=formula_str,
+            target_prototypes='non-native',
+            filter_prototypes=filter_prototypes,
+            collections=collections,
+            limit=limit,
+            other_targets=other_targets,
+        )
 
         # Substitute over all prototypes over all of their permutations
         allS = 0
@@ -554,13 +598,24 @@ def run_MPDD_devs(
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
-        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
+        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes(native)"
 
         try:
             os.mkdir(out_dir)
             print('Directory created for MPDD prototypes: ' + out_dir)
         except FileExistsError:
             print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
+
+        _write_query_sidecar(
+            out_dir,
+            target_formula=formula_str,
+            target_prototypes='native',
+            filter_prototypes=filter_prototypes,
+            collections=collections,
+            limit=limit,
+            devs=devs,
+            other_targets=other_targets,
+        )
 
         # Query for matching MPDD entries
         nativeQuery = comp2comp_q(target_composition_dict, devs)
@@ -664,7 +719,7 @@ def run_MPDD_devs(
 
         # ********************************* Substitution elements combination ********************************************
 
-        out_dir = f"{formula_str}-{source_str}-prototypes"
+        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes"
         print('Final Prototype Directory: ' + out_dir)
 
         try:
@@ -672,6 +727,17 @@ def run_MPDD_devs(
             print('Final directory created.')
         except FileExistsError:
             print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
+
+        _write_query_sidecar(
+            out_dir,
+            target_formula=formula_str,
+            target_prototypes='non-native',
+            filter_prototypes=filter_prototypes,
+            collections=collections,
+            limit=limit,
+            devs=devs,
+            other_targets=other_targets,
+        )
 
         # All generated prototypes
         allS = 0
