@@ -278,67 +278,80 @@ class TestCrystALLSearch(unittest.TestCase):
         target_options = ["native", "non-native"]
         filter_options = ["material.structID", "material.volNormStructID"]
         devs_options = [None, {"Ni": 10, "Ru": 10}]
+        other_target_options = [None, {"material.dimensionality": 2}]
 
-        for devs in devs_options:
-            for target_prototypes in target_options:
-                for filter_prototypes in filter_options:
-                    with self.subTest(
-                        f"Generate_MPDD for devs={devs} / {target_prototypes} / {filter_prototypes}"
-                    ):
-                        # Remove any existing output directories to avoid interference
-                        # match common patterns for Ni26Ru8 prototype outputs
-                        for pattern in [
-                            "Ni26Ru8*prototypes*",
-                            "Ni26Ru8-local-prototypes",
-                        ]:
-                            for path in glob.glob(pattern):
-                                if os.path.exists(path):
-                                    shutil.rmtree(path)
+        for other_targets in other_target_options:
+            for devs in devs_options:
+                for target_prototypes in target_options:
+                    for filter_prototypes in filter_options:
+                        with self.subTest(
+                            f"Generate_MPDD for other_targets={other_targets} / devs={devs} / "
+                            f"{target_prototypes} / {filter_prototypes}"
+                        ):
+                            # Remove any existing output directories to avoid interference
+                            # match common patterns for Ni26Ru8 prototype outputs
+                            for pattern in [
+                                "Ni26Ru8*prototypes*",
+                                "Ni26Ru8-local-prototypes",
+                            ]:
+                                for path in glob.glob(pattern):
+                                    if os.path.exists(path):
+                                        shutil.rmtree(path)
 
-                        # Call generate_MPDD with or without devs. The `devs` path
-                        # performs aggregation queries that may require additional
-                        # indexes in the local test MPDD instance. Handle
-                        # OperationFailure gracefully and skip the subtest if the
-                        # environment cannot support the query.
-                        try:
-                            if devs is None:
-                                self.cas.generate_MPDD(
-                                    limit=10,
-                                    target_prototypes=target_prototypes,
-                                    filter_prototypes=filter_prototypes,
-                                )
-                            else:
+                            # Call generate_MPDD. Both `devs` and `other_targets` may be
+                            # None; generate_MPDD handles that internally. The `devs` path
+                            # performs aggregation queries that may require additional
+                            # indexes in the local test MPDD instance. Handle
+                            # OperationFailure gracefully and skip the subtest if the
+                            # environment cannot support the query.
+                            try:
                                 self.cas.generate_MPDD(
                                     limit=10,
                                     target_prototypes=target_prototypes,
                                     filter_prototypes=filter_prototypes,
                                     devs=devs,
+                                    other_targets=other_targets,
                                 )
-                        except Exception as e:
-                            # If MongoDB aggregation fails due to missing index or
-                            # unsupported hint, skip this subtest rather than
-                            # failing the whole suite. Record the exception for
-                            # debugging in the skip message.
-                            msg = f"Skipping devs aggregation subtest due to DB error: {e}"
-                            self.skipTest(msg)
+                            except Exception as e:
+                                # If MongoDB aggregation fails due to missing index or
+                                # unsupported hint, skip this subtest rather than
+                                # failing the whole suite. Record the exception for
+                                # debugging in the skip message.
+                                msg = f"Skipping devs aggregation subtest due to DB error: {e}"
+                                self.skipTest(msg)
 
-                        mpdd_path_after = self.cas.prototype_path
-                        self.assertIsInstance(mpdd_path_after, str)
-                        self.assertTrue(os.path.isdir(mpdd_path_after))
+                            mpdd_path_after = self.cas.prototype_path
+                            self.assertIsInstance(mpdd_path_after, str)
+                            self.assertTrue(os.path.isdir(mpdd_path_after))
 
-                        # For the non-devs path we expect prototypes to be found.
-                        # For devs-based compositional substitution queries the
-                        # local MPDD snapshot may legitimately return zero
-                        # prototypes; therefore only require a non-empty list for
-                        # the devs == None case.
-                        if devs is None:
-                            self.assertGreater(len(self.cas.prototypes), 0)
-                        else:
-                            self.assertIsInstance(self.cas.prototypes, list)
+                            # For the non-devs path we expect prototypes to be found.
+                            # For devs-based compositional substitution queries the
+                            # local MPDD snapshot may legitimately return zero
+                            # prototypes; therefore only require a non-empty list for
+                            # the devs == None case.
+                            if devs is None:
+                                self.assertGreater(len(self.cas.prototypes), 0)
+                            else:
+                                self.assertIsInstance(self.cas.prototypes, list)
 
         # Unhappy path: invalid devs type should raise
         with self.assertRaises(AssertionError):
             self.cas.generate_MPDD(devs="not-a-dict")
+
+        # Unhappy path: other_targets must be a dict
+        with self.assertRaises(AssertionError):
+            self.cas.generate_MPDD(other_targets="not-a-dict")
+
+        # Unhappy path: other_targets cannot override reserved formula keys in run_MPDD
+        with self.assertRaises(ValueError):
+            self.cas.generate_MPDD(other_targets={"material.reducedFormula": "Ni26Ru8"})
+
+        # Unhappy path: other_targets cannot collide with composition-query keys in run_MPDD_devs
+        with self.assertRaises(ValueError):
+            self.cas.generate_MPDD(
+                devs={"Ni": 10, "Ru": 10},
+                other_targets={"material.system": "Ni-Ru"},
+            )
 
     @pytest.mark.order(3)
     def test_generate_local(self) -> None:
