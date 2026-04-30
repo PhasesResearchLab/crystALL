@@ -18,6 +18,10 @@ from pymatgen.core import Composition
 from pymongo import MongoClient
 from sklearn.cluster import KMeans
 
+IN_GITHUB_ACTIONS = (
+    os.getenv("GITHUB_ACTIONS") == "true" and os.getenv("MODELS_FETCHED") != "true"
+)
+
 
 class TestTopLevelFunctions(unittest.TestCase):
     """Tests for top-level prototype generation functions (local + MPDD)."""
@@ -417,6 +421,9 @@ class TestCrystALLSearch(unittest.TestCase):
         # run_local asserts that output dir must differ from prototype_path.
 
     @pytest.mark.order(4)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_run_pysipfenn(self) -> None:
         """Test running pySIPFENN models end-to-end."""
         from unittest.mock import MagicMock
@@ -541,6 +548,9 @@ class TestCrystALLSearch(unittest.TestCase):
             )
 
     @pytest.mark.order(6)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_get_mpdd_convexhull(self) -> None:
         """Test getting MPDD convex hull stability."""
         with patch("builtins.input", return_value="n"):
@@ -563,6 +573,9 @@ class TestCrystALLSearch(unittest.TestCase):
             cas3.get_mpdd_convexhull()
 
     @pytest.mark.order(7)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_filter_prototypes(self) -> None:
         """Test filtering prototypes with default and custom objectives."""
         # Ensure features are available and at least one objective exists
@@ -572,8 +585,8 @@ class TestCrystALLSearch(unittest.TestCase):
         base_obj = self.cas.predicted_objectives[0]
         new_name = f"scaled_{base_obj}"
 
-        # Define a simple scaled objective [0] * 2
-        self.cas.define_objective(new_name, [base_obj], "[0] * 2")
+        # Define a simple scaled objective #0 * 2
+        self.cas.define_objective(new_name, [base_obj], "#0 * 2")
         self.assertIn(new_name, self.cas.predicted_objectives)
 
         # Filter using the newly defined objective
@@ -595,7 +608,7 @@ class TestCrystALLSearch(unittest.TestCase):
             self.cas.define_objective("bad_syntax", [base_obj], "bad$expr")
         with self.assertRaises(AssertionError):
             # index 1 is out-of-range when only one base objective is provided
-            self.cas.define_objective("out_of_range", [base_obj], "[1]")
+            self.cas.define_objective("out_of_range", [base_obj], "#1")
 
         # Unhappy path: invalid objective name should raise
         with self.assertRaises(AssertionError):
@@ -604,6 +617,9 @@ class TestCrystALLSearch(unittest.TestCase):
             )
 
     @pytest.mark.order(8)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_cluster_prototypes_DBSCAN(self) -> None:
         """Test clustering prototypes using DBSCAN."""
         # Trim the working set to keep clustering light while retaining enough samples
@@ -670,6 +686,9 @@ class TestCrystALLSearch(unittest.TestCase):
             cas2.cluster_prototypes_DBSCAN(eps=0.3, min_samples=1.5)
 
     @pytest.mark.order(9)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_cluster_prototypes_KMeans(self) -> None:
         """Test clustering prototypes using KMeans."""
         # Trim the working set to keep clustering light while retaining enough samples
@@ -724,6 +743,9 @@ class TestCrystALLSearch(unittest.TestCase):
         self.assertEqual(len(cas2.top_candidates), 0)
 
     @pytest.mark.order(10)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_export_table(self) -> None:
         """Test exporting prototype data to CSV."""
         # First, call export_table when no top_candidates are available to
@@ -745,6 +767,9 @@ class TestCrystALLSearch(unittest.TestCase):
         os.remove("top-candidates.csv")
 
     @pytest.mark.order(11)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_plot_barchart(self) -> None:
         """Test plotting bar charts."""
         # First, ensure early-return path when no top_candidates exist
@@ -762,6 +787,9 @@ class TestCrystALLSearch(unittest.TestCase):
         os.remove("barchart_clusterPrototypes.html")
 
     @pytest.mark.order(12)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_plot_2D(self) -> None:
         """Test plotting 2D scatter plots."""
         # Non-save branch: patch the module-level `iplot` used by `crystall.core`
@@ -780,6 +808,9 @@ class TestCrystALLSearch(unittest.TestCase):
         os.remove("2D_clusterPrototypes.html")
 
     @pytest.mark.order(13)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_plot_3D(self) -> None:
         """Test plotting 3D scatter plots."""
         # Non-save branch: patch the module-level `iplot` used by `crystall.core`
