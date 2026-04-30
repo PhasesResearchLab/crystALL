@@ -9,13 +9,11 @@ The micro-env is created under ``<env_root>/deepaw/``.
 """
 
 import os
-import platform
 import subprocess as sp
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Any
 
 from crystall.calculators import BaseCalculator
-
 
 _CHGCAR_MARKER_KEY = "__crystall_pymatgen_chgcar__"
 
@@ -58,26 +56,6 @@ class DeePAWAdapter(BaseCalculator):
         self._nz = nz
 
     # ── OS / runtime guards ─────────────────────────────────────────────
-
-    @staticmethod
-    def _current_os() -> str:
-        """Return the current OS identifier (mirrors MLIPAdapter pattern)."""
-        system = platform.system().lower()
-        if system == "darwin":
-            return "macos"
-        if system == "linux":
-            return "linux"
-        if system == "windows":
-            return "windows"
-        return system
-
-    def _assert_os_supported(self) -> None:
-        """Raise RuntimeError unless running on Linux."""
-        current = self._current_os()
-        if current != "linux":
-            raise RuntimeError(
-                f"{self.name} is only supported on Linux. Current OS: '{current}'."
-            )
 
     def _assert_gpu_runtime_supported(self) -> None:
         """Raise RuntimeError if NVIDIA GPU runtime is unavailable."""
@@ -124,10 +102,6 @@ class DeePAWAdapter(BaseCalculator):
         """Directory for split archive parts during installation."""
         return self._env_path() / "downloads"
 
-    def _container_build_dir(self) -> Path:
-        """Directory for container build artifacts."""
-        return self._env_path() / "container"
-
     def _container_path(self) -> Path:
         """Path to the final Singularity container image."""
         return self._env_path() / "deepaw-cpp-v1.sif"
@@ -135,10 +109,49 @@ class DeePAWAdapter(BaseCalculator):
     # ── Hook overrides ───────────────────────────────────────────────────
 
     def layer2_dependencies(self) -> List[str]:
-        return ["requests"]
+        return []
+
+
+    def _setup_preflight(self) -> None:
+        """DeePAW-specific preflight: verify GPU runtime and singularity."""
+        super()._setup_preflight()
+        self._assert_gpu_runtime_supported()
+        self._resolve_singularity_binary()
+
+    def format_vars(self) -> Dict[str, str]:
+        """Template variables for Layer-3 shell commands."""
+        return {
+            "env_path": str(self._env_path()),
+            "downloads_dir": str(self._downloads_dir()),
+            "container_path": str(self._container_path()),
+            "singularity_bin": self._resolve_singularity_binary(),
+        }
 
     def setup_commands(self) -> List[str]:
-        return []
+        """Layer-3 shell commands that download and build the DeePAW container."""
+        return [
+            # Step 1 -- Download 32 split parts from Zenodo (curl -C - resumes partials)
+            (
+                "mkdir -p {downloads_dir} && "
+                "i=0; "
+                "while [ \"$i\" -le 31 ]; do "
+                "  part=$(printf '%03d' \"$i\"); "
+                "  curl -C - -L "
+                "    -o \"{downloads_dir}/deepaw-cpp-v1.tar.gz.part$part\" "
+                "    \"https://zenodo.org/records/18311602/files/deepaw-cpp-v1.tar.gz.part$part?download=1\"; "
+                "  i=$((i + 1)); "
+                "done"
+            ),
+            # Step 2 -- Assemble parts into single archive
+            "cat {downloads_dir}/deepaw-cpp-v1.tar.gz.part* > {env_path}/deepaw-cpp-v1.tar.gz",
+            # Step 3 -- Decompress to Docker archive (.tar)
+            "gunzip -f {env_path}/deepaw-cpp-v1.tar.gz",
+            # Step 4 -- Build Singularity container from Docker archive
+            "{singularity_bin} build --force --fakeroot {container_path} docker-archive://{env_path}/deepaw-cpp-v1.tar",
+            # Step 5 -- Remove build artifacts, keep only the .sif
+            "rm -rf {downloads_dir} {env_path}/deepaw-cpp-v1.tar",
+        ]
+
 
     def _request_extras(self) -> dict:
         """Pass grid dimensions to the worker script."""
@@ -147,262 +160,6 @@ class DeePAWAdapter(BaseCalculator):
             "ny": self._ny,
             "nz": self._nz,
         }
-
-    # ── Installation ────────────────────────────────────────────────
-
-    def setup_env(self) -> None:
-        """Create micro-env and build DeePAW container image (idempotent)."""
-        self._assert_os_supported()
-
-        env_path = self._env_path()
-
-        if self.is_env_ready():
-            print(f"Using cached micro-environment for {self.name} at {env_path}")
-            return
-
-        if env_path.exists():
-            py = self._micro_python()
-            sentinel = env_path / ".crystall_env_ready"
-            if py.exists() and not sentinel.exists():
-                print(
-                    f"Detected incomplete micro-environment for {self.name} at {env_path}. "
-                    "Removing and reinstalling."
-                )
-                import shutil
-
-                shutil.rmtree(env_path, ignore_errors=True)
-
-        env_path.parent.mkdir(parents=True, exist_ok=True)
-
-        print(f"\n--- Initializing micro-environment for {self.name} ---")
-        print(f"Location: {env_path}")
-
-        try:
-            micro_py = self._micro_python()
-            uv_bin = self._uv_bin()
-
-            sp.run(
-                [uv_bin, "venv", "--python", self.python_version(), str(env_path)],
-                check=True,
-                env={**os.environ, "UV_CACHE_DIR": str(self._env_root() / "uv_cache")},
-            )
-
-            deps = self.layer2_dependencies()
-            if deps:
-                sp.run(
-                    [uv_bin, "pip", "install", *deps, "--python", str(micro_py)],
-                    check=True,
-                )
-                print(f"✅ Layer 2: {deps}")
-
-            self._run_deepaw_install()
-
-            sentinel = env_path / ".crystall_env_ready"
-            sentinel.write_text("ok", encoding="utf-8")
-            print(f"--- Micro-environment for {self.name} ready ---\n")
-        except Exception:
-            import shutil
-
-            if env_path.exists():
-                shutil.rmtree(env_path, ignore_errors=True)
-            raise
-
-    def _run_deepaw_install(self) -> None:
-        """Download, assemble, extract, and build the DeePAW container."""
-        self._assert_gpu_runtime_supported()
-
-        singularity_bin = self._resolve_singularity_binary()
-        print(f"[DeePAW] Using {singularity_bin}")
-
-        self._download_split_parts()
-        archive_path = self._assemble_archive()
-        self._extract_archive(archive_path)
-        self._build_container()
-        self._cleanup_install_artifacts()
-
-    def _download_split_parts(self) -> None:
-        """Download 32 split parts from Zenodo."""
-        import urllib.request
-        import hashlib
-
-        downloads = self._downloads_dir()
-        downloads.mkdir(parents=True, exist_ok=True)
-
-        zenodo_base = "https://zenodo.org/records/18311602/files"
-
-        existing_parts = sorted(downloads.glob("deepaw-cpp-v1.tar.gz.part*"))
-        if len(existing_parts) >= 32:
-            print(
-                f"[DeePAW] Found {len(existing_parts)} split parts (skipping download)"
-            )
-            return
-
-        print("[DeePAW] Downloading 32 split parts from Zenodo...")
-        part_names = [
-            f"deepaw-cpp-v1.tar.gz.part{chr(97 + i)}{chr(97 + j)}"
-            for i in range(4)
-            for j in range(26)
-            if not (i == 3 and j > 1)
-        ][:32]
-
-        for idx, part_name in enumerate(part_names, 1):
-            part_path = downloads / part_name
-            if part_path.exists() and part_path.stat().st_size > 0:
-                continue
-
-            url = f"{zenodo_base}/{part_name}"
-            print(f"[DeePAW] Downloading {part_name} ({idx}/32)...")
-            try:
-                req = urllib.request.Request(url)
-                with urllib.request.urlopen(req, timeout=300) as resp:
-                    with open(part_path, "wb") as out_f:
-                        while chunk := resp.read(1024 * 1024):
-                            out_f.write(chunk)
-            except Exception as e:
-                print(f"[DeePAW] Failed to download {part_name}: {e}")
-                if part_path.exists():
-                    part_path.unlink(missing_ok=True)
-                raise RuntimeError(f"DeePAW split part download failed: {part_name}")
-
-        print("[DeePAW] All 32 parts downloaded")
-
-    def _assemble_archive(self) -> Path:
-        """Concatenate 32 parts into a single .tar.gz."""
-        downloads = self._downloads_dir()
-        archive_path = self._env_path() / "deepaw-cpp-v1.tar.gz"
-
-        if archive_path.exists() and archive_path.stat().st_size > 100 * 1024 * 1024:
-            print("[DeePAW] Found assembled archive (skipping assembly)")
-            return archive_path
-
-        print("[DeePAW] Assembling split parts into archive...")
-        part_files = sorted(downloads.glob("deepaw-cpp-v1.tar.gz.part*"))
-
-        with open(archive_path, "wb") as out_f:
-            for part in part_files:
-                with open(part, "rb") as in_f:
-                    while chunk := in_f.read(1024 * 1024):
-                        out_f.write(chunk)
-
-        print(
-            f"[DeePAW] Assembled archive: {archive_path.stat().st_size // (1024 * 1024)} MB"
-        )
-        return archive_path
-
-    def _extract_archive(self, archive_path: Path) -> None:
-        """Extract the .tar.gz and embedded .tar."""
-        import tarfile
-
-        container_dir = self._container_build_dir()
-
-        if container_dir.exists():
-            print("[DeePAW] Found extracted archive (skipping extraction)")
-            return
-
-        container_dir.mkdir(parents=True, exist_ok=True)
-
-        print("[DeePAW] Extracting outer archive...")
-        with tarfile.open(archive_path, "r:gz") as outer:
-            outer.extractall(container_dir)
-
-        extracted_files = list(container_dir.glob("*.tar*"))
-        inner_tar = next(
-            (
-                f
-                for f in extracted_files
-                if f.suffix in (".tar", ".gz") and "deepaw" in f.name
-            ),
-            None,
-        )
-        if not inner_tar:
-            inner_tar = next(iter(extracted_files), None)
-
-        if inner_tar and inner_tar.suffix == ".gz":
-            print(f"[DeePAW] Extracting inner tar: {inner_tar.name}")
-            with tarfile.open(inner_tar, "r:gz") as inner:
-                inner.extractall(container_dir)
-        elif inner_tar:
-            print(f"[DeePAW] Extracting inner tar: {inner_tar.name}")
-            with tarfile.open(inner_tar, "r:") as inner:
-                inner.extractall(container_dir)
-
-        print("[DeePAW] Archive extracted")
-
-    def _build_container(self) -> Path:
-        """Build the Singularity .sif from the extracted Docker archive."""
-        container_path = self._container_path()
-
-        if container_path.exists():
-            print("[DeePAW] Found existing .sif (skipping build)")
-            return container_path
-
-        container_dir = self._container_build_dir()
-
-        docker_archive = next(
-            container_dir.glob("deepaw-cpp-v1.tar"),
-            None,
-        )
-        if not docker_archive:
-            docker_tar = list(container_dir.glob("*.tar"))
-            docker_archive = docker_tar[0] if docker_tar else None
-
-        if not docker_archive:
-            raise RuntimeError(
-                "DeePAW container build failed: no Docker archive found in "
-                f"{container_dir}"
-            )
-
-        singularity_bin = self._resolve_singularity_binary()
-        print(f"[DeePAW] Building Singularity image from {docker_archive.name}...")
-
-        sif_path = container_path.with_suffix(".sif.tmp")
-        if sif_path.exists():
-            sif_path.unlink()
-
-        build_cmd = [
-            singularity_bin,
-            "build",
-            "--force",
-            "--fakeroot",
-            str(sif_path),
-            f"docker-archive://{docker_archive}",
-        ]
-
-        result = sp.run(build_cmd, capture_output=True, text=True, cwd=container_dir)
-
-        if result.returncode != 0:
-            raise RuntimeError(f"DeePAW container build failed:\n{result.stderr}")
-
-        sif_path.rename(container_path)
-        print(f"[DeePAW] Built container: {container_path.name}")
-
-        return container_path
-
-    def _cleanup_install_artifacts(self) -> None:
-        """Remove obsolete build artifacts, keep final .sif."""
-        container_path = self._container_path()
-
-        if not container_path.exists():
-            raise RuntimeError("DeePAW cleanup failed: container image not found")
-
-        print("[DeePAW] Cleaning up obsolete build artifacts...")
-
-        downloads = self._downloads_dir()
-        if downloads.exists():
-            for part in downloads.glob("deepaw-cpp-v1.tar.gz.part*"):
-                part.unlink(missing_ok=True)
-
-        archive_path = self._env_path() / "deepaw-cpp-v1.tar.gz"
-        if archive_path.exists():
-            archive_path.unlink()
-
-        container_dir = self._container_build_dir()
-        if container_dir.exists():
-            for f in container_dir.rglob("*"):
-                if f.is_file() and f.suffix in (".tar", ".gz"):
-                    f.unlink(missing_ok=True)
-
-        print("[DeePAW] Cleanup complete")
 
     # ── Execution ────────────────────────────────────────────────────────
 
@@ -687,7 +444,7 @@ with open(output_file, "w") as f:
 
                 chgcar = Chgcar.from_file(output_chgcar)
                 props = {
-                    "DeePAW Charge Density": {
+                    "DEEPAW_RHO: DeePAW Charge Density": {
                         CHGCAR_MARKER_KEY: chgcar.as_dict()
                     }
                 }
