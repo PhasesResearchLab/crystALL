@@ -511,7 +511,7 @@ class CrystALLSearch:
             self.available_calculators[calculator_name] = list(objectives)
             print(f"{Fore.GREEN}✔ {calculator_name} ready.{Style.RESET_ALL}")
 
-    def connect_MPDD(
+    def setup_MPDD(
         self, MPDD: Database = None, collections: List[str] = ["curated"]
     ) -> None:
         """
@@ -1088,7 +1088,7 @@ class CrystALLSearch:
         """
 
         assert self.MPDD is not None, (
-            "No database connection identified. Please run `connect_MPDD` first."
+            "No database connection identified. Please run `setup_MPDD` first."
         )
         assert len(self.prototypes) > 0, (
             "No prototypes identified. Please run `generate_MPDD` or `generate_local` first."
