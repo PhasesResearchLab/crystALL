@@ -65,7 +65,7 @@ class TestDeePAWAdapterMetadata(unittest.TestCase):
 
 
 class TestDeePAWOSGuard(unittest.TestCase):
-    """Linux-only OS restriction."""
+    """Linux-only OS restriction (inherited from BaseCalculator via supported_os)."""
 
     def setUp(self):
         self.adapter = DeePAWAdapter()
@@ -82,12 +82,15 @@ class TestDeePAWOSGuard(unittest.TestCase):
         with patch("platform.system", return_value="Windows"):
             self.assertEqual(self.adapter._current_os(), "windows")
 
+    def test_supported_os_is_linux_only(self):
+        self.assertEqual(self.adapter.supported_os, ["linux"])
+
     def test_assert_os_supported_raises_on_macos(self):
         with patch("platform.system", return_value="Darwin"):
             with self.assertRaises(RuntimeError) as ctx:
                 self.adapter._assert_os_supported()
         self.assertIn("macos", str(ctx.exception))
-        self.assertIn("Linux", str(ctx.exception))
+        self.assertIn("linux", str(ctx.exception))
 
     def test_assert_os_supported_raises_on_windows(self):
         with patch("platform.system", return_value="Windows"):
@@ -163,61 +166,50 @@ class TestDeePAWSingularityResolution(unittest.TestCase):
         self.assertIn("apptainer", str(ctx.exception).lower())
 
 
-class TestDeePAWCleanup(unittest.TestCase):
-    """Cleanup helper removes split parts and tar, preserves .sif."""
+class TestDeePAWSetupSchema(unittest.TestCase):
+    """Verify setup_env override is gone and Layer-3 commands are correct."""
 
     def setUp(self):
         self.adapter = DeePAWAdapter()
 
-    def test_cleanup_removes_parts_and_tars_preserves_sif(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
+    def test_setup_env_is_not_overridden(self):
+        from crystall.calculators import BaseCalculator
+        self.assertIs(
+            DeePAWAdapter.setup_env,
+            BaseCalculator.setup_env,
+            "DeePAWAdapter must not override setup_env",
+        )
 
-            # Simulate env structure
-            downloads = tmp_path / "downloads"
-            downloads.mkdir()
-            container_dir = tmp_path / "container"
-            container_dir.mkdir()
+    def test_setup_commands_returns_five_steps(self):
+        cmds = self.adapter.setup_commands()
+        self.assertEqual(len(cmds), 5)
 
-            # Create fake artifacts
-            part_files = [downloads / f"deepaw-cpp-v1.tar.gz.part{c}" for c in ["aa", "ab", "ac"]]
-            for p in part_files:
-                p.write_text("data")
-            archive = tmp_path / "deepaw-cpp-v1.tar.gz"
-            archive.write_text("archive")
-            inner_tar = container_dir / "deepaw-cpp-v1.tar"
-            inner_tar.write_text("tar")
+    def test_setup_commands_download_step_covers_parts_000_to_031(self):
+        dl_cmd = self.adapter.setup_commands()[0]
+        self.assertIn("le 31", dl_cmd)
+        self.assertIn("%03d", dl_cmd)
+        self.assertIn("zenodo.org", dl_cmd)
 
-            # Create the final .sif that must be preserved
-            sif = tmp_path / "deepaw-cpp-v1.sif"
-            sif.write_text("container")
+    def test_setup_commands_uses_double_quotes_for_shell_vars(self):
+        """$part must not be inside single-quoted shell strings."""
+        dl_cmd = self.adapter.setup_commands()[0]
+        # After template substitution the shell must expand $part;
+        # verify no single-quote wrapping of the variable.
+        self.assertIn('"$i"', dl_cmd)
+        self.assertNotIn("'$part'", dl_cmd)
 
-            with (
-                patch.object(self.adapter, "_env_path", return_value=tmp_path),
-                patch.object(self.adapter, "_downloads_dir", return_value=downloads),
-                patch.object(self.adapter, "_container_build_dir", return_value=container_dir),
-                patch.object(self.adapter, "_container_path", return_value=sif),
-            ):
-                self.adapter._cleanup_install_artifacts()
+    def test_format_vars_keys(self):
+        with (
+            patch.object(self.adapter, "_env_path", return_value=Path("/env")),
+            patch.object(self.adapter, "_downloads_dir", return_value=Path("/env/dl")),
+            patch.object(self.adapter, "_container_path", return_value=Path("/env/c.sif")),
+            patch.object(self.adapter, "_resolve_singularity_binary", return_value="singularity"),
+        ):
+            fv = self.adapter.format_vars()
+        self.assertEqual(set(fv.keys()), {"env_path", "downloads_dir", "container_path", "singularity_bin"})
 
-            # Parts and tars must be gone
-            for p in part_files:
-                self.assertFalse(p.exists(), f"{p.name} should have been removed")
-            self.assertFalse(archive.exists(), "assembled archive should have been removed")
-            self.assertFalse(inner_tar.exists(), "inner tar should have been removed")
-
-            # .sif must survive
-            self.assertTrue(sif.exists(), ".sif must be preserved")
-
-    def test_cleanup_raises_if_sif_missing(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            sif = tmp_path / "deepaw-cpp-v1.sif"  # does NOT exist
-
-            with patch.object(self.adapter, "_container_path", return_value=sif):
-                with self.assertRaises(RuntimeError) as ctx:
-                    self.adapter._cleanup_install_artifacts()
-            self.assertIn("container image not found", str(ctx.exception))
+    def test_layer2_dependencies_is_empty(self):
+        self.assertEqual(self.adapter.layer2_dependencies(), [])
 
 
 class TestDeePAWChgcarSerialization(unittest.TestCase):
@@ -236,9 +228,15 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
         fake_dict = self._fake_chgcar_dict()
         wrapped = {_CHGCAR_MARKER_KEY: fake_dict}
 
-        with patch("crystall.adapters.deepaw.DeePAWAdapter._deserialize_worker_value",
-                   wraps=DeePAWAdapter._deserialize_worker_value) as _,\
-             patch("pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock) as mock_fd:
+        with (
+            patch(
+                "crystall.adapters.deepaw.DeePAWAdapter._deserialize_worker_value",
+                wraps=DeePAWAdapter._deserialize_worker_value,
+            ) as _,
+            patch(
+                "pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock
+            ) as mock_fd,
+        ):
             result = DeePAWAdapter._deserialize_worker_value(wrapped)
 
         mock_fd.assert_called_once_with(fake_dict)
@@ -251,15 +249,19 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
         raw_result = {
             "name": "POSCAR",
             "properties": {
-                "DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
+                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
             },
         }
 
-        with patch("pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock):
+        with patch(
+            "pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock
+        ):
             result = DeePAWAdapter._deserialize_result(raw_result)
 
         self.assertEqual(result["name"], "POSCAR")
-        self.assertIs(result["properties"]["DeePAW Charge Density"], chgcar_mock)
+        self.assertIs(
+            result["properties"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
+        )
 
     def test_deserialize_non_marker_dict_passes_through(self):
         """Plain dicts without the marker key must be returned unchanged."""
@@ -305,11 +307,13 @@ class TestDeePAWAdapterDiscovery(unittest.TestCase):
 
     def test_load_adapters_includes_deepaw(self):
         from crystall.calculators import load_adapters
+
         adapters = load_adapters()
         self.assertIn("DeePAW", adapters)
 
     def test_deepaw_adapter_importable_from_calculators(self):
         from crystall.calculators import DeePAWAdapter as Imported
+
         self.assertIs(Imported, DeePAWAdapter)
 
 
@@ -325,7 +329,7 @@ class TestDeePAWRunOnStructure(unittest.TestCase):
         fake_result = {
             "name": "POSCAR",
             "properties": {
-                "DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
+                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
             },
         }
 
@@ -336,13 +340,20 @@ class TestDeePAWRunOnStructure(unittest.TestCase):
             with (
                 patch("platform.system", return_value="Linux"),
                 patch.object(Path, "exists", return_value=True),  # GPU guard passes
-                patch.object(self.adapter, "_dispatch_worker", return_value=[fake_result]),
-                patch("pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock),
+                patch.object(
+                    self.adapter, "_dispatch_worker", return_value=[fake_result]
+                ),
+                patch(
+                    "pymatgen.io.vasp.outputs.Chgcar.from_dict",
+                    return_value=chgcar_mock,
+                ),
             ):
                 result = self.adapter.run_on_structure(poscar)
 
         self.assertEqual(result["name"], "POSCAR")
-        self.assertIs(result["properties"]["DeePAW Charge Density"], chgcar_mock)
+        self.assertIs(
+            result["properties"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
+        )
 
     def test_run_on_structure_raises_on_non_linux(self):
         with patch("platform.system", return_value="Darwin"):
@@ -363,7 +374,9 @@ class TestDeePAWRunOnDirectory(unittest.TestCase):
             {
                 "name": "POSCAR",
                 "properties": {
-                    "DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
+                    "DEEPAW_RHO: DeePAW Charge Density": {
+                        _CHGCAR_MARKER_KEY: fake_dict
+                    },
                 },
             }
         ]
@@ -374,13 +387,20 @@ class TestDeePAWRunOnDirectory(unittest.TestCase):
             with (
                 patch("platform.system", return_value="Linux"),
                 patch.object(Path, "exists", return_value=True),  # GPU guard passes
-                patch.object(self.adapter, "_dispatch_worker", return_value=fake_results),
-                patch("pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock),
+                patch.object(
+                    self.adapter, "_dispatch_worker", return_value=fake_results
+                ),
+                patch(
+                    "pymatgen.io.vasp.outputs.Chgcar.from_dict",
+                    return_value=chgcar_mock,
+                ),
             ):
                 results = self.adapter.run_on_directory(tmp)
 
         self.assertEqual(len(results), 1)
-        self.assertIs(results[0]["properties"]["DeePAW Charge Density"], chgcar_mock)
+        self.assertIs(
+            results[0]["properties"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
+        )
 
     def test_run_on_directory_raises_on_non_linux(self):
         with patch("platform.system", return_value="Darwin"):

@@ -279,7 +279,7 @@ class TestDeserializeResult(unittest.TestCase):
         import numpy as np
         from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
 
-        bs = deserialized["properties"]["Phonax Phonon Band Structure"]
+        bs = deserialized["properties"]["PHONAX_BS: Phonax Phonon Band Structure"]
         self.assertIsInstance(bs, PhononBandStructureSymmLine)
         self.assertEqual(bs.frequencies.shape, (6, n_qpoints))
         np.testing.assert_allclose(
@@ -310,7 +310,7 @@ class TestDeserializeResult(unittest.TestCase):
 
         from pymatgen.phonon.dos import CompletePhononDos
 
-        dos = deserialized["properties"]["Phonax Phonon DOS"]
+        dos = deserialized["properties"]["PHONAX_DOS: Phonax Phonon DOS"]
         self.assertIsInstance(dos, CompletePhononDos)
         self.assertEqual(len(dos.frequencies), n_total)
 
@@ -362,7 +362,9 @@ class TestRunOnStructureWorkflow(unittest.TestCase):
                 result = adapter.run_on_structure(poscar_path)
 
             self.assertEqual(result["name"], "POSCAR")
-            self.assertIn("Phonax Phonon Band Structure", result["properties"])
+            self.assertIn(
+                "PHONAX_BS: Phonax Phonon Band Structure", result["properties"]
+            )
 
 
 class TestWorkerScriptSemantics(unittest.TestCase):

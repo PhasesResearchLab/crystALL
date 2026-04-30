@@ -634,9 +634,7 @@ class TestCrystALLSearch(unittest.TestCase):
         mock_dbscan_inst.labels_ = np.array([0, 0, 1, 1, -1][: len(self.cas.ks2022)])
 
         with (
-            patch.object(
-                crystall.CrystALLSearch, "_embed_features", cheap_embed
-            ),
+            patch.object(crystall.CrystALLSearch, "_embed_features", cheap_embed),
             patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst),
         ):
             self.cas.cluster_prototypes_DBSCAN()
@@ -650,9 +648,7 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
         with (
-            patch.object(
-                crystall.CrystALLSearch, "_embed_features", cheap_embed
-            ),
+            patch.object(crystall.CrystALLSearch, "_embed_features", cheap_embed),
             patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst),
         ):
             self.cas.cluster_prototypes_DBSCAN(same_composition=True)
@@ -708,9 +704,7 @@ class TestCrystALLSearch(unittest.TestCase):
         with (
             patch("crystall.core.KMeans", return_value=mock_kmeans_inst),
             patch("crystall.core.silhouette_score", return_value=0.5),
-            patch.object(
-                crystall.CrystALLSearch, "_embed_features", cheap_embed
-            ),
+            patch.object(crystall.CrystALLSearch, "_embed_features", cheap_embed),
             patch("crystall.core.np.geomspace", return_value=np.array([2, 3])),
         ):
             # Explicitly exercise silhouette-search path with fixed small cluster count
@@ -976,6 +970,7 @@ class TestBaseCalculator(unittest.TestCase):
             MLIPAdapter("ORB", inference=[MLIPAdapter("MACE-mh")])
         self.assertIn("calculator_type='mlip'", str(ctx.exception))
 
+
 class TestBaseCalculatorSchemaGuards(unittest.TestCase):
     """Tests for the adapter schema guards introduced in TODO_260429_Adapter_Schema_Guards.
 
@@ -998,6 +993,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
 
         def _env_path(self):
             from pathlib import Path
+
             return Path(self._tmp) / "env"
 
         def _run_code(self):
@@ -1008,11 +1004,12 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         """setup_env must print the warning and continue without prompting when stdin is not a tty."""
         import tempfile, io
         from unittest.mock import patch, MagicMock
+
         adapter = self._GuardAdapter()
         with tempfile.TemporaryDirectory() as tmp:
             adapter._tmp = tmp
             with (
-                patch("sys.stdin", io.StringIO("")),          # isatty() → False
+                patch("sys.stdin", io.StringIO("")),  # isatty() → False
                 patch.object(adapter, "_uv_bin", return_value="uv"),
                 patch("subprocess.run", return_value=MagicMock(returncode=0)),
                 patch.object(adapter, "_install_layer2"),
@@ -1031,6 +1028,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         """setup_env must return early and skip installation when user enters 'n'."""
         import tempfile, io
         from unittest.mock import patch, MagicMock
+
         adapter = self._GuardAdapter()
         with tempfile.TemporaryDirectory() as tmp:
             adapter._tmp = tmp
@@ -1049,28 +1047,34 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         """_setup_preflight must be called even when the env is already ready."""
         import tempfile
         from unittest.mock import patch, call
+
         adapter = self._GuardAdapter()
         with tempfile.TemporaryDirectory() as tmp:
             adapter._tmp = tmp
             call_log = []
             with (
                 patch.object(
-                    adapter, "_setup_preflight",
-                    side_effect=lambda: call_log.append("preflight")
+                    adapter,
+                    "_setup_preflight",
+                    side_effect=lambda: call_log.append("preflight"),
                 ),
                 patch.object(
-                    adapter, "is_env_ready",
-                    side_effect=lambda: call_log.append("cache_check") or True
+                    adapter,
+                    "is_env_ready",
+                    side_effect=lambda: call_log.append("cache_check") or True,
                 ),
             ):
                 adapter.setup_env()
-        self.assertEqual(call_log[0], "preflight", "preflight must fire before cache check")
+        self.assertEqual(
+            call_log[0], "preflight", "preflight must fire before cache check"
+        )
         self.assertIn("cache_check", call_log)
 
     # ── 4. _resolve_device('cuda') raises when CUDA unavailable ──────────
     def test_resolve_device_cuda_raises_when_unavailable(self):
         """_resolve_device must raise RuntimeError for 'cuda' when the system has no GPU."""
         from unittest.mock import patch
+
         adapter = self._GuardAdapter()
         with patch.object(type(adapter), "_cuda_available_system", return_value=False):
             with self.assertRaises(RuntimeError) as ctx:
@@ -1087,6 +1091,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
     # ── 6. MLIPAdapter does not override setup_env ───────────────────────
     def test_mlip_adapter_does_not_override_setup_env(self):
         from crystall.calculators import MLIPAdapter
+
         self.assertIs(
             MLIPAdapter.setup_env,
             BaseCalculator.setup_env,
@@ -1096,6 +1101,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
     # ── 7. DeePAWAdapter does not override setup_env ─────────────────────
     def test_deepaw_adapter_does_not_override_setup_env(self):
         from crystall.calculators import DeePAWAdapter
+
         self.assertIs(
             DeePAWAdapter.setup_env,
             BaseCalculator.setup_env,
@@ -1107,6 +1113,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         """NequIP is linux-only; _assert_os_supported must raise on macOS."""
         from unittest.mock import patch
         from crystall.calculators import MLIPAdapter
+
         adapter = MLIPAdapter("NequIP")
         with patch("platform.system", return_value="Darwin"):
             with self.assertRaises(RuntimeError) as ctx:
@@ -1135,11 +1142,13 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         for cls in adapters:
             with self.subTest(adapter=cls.__name__):
                 self.assertIn(
-                    "supported_os", cls.__dict__,
+                    "supported_os",
+                    cls.__dict__,
                     f"{cls.__name__} must declare supported_os as a class attribute",
                 )
                 self.assertIn(
-                    "supported_devices", cls.__dict__,
+                    "supported_devices",
+                    cls.__dict__,
                     f"{cls.__name__} must declare supported_devices as a class attribute",
                 )
                 self.assertTrue(

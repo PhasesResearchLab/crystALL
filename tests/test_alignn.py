@@ -91,7 +91,9 @@ class TestAlignnAdapterContract(unittest.TestCase):
         fake_results = [{"name": "POSCAR", "properties": {"dummy": 1.23}}]
 
         with (
-            patch.object(self.adapter, "_dispatch_worker", return_value=fake_results) as mock_dw,
+            patch.object(
+                self.adapter, "_dispatch_worker", return_value=fake_results
+            ) as mock_dw,
             tempfile.TemporaryDirectory() as tmp,
         ):
             # Create a dummy structure file so the directory is not empty.
