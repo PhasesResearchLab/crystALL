@@ -522,6 +522,9 @@ class TestCrystALLSearch(unittest.TestCase):
             )
 
     @pytest.mark.order(6)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_get_mpdd_convexhull(self) -> None:
         """Test getting MPDD convex hull stability."""
         self.cas.get_mpdd_convexhull()
@@ -555,8 +558,8 @@ class TestCrystALLSearch(unittest.TestCase):
         base_obj = self.cas.predicted_objectives[0]
         new_name = f"scaled_{base_obj}"
 
-        # Define a simple scaled objective [0] * 2
-        self.cas.define_objective(new_name, [base_obj], "[0] * 2")
+        # Define a simple scaled objective #0 * 2
+        self.cas.define_objective(new_name, [base_obj], "#0 * 2")
         self.assertIn(new_name, self.cas.predicted_objectives)
 
         # Filter using the newly defined objective
@@ -578,7 +581,7 @@ class TestCrystALLSearch(unittest.TestCase):
             self.cas.define_objective("bad_syntax", [base_obj], "bad$expr")
         with self.assertRaises(AssertionError):
             # index 1 is out-of-range when only one base objective is provided
-            self.cas.define_objective("out_of_range", [base_obj], "[1]")
+            self.cas.define_objective("out_of_range", [base_obj], "#1")
 
         # Unhappy path: invalid objective name should raise
         with self.assertRaises(AssertionError):
