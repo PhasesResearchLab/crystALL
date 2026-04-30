@@ -14,11 +14,10 @@ import sys
 import warnings
 
 import numpy as np
-from typing import Any, Sequence, List, Dict, Union, Literal, Optional
+from typing import Any, Sequence, List, Dict, Tuple, Union, Literal, Optional
 
 
 from duecredit import BibTeX, Doi, due
-
 
 # ── Citation registration ─────────────────────────────────────────────────────
 
@@ -419,7 +418,74 @@ class BaseCalculator:
         sentinel = self._env_path() / ".crystall_env_ready"
         return py.exists() and os.access(str(py), os.X_OK) and sentinel.exists()
 
+    # ── Platform / device guards ────────────────────────────────────────────
+
+    @staticmethod
+    def _current_os() -> str:
+        """Return a normalised OS identifier for the current platform."""
+        import platform
+
+        system = platform.system().lower()
+        if system == "darwin":
+            return "macos"
+        if system == "linux":
+            return "linux"
+        if system == "windows":
+            return "windows"
+        return system
+
+    def _assert_os_supported(self) -> None:
+        """Raise RuntimeError if the current OS is not listed in supported_os."""
+        current = self._current_os()
+        if current not in self.supported_os:
+            raise RuntimeError(
+                f"{self.name} is not supported on '{current}'. "
+                f"Supported OS values: {self.supported_os}."
+            )
+
+    @staticmethod
+    def _cuda_available_system() -> bool:
+        """Return True if nvidia-smi is present and exits cleanly on the host."""
+        import subprocess as sp
+
+        try:
+            result = sp.run(["nvidia-smi"], capture_output=True, timeout=10)
+            return result.returncode == 0
+        except (FileNotFoundError, sp.TimeoutExpired):
+            return False
+
+    def _resolve_device(self, device: str = "cpu") -> str:
+        """Validate and return the requested device, caching the result.
+
+        Raises ValueError if device is not in supported_devices.
+        Raises RuntimeError if 'cuda' is requested but unavailable on the host.
+        """
+        if getattr(self, "_resolved_device", None) is not None:
+            return self._resolved_device  # type: ignore[return-value]
+        if device not in self.supported_devices:
+            raise ValueError(
+                f"[{self.name}] device='{device}' is not supported. "
+                f"Supported values: {self.supported_devices}."
+            )
+        if device == "cuda" and not self._cuda_available_system():
+            raise RuntimeError(
+                f"[{self.name}] device='cuda' requested but CUDA is not available "
+                "on this system (nvidia-smi not found or returned non-zero)."
+            )
+        self._resolved_device: str = device
+        return device
+
     # ── Overridable hooks ───────────────────────────────────────────────────
+
+    def _setup_preflight(self) -> None:
+        """Pre-installation checks run before setup_env creates the micro-env.
+
+        Called at the very start of setup_env, before the cached-env
+        short-circuit.  Subclasses can override this to add adapter-specific
+        pre-checks without overriding setup_env itself.
+        """
+        self._assert_os_supported()
+        self._resolve_device()
 
     def python_version(self) -> str:
         """Python version for the micro-env venv (e.g. ``"3.11"``)."""
@@ -460,10 +526,10 @@ class BaseCalculator:
     def _request_extras(self) -> dict:
         """Additional keys merged into the request JSON sent to the worker.
 
-        Override to pass model-specific configuration (calculator code lines,
-        format vars, etc.) to the worker script.
+        Base implementation propagates save_artifacts to all workers.
+        Subclasses must call super()._request_extras() and update the result.
         """
-        return {}
+        return {"save_artifacts": self.save_artifacts}
 
     # ── Environment lifecycle ───────────────────────────────────────────────
 
@@ -478,10 +544,27 @@ class BaseCalculator:
         import subprocess as sp
         from pathlib import Path
 
+        self._setup_preflight()
+
         target = self._env_path()
         if self.is_env_ready():
             print(f"Using cached micro-environment for {self.name} at {target}")
             return
+
+        if sys.stdin.isatty():
+            _response = input(
+                "Warning: installing calculator models can require significant disk space "
+                "(up to ~2 GB per model). Proceed with installation? (Y/n): "
+            )
+            if _response.strip().lower() not in ("y", ""):
+                print("Setup aborted.")
+                return
+        else:
+            print(
+                "Warning: installing calculator models can require significant disk space "
+                "(up to ~2 GB per model).\n"
+                "[Non-interactive session detected — proceeding automatically.]"
+            )
 
         if target.exists():
             py = self._micro_python()
@@ -642,9 +725,6 @@ class BaseCalculator:
         self,
         file_paths: List[str],
         *,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         verbose: bool = False,
         **kwargs,
     ) -> list:
@@ -657,11 +737,15 @@ class BaseCalculator:
         import subprocess as sp
         import tempfile
 
-        assert self.is_env_ready(), (
-            f"Micro-environment for '{self.name}' is not ready. Call setup_env() first."
-        )
+        assert (
+            self.is_env_ready()
+        ), f"Micro-environment for '{self.name}' is not ready. Call setup_env() first."
 
         code = self._run_code()
+
+        isif = kwargs.pop("isif", 8)
+        optimizer = kwargs.pop("optimizer", "FIRE")
+        fmax = kwargs.pop("fmax", 0.05)
 
         # Build request payload
         request = {
@@ -734,9 +818,6 @@ class BaseCalculator:
     def run_on_structure(
         self,
         file_path: str,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -744,18 +825,13 @@ class BaseCalculator:
 
         Args:
             file_path: Path to a structure file (POSCAR, CIF, etc.).
-            isif: ISIF relaxation setting (ignored by non-relaxation adapters).
-            optimizer: ASE optimizer name (``"FIRE"`` or ``"LBFGS"``).
-            fmax: Force convergence threshold for relaxation.
             objectives: Optional subset of objectives to return.
 
         Returns:
             Dict with ``"name"`` and ``"properties"`` keys.
         """
         file_path = os.path.abspath(file_path)
-        results = self._dispatch_worker(
-            [file_path], isif=isif, optimizer=optimizer, fmax=fmax, **kwargs
-        )
+        results = self._dispatch_worker([file_path], **kwargs)
         if not results:
             return {"name": os.path.basename(file_path), "properties": {}}
         return results[0]
@@ -766,9 +842,6 @@ class BaseCalculator:
         mode: Literal["serial", "parallel"] = "serial",
         max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         **kwargs,
     ) -> list[Dict[str, Any]]:
         """Run calculator over all structure files in a directory.
@@ -781,9 +854,6 @@ class BaseCalculator:
             mode: Execution mode hint (reserved for future parallel dispatch).
             max_workers: Max parallel workers (reserved for future use).
             objectives: Optional subset of objective names to compute/return.
-            isif: ISIF relaxation setting (default 8).
-            optimizer: ASE optimizer name (default ``"FIRE"``).
-            fmax: Force convergence threshold (default 0.05 eV/Å).
 
         Returns:
             List of dicts, each with ``"name"`` and ``"properties"`` keys.
@@ -803,9 +873,7 @@ class BaseCalculator:
             warnings.warn(f"No files found in {path}")
             return []
 
-        return self._dispatch_worker(
-            file_paths, isif=isif, optimizer=optimizer, fmax=fmax, **kwargs
-        )
+        return self._dispatch_worker(file_paths, **kwargs)
 
     # ── Utility ─────────────────────────────────────────────────────────────
 

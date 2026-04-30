@@ -23,10 +23,15 @@ if TYPE_CHECKING:
     from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
     from pymatgen.phonon.dos import CompletePhononDos
 
+    name = "phonax"
+    calculator_type: Literal["inference"] = "inference"
     objectives_map = {
         "PHONAX_BS: Phonax Phonon Band Structure": "phonon_band_structure",
         "PHONAX_DOS: Phonax Phonon DOS": "phonon_dos",
     }
+    supported_os: List[str] = ["windows", "macos", "linux"]
+    supported_devices: List[str] = ["cpu", "cuda"]  # JAX supports CPU; CUDA via jax[cuda] if available
+
 
 _PHONAX_WORKER_SCRIPT = """\
 import sys

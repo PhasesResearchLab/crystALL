@@ -26,6 +26,7 @@ _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 class _BaseMatGLStaticAdapter(BaseCalculator):
     """Shared behavior for MatGL static adapters."""
 
+    name = "MatGL"
     calculator_type: Literal["mlip", "inference"] = "inference"
 
     objectives_map: Dict[str, str] = {
@@ -38,6 +39,9 @@ class _BaseMatGLStaticAdapter(BaseCalculator):
         "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
         "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
     }
+
+    supported_os: List[str] = ["windows", "macos", "linux"]
+    supported_devices: List[str] = ["cpu", "cuda"]  # platform-specific DGL/torch wheels; no device lock
 
     def _env_path(self) -> Path:
         return self._env_root() / "matgl"

@@ -40,6 +40,8 @@ class DeePAWAdapter(BaseCalculator):
     objectives_map: Dict[str, str] = {
         "DEEPAW_RHO: DeePAW Charge Density": "deepaw_charge_density",
     }
+    supported_os: List[str] = ["linux"]
+    supported_devices: List[str] = ["cuda"]
 
     def __init__(self, nx: int = 40, ny: int = 40, nz: int = 40, **kwargs):
         """Initialise the adapter.

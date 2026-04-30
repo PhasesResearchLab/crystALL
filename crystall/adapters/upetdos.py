@@ -17,12 +17,14 @@ class UPETDosAdapter(BaseCalculator):
     """Adapter for the UPET-MAD DOS model for inference."""
 
     name = "UPET-DOS"
-    calculator_type = "inference"
+    calculator_type: Literal["inference"] = "inference"
     objectives_map: Dict[str, str] = {
         "UPETDOS_DOS: UPET-MAD DOS": "complete_dos",
         "UPETDOS_BG: UPET-MAD Bandgap [eV]": "bandgap",
         "UPETDOS_EF: UPET-MAD Fermi Level [eV]": "fermi_level",
     }
+    supported_os: List[str] = ["windows", "macos", "linux"]
+    supported_devices: List[str] = ["cpu", "cuda"]  # worker auto-selects via torch.cuda.is_available()
 
     def _env_path(self) -> Path:
         return self._env_root() / "upetdos"

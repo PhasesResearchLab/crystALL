@@ -37,6 +37,8 @@ class AlignnAdapter(BaseCalculator):
         "ALIGNN_EF_ALEX: ALIGNN-Alexandria Formation Energy [eV/atom]": "alex_e_form",
         "ALIGNN_VOL_ALEX: ALIGNN-Alexandria Volume Per Atom [A^3]": "alex_volume_per_atom",
     }
+    supported_os: List[str] = ["windows", "macos", "linux"]
+    supported_devices: List[str] = ["cpu"]  # torch installed without CUDA index
 
     # ── Micro-env path ──────────────────────────────────────────────────────
 
