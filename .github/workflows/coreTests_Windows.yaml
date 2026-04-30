@@ -2,9 +2,17 @@ name: Windows
 
 on: 
   push:
+    branches: [main]
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_Windows.yaml'
+  
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_Windows.yaml'
+
   workflow_dispatch:
 
 jobs:
