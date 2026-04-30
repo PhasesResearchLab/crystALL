@@ -29,6 +29,11 @@ from crystall.calculators import BaseCalculator
 
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
+# Matches "${VAR_NAME}" optionally followed by whitespace and a guidance message.
+# Used in mlips.json custom values to indicate env-var resolution.
+_ENV_VAR_RE = re.compile(r"^\$\{([A-Z_][A-Z0-9_]*)\}\s*(.*)", re.DOTALL)
+
+
 def _sanitize_model_code(name: str) -> str:
     """Convert an arbitrary model name string into a valid objective code prefix.
 
@@ -239,6 +244,31 @@ class MLIPAdapter(BaseCalculator):
         except Exception as exc:
             warnings.warn(f"[{self.name}] CUDA probe failed in micro-env: {exc}")
             return False
+
+    def _resolve_env_value(key: str, value: str, model_name: str) -> str:
+        """Resolve a custom config value, substituting env-var placeholders.
+
+        If *value* matches ``${VAR_NAME}`` (optionally followed by a guidance
+        message), the named environment variable is read from ``os.environ``.
+        A missing variable raises :class:`EnvironmentError` immediately, before
+        any model initialisation is attempted.
+
+        Plain (non-placeholder) values are returned unchanged.
+        """
+        match = _ENV_VAR_RE.match(value)
+        if not match:
+            return value
+        var_name, guidance = match.group(1), match.group(2).strip()
+        resolved = os.environ.get(var_name)
+        if resolved is None:
+            lines = [
+                f"[{model_name}] Required environment variable '{var_name}' is not set.",
+                f"  → Set it with: export {var_name}=<your_value>",
+            ]
+            if guidance:
+                lines.append(f"  → {guidance}")
+            raise EnvironmentError("\n".join(lines))
+        return resolved
 
     def layer2_dependencies(self) -> List[str]:
         return [
