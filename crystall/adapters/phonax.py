@@ -23,6 +23,34 @@ if TYPE_CHECKING:
     from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
     from pymatgen.phonon.dos import CompletePhononDos
 
+
+class PhonaxAdapter(BaseCalculator):
+    """Adapter for Phonax phonon inference.
+
+    Computes phonon band structures and densities of states by dispatching a
+    self-contained worker script into a micro-environment that installs Phonax
+    and its dependencies.
+
+    Example::
+
+        adapter = PhonaxAdapter("/path/to/weights.pt")
+        adapter.setup_env()
+        result = adapter.run_on_structure("POSCAR")
+        band_structure = result["properties"]["Phonax Phonon Band Structure"]
+        dos = result["properties"]["Phonax Phonon DOS"]
+
+    Args:
+        weights_path: Path to the Phonax model weights file.
+        model_name: Which pre-trained model to load (default ``"nequip-uniIAP"``).
+            Supported: ``"nequip-uniIAP"``, ``"nequip-uniIAP-finetune"``,
+            ``"nequip-JAX-uniIAP"``, ``"mace-uniIAP"``, ``"mace-uniIAP-finetune"``.
+        npoints: Number of k-points along the high-symmetry band path
+            (default 1000).
+        bz_mesh: Uniform BZ mesh density as ``(nx, ny, nz)`` tuple for DOS
+            (default ``(10, 10, 10)``).
+        dos_sigma: Gaussian broadening width for DOS in THz (default 2.0).
+    """
+
     name = "phonax"
     calculator_type: Literal["inference"] = "inference"
     objectives_map = {
@@ -31,6 +59,210 @@ if TYPE_CHECKING:
     }
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu", "cuda"]  # JAX supports CPU; CUDA via jax[cuda] if available
+
+    _VALID_MODEL_NAMES = frozenset(
+        [
+            "nequip-uniIAP",
+            "nequip-uniIAP-finetune",
+            "nequip-JAX-uniIAP",
+            "mace-uniIAP",
+            "mace-uniIAP-finetune",
+        ]
+    )
+
+    def __init__(
+        self,
+        weights_path: str | Path,
+        model_name: str = "nequip-uniIAP",
+        npoints: int = 1000,
+        bz_mesh: tuple[int, int, int] = (10, 10, 10),
+        dos_sigma: float = 2.0,
+    ):
+        if model_name not in self._VALID_MODEL_NAMES:
+            raise ValueError(
+                f"Unknown model_name '{model_name}'. "
+                f"Supported: {sorted(self._VALID_MODEL_NAMES)}"
+            )
+        self._weights_path = Path(weights_path)
+        self._model_name = model_name
+        self._npoints = npoints
+        self._bz_mesh = bz_mesh
+        self._dos_sigma = dos_sigma
+
+    def layer2_dependencies(self) -> List[str]:
+        return [
+            "phonax",
+            "jax",
+            "dm-haiku",
+            "jraph",
+            "e3nn-jax",
+            "optax",
+            "ase>=3.23",
+            "tqdm",
+        ]
+
+    def _request_extras(self) -> dict:
+        return {
+            "model_name": self._model_name,
+            "weights_path": str(self._weights_path),
+            "npoints": self._npoints,
+            "bz_mesh": list(self._bz_mesh),
+            "dos_sigma": self._dos_sigma,
+        }
+
+    def _run_code(self) -> str:
+        return _PHONAX_WORKER_SCRIPT
+
+    @staticmethod
+    def _band_structure_from_payload(
+        payload: dict, structure: "Structure"
+    ) -> "PhononBandStructureSymmLine":
+        from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
+        from pymatgen.core import Lattice
+        from pymatgen.electronic_structure.bandstructure import Kpoint
+        import numpy as np
+
+        lattice_real = np.array(payload["lattice"], dtype=np.float64)
+        lattice_rec = Lattice(lattice_real).reciprocal_lattice
+
+        freqs_cm1 = np.array(payload["frequencies_cm1"], dtype=np.float64)
+        freqs_thz = freqs_cm1 * 0.02998  # cm⁻¹ → THz
+
+        qpoints = [Kpoint(kpt, lattice_rec) for kpt in payload["qpoints"]]
+
+        labels_raw = payload.get("labels", {})
+        labels_dict: Dict[str, Any] = {}
+        for idx_str, label in labels_raw.items():
+            idx = int(idx_str)
+            labels_dict[label] = qpoints[idx]
+
+        return PhononBandStructureSymmLine(
+            qpoints=qpoints,
+            frequencies=freqs_thz.T,
+            lattice=lattice_rec,
+            has_nac=False,
+            eigendisplacements=None,
+            labels_dict=labels_dict,
+            structure=structure,
+        )
+
+    @staticmethod
+    def _dos_from_payload(payload: dict, structure: "Structure") -> "CompletePhononDos":
+        from pymatgen.phonon.dos import PhononDos, CompletePhononDos
+        import numpy as np
+
+        freqs_cm1 = np.array(payload["frequencies_cm1"], dtype=np.float64)
+        freqs_thz = freqs_cm1.flatten() * 0.02998
+
+        total_dos = PhononDos(freqs_thz, np.array(payload["total_dos"]))
+
+        ph_doses: Dict[Any, list] = {}
+        partial_raw = payload.get("partial_dos", {})
+        for site in structure.sites:
+            ele = site.species_string
+            if ele in partial_raw:
+                ph_doses[site] = partial_raw[ele]
+
+        return CompletePhononDos(structure, total_dos, ph_doses)
+
+    @classmethod
+    def _deserialize_result(
+        cls, result: Dict[str, Any], struct_dict: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
+        if not isinstance(result, dict):
+            return result
+        props = result.get("properties")
+        if not isinstance(props, dict):
+            return result
+
+        updated = dict(result)
+        updated_props = {}
+
+        from pymatgen.core import Structure
+
+        structure = Structure.from_dict(struct_dict) if struct_dict else None
+
+        for key, value in props.items():
+            # NOTE: The string literals below MUST stay in sync with the
+            # corresponding keys in objectives_map.  If a description is
+            # ever edited in objectives_map, update these strings too.
+            if key == "phonon_band_structure" and isinstance(value, dict):
+                try:
+                    updated_props["PHONAX_BS: Phonax Phonon Band Structure"] = (
+                        cls._band_structure_from_payload(value, structure)
+                    )
+                except Exception:
+                    updated_props[key] = value
+
+            elif key == "phonon_dos" and isinstance(value, dict):
+                try:
+                    updated_props["PHONAX_DOS: Phonax Phonon DOS"] = (
+                        cls._dos_from_payload(value, structure)
+                    )
+                except Exception:
+                    updated_props[key] = value
+
+            else:
+                updated_props[key] = value
+
+        updated["properties"] = updated_props
+        return updated
+
+    def run_on_structure(
+        self,
+        file_path: str,
+        isif: int = 8,
+        optimizer: str = "FIRE",
+        fmax: float = 0.05,
+        objectives: Sequence[str] | None = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Run Phonax phonon inference on a single structure file.
+
+        The structure is written to a temporary POSCAR before dispatch.
+        """
+        internal_objectives = self._resolve_objectives_to_dispatch(objectives)
+
+        file_path_abs = os.path.abspath(file_path)
+
+        from pymatgen.core import Structure
+
+        try:
+            structure = Structure.from_file(file_path_abs)
+        except Exception:
+            structure = None
+
+        struct_dict = structure.as_dict() if structure is not None else None
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_POSCAR", delete=False
+        ) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            if structure is not None:
+                structure.to(fmt="poscar", filename=tmp_path)
+            else:
+                import shutil
+
+                shutil.copy2(file_path_abs, tmp_path)
+
+            result = super().run_on_structure(
+                tmp_path,
+                isif=isif,
+                optimizer=optimizer,
+                fmax=fmax,
+                objectives=internal_objectives,
+                _structure_dict=struct_dict,
+                **kwargs,
+            )
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        return self._deserialize_result(result, struct_dict=struct_dict)
 
 
 _PHONAX_WORKER_SCRIPT = """\
@@ -269,244 +501,3 @@ def main():
 if __name__ == "__main__":
     main()
 """
-
-
-class PhonaxAdapter(BaseCalculator):
-    """Adapter for Phonax phonon inference.
-
-    Computes phonon band structures and densities of states by dispatching a
-    self-contained worker script into a micro-environment that installs Phonax
-    and its dependencies.
-
-    Example::
-
-        adapter = PhonaxAdapter("/path/to/weights.pt")
-        adapter.setup_env()
-        result = adapter.run_on_structure("POSCAR")
-        band_structure = result["properties"]["Phonax Phonon Band Structure"]
-        dos = result["properties"]["Phonax Phonon DOS"]
-
-    Args:
-        weights_path: Path to the Phonax model weights file.
-        model_name: Which pre-trained model to load (default ``"nequip-uniIAP"``).
-            Supported: ``"nequip-uniIAP"``, ``"nequip-uniIAP-finetune"``,
-            ``"nequip-JAX-uniIAP"``, ``"mace-uniIAP"``, ``"mace-uniIAP-finetune"``.
-        npoints: Number of k-points along the high-symmetry band path
-            (default 1000).
-        bz_mesh: Uniform BZ mesh density as ``(nx, ny, nz)`` tuple for DOS
-            (default ``(10, 10, 10)``).
-        dos_sigma: Gaussian broadening width for DOS in THz (default 2.0).
-    """
-
-    name = "phonax"
-    calculator_type: Literal["inference"] = "inference"
-    objectives_map = {
-        "Phonax Phonon Band Structure": "phonon_band_structure",
-        "Phonax Phonon DOS": "phonon_dos",
-    }
-
-    _VALID_MODEL_NAMES = frozenset(
-        [
-            "nequip-uniIAP",
-            "nequip-uniIAP-finetune",
-            "nequip-JAX-uniIAP",
-            "mace-uniIAP",
-            "mace-uniIAP-finetune",
-        ]
-    )
-
-    def __init__(
-        self,
-        weights_path: str | Path,
-        model_name: str = "nequip-uniIAP",
-        npoints: int = 1000,
-        bz_mesh: tuple[int, int, int] = (10, 10, 10),
-        dos_sigma: float = 2.0,
-    ):
-        if model_name not in self._VALID_MODEL_NAMES:
-            raise ValueError(
-                f"Unknown model_name '{model_name}'. "
-                f"Supported: {sorted(self._VALID_MODEL_NAMES)}"
-            )
-        self._weights_path = Path(weights_path)
-        self._model_name = model_name
-        self._npoints = npoints
-        self._bz_mesh = bz_mesh
-        self._dos_sigma = dos_sigma
-
-    def layer2_dependencies(self) -> List[str]:
-        return [
-            "phonax",
-            "jax",
-            "dm-haiku",
-            "jraph",
-            "e3nn-jax",
-            "optax",
-            "ase>=3.23",
-            "tqdm",
-        ]
-
-    def _request_extras(self) -> dict:
-        return {
-            "model_name": self._model_name,
-            "weights_path": str(self._weights_path),
-            "npoints": self._npoints,
-            "bz_mesh": list(self._bz_mesh),
-            "dos_sigma": self._dos_sigma,
-        }
-
-    def _run_code(self) -> str:
-        return _PHONAX_WORKER_SCRIPT
-
-    @staticmethod
-    def _band_structure_from_payload(
-        payload: dict, structure: "Structure"
-    ) -> "PhononBandStructureSymmLine":
-        from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
-        from pymatgen.core import Lattice
-        from pymatgen.electronic_structure.bandstructure import Kpoint
-        import numpy as np
-
-        lattice_real = np.array(payload["lattice"], dtype=np.float64)
-        lattice_rec = Lattice(lattice_real).reciprocal_lattice
-
-        freqs_cm1 = np.array(payload["frequencies_cm1"], dtype=np.float64)
-        freqs_thz = freqs_cm1 * 0.02998  # cm⁻¹ → THz
-
-        qpoints = [Kpoint(kpt, lattice_rec) for kpt in payload["qpoints"]]
-
-        labels_raw = payload.get("labels", {})
-        labels_dict: Dict[str, Any] = {}
-        for idx_str, label in labels_raw.items():
-            idx = int(idx_str)
-            labels_dict[label] = qpoints[idx]
-
-        return PhononBandStructureSymmLine(
-            qpoints=qpoints,
-            frequencies=freqs_thz.T,
-            lattice=lattice_rec,
-            has_nac=False,
-            eigendisplacements=None,
-            labels_dict=labels_dict,
-            structure=structure,
-        )
-
-    @staticmethod
-    def _dos_from_payload(payload: dict, structure: "Structure") -> "CompletePhononDos":
-        from pymatgen.phonon.dos import PhononDos, CompletePhononDos
-        import numpy as np
-
-        freqs_cm1 = np.array(payload["frequencies_cm1"], dtype=np.float64)
-        freqs_thz = freqs_cm1.flatten() * 0.02998
-
-        total_dos = PhononDos(freqs_thz, np.array(payload["total_dos"]))
-
-        ph_doses: Dict[Any, list] = {}
-        partial_raw = payload.get("partial_dos", {})
-        for site in structure.sites:
-            ele = site.species_string
-            if ele in partial_raw:
-                ph_doses[site] = partial_raw[ele]
-
-        return CompletePhononDos(structure, total_dos, ph_doses)
-
-    @classmethod
-    def _deserialize_result(
-        cls, result: Dict[str, Any], struct_dict: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
-        if not isinstance(result, dict):
-            return result
-        props = result.get("properties")
-        if not isinstance(props, dict):
-            return result
-
-        updated = dict(result)
-        updated_props = {}
-
-        from pymatgen.core import Structure
-
-        structure = Structure.from_dict(struct_dict) if struct_dict else None
-
-        for key, value in props.items():
-            if key == "phonon_band_structure" and isinstance(value, dict):
-                try:
-                    updated_props["Phonax Phonon Band Structure"] = (
-                        cls._band_structure_from_payload(value, structure)
-                    )
-                except Exception:
-                    updated_props[key] = value
-
-            elif key == "phonon_dos" and isinstance(value, dict):
-                try:
-                    updated_props["Phonax Phonon DOS"] = cls._dos_from_payload(
-                        value, structure
-                    )
-                except Exception:
-                    updated_props[key] = value
-
-            else:
-                updated_props[key] = value
-
-        updated["properties"] = updated_props
-        return updated
-
-    def run_on_structure(
-        self,
-        file_path: str,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
-        objectives: Sequence[str] | None = None,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Run Phonax phonon inference on a single structure file.
-
-        The structure is written to a temporary POSCAR before dispatch.
-        """
-        if objectives is None:
-            objectives = list(self.objectives_map.keys())
-
-        internal_objectives = [
-            self.objectives_map[obj] for obj in objectives if obj in self.objectives_map
-        ]
-
-        file_path_abs = os.path.abspath(file_path)
-
-        from pymatgen.core import Structure
-
-        try:
-            structure = Structure.from_file(file_path_abs)
-        except Exception:
-            structure = None
-
-        struct_dict = structure.as_dict() if structure is not None else None
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix="_POSCAR", delete=False
-        ) as tmp:
-            tmp_path = tmp.name
-
-        try:
-            if structure is not None:
-                structure.to(fmt="poscar", filename=tmp_path)
-            else:
-                import shutil
-
-                shutil.copy2(file_path_abs, tmp_path)
-
-            result = super().run_on_structure(
-                tmp_path,
-                isif=isif,
-                optimizer=optimizer,
-                fmax=fmax,
-                objectives=internal_objectives,
-                _structure_dict=struct_dict,
-                **kwargs,
-            )
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-
-        return self._deserialize_result(result, struct_dict=struct_dict)
