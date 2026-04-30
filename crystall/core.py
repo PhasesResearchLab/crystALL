@@ -233,9 +233,9 @@ class CrystALLSearch:
                     )
 
         # Update objectives with calculators found
-        self.__update_objectives(self.Calculator)
+        self._update_objectives(self.Calculator)
 
-    def __update_objectives(self, calculator: Calculator, verbose: bool = True) -> None:
+    def _update_objectives(self, calculator: Calculator, verbose: bool = True) -> None:
         """
         Update the available objectives with the calculators found.
 
@@ -262,15 +262,62 @@ class CrystALLSearch:
                 try:
                     colored_calc = f"{calc_name}"
                     colored_objs = ", ".join(
-                        f"{Fore.GREEN}{Style.BRIGHT}{o}{Style.RESET_ALL}"
-                        for o in sorted(obj_list)
+                        (
+                            (
+                                f"{Fore.GREEN}{Style.BRIGHT}"
+                                f"{code}: {self._objective_registry[code]['description']}"
+                                f"{Style.RESET_ALL}"
+                            )
+                            if code in self._objective_registry
+                            and self._objective_registry[code].get("description")
+                            else f"{Fore.GREEN}{Style.BRIGHT}{code}{Style.RESET_ALL}"
+                        )
+                        for code in sorted(obj_list)
                     )
                     print(f"- {colored_calc}: {colored_objs}")
                 except UnicodeEncodeError:
                     # Fallback without colors if terminal cannot render them
-                    print(f"- {calc_name}: {', '.join(sorted(obj_list))}")
+                    labels = [
+                        (
+                            f"{code}: {self._objective_registry[code]['description']}"
+                            if code in self._objective_registry
+                            and self._objective_registry[code].get("description")
+                            else code
+                        )
+                        for code in sorted(obj_list)
+                    ]
+                    print(f"- {calc_name}: {', '.join(labels)}")
 
-    def __check_objectives(self) -> None:
+    def _resolve_to_code(self, objective: str) -> str:
+        """Normalise an objective identifier to its stable code.
+
+        Accepts a bare code, a full ``'CODE: description'`` key, or a pySIPFENN
+        model name. Raises ``ValueError`` with a simple hint if the code cannot
+        be matched against known objective sets.
+        """
+        assert isinstance(objective, str) and len(objective.strip()) > 0, (
+            "Objective must be a non-empty string"
+        )
+
+        code, _ = BaseCalculator._parse_objective_key(objective)
+        flat_available = sorted(
+            {c for codes in self.available_calculators.values() for c in codes}
+        )
+        known_codes = sorted(
+            set(self._objective_registry.keys())
+            .union(self.predicted_objectives)
+            .union(flat_available)
+        )
+        if code in known_codes:
+            return code
+
+        close = [c for c in known_codes if code[:4] and c.startswith(code[:4])]
+        hint = f" Did you mean one of: {close}?" if close else ""
+        raise ValueError(
+            f"Objective code '{code}' not found in available objectives.{hint}"
+        )
+
+    def _check_objectives(self) -> None:
         """
         Check available objectives with predictions.
 
@@ -426,7 +473,7 @@ class CrystALLSearch:
                 else:
                     raise
         print("Done! Models are ready to use.")
-        self.__update_objectives(self.Calculator, False)
+        self._update_objectives(self.Calculator, False)
 
     def setup_calculator(self, calculator_name: str) -> None:
         """Stub to setup an external calculator adapter.
@@ -1295,14 +1342,18 @@ class CrystALLSearch:
             )
             return
 
-        self.__check_objectives()
+        self._check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
-        print(
-            "\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n"
-        ) if n_clusters is None else None
+        (
+            print(
+                "\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n"
+            )
+            if n_clusters is None
+            else None
+        )
 
         # Determine the optimal number of clusters using silhouette score
         distances = pairwise_distances(self.embeddedks2022)
@@ -1346,7 +1397,7 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
 
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
     def cluster_prototypes_DBSCAN(
         self,
@@ -1381,10 +1432,10 @@ class CrystALLSearch:
             )
             return
 
-        self.__check_objectives()
+        self._check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         # Cluster the prototypes using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
@@ -1401,9 +1452,9 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
 
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
-    def __embed_features(self, same_composition: bool) -> None:
+    def _embed_features(self, same_composition: bool) -> None:
         """
         Embed the features in 2D t-SNE space.
 
@@ -1454,7 +1505,7 @@ class CrystALLSearch:
         )
         self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
 
-    def __select_prototypes(self, clusters: dict) -> None:
+    def _select_prototypes(self, clusters: dict) -> None:
         """
         Select the best prototype per cluster for each objective and store them in self.top_candidates.
 
