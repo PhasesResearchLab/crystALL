@@ -244,9 +244,9 @@ def run_local(target_formula: Union[str, Composition], prototype_path: str) -> s
     formula_str = str(target_formula).replace(" ", "")
     out_dir = f"{formula_str}-local-prototypes"
     # Ensure we are not writing back into the prototype source directory
-    assert os.path.abspath(out_dir) != os.path.abspath(prototype_path), (
-        "Output directory must differ from prototype_path"
-    )
+    assert os.path.abspath(out_dir) != os.path.abspath(
+        prototype_path
+    ), "Output directory must differ from prototype_path"
 
     print(
         f"Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}"
@@ -322,9 +322,9 @@ def run_MPDD(
             "Target formula must be a string or a pymatgen Composition object"
         )
     assert len(collections) > 0, "At least one collection must be specified"
-    assert isinstance(MPDD, Database), (
-        "MPDD must be a pymongo Database object corresponding to the MPDD database or another database following (at least partially) the same schema"
-    )
+    assert isinstance(
+        MPDD, Database
+    ), "MPDD must be a pymongo Database object corresponding to the MPDD database or another database following (at least partially) the same schema"
 
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
