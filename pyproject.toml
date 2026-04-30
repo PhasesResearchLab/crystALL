@@ -56,10 +56,7 @@ packages = { find = { exclude = ["paper", "oldfiles"] } }
 
 [project.entry-points."crystall.calculators"]
 ALIGNN = "crystall.adapters.alignn:AlignnAdapter"
-CHGNetStatic = "crystall.adapters.matgl:CHGNetStaticAdapter"
+MatGL = "crystall.adapters.matgl:MatGLAdapter"
 DeePAW = "crystall.adapters.deepaw:DeePAWAdapter"
-MEGNetStatic = "crystall.adapters.matgl:MEGNetStaticAdapter"
-M3GNetStatic = "crystall.adapters.matgl:M3GNetStaticAdapter"
 Phonax = "crystall.adapters.phonax:PhonaxAdapter"
-QETStatic = "crystall.adapters.matgl:QETStaticAdapter"
 UPET-DOS = "crystall.adapters.upetdos:UPETDosAdapter"
