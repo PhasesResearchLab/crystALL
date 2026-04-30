@@ -3,8 +3,10 @@
 Provides an adapter for the PET-MAD-DOS calculator from the upet package.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List, Any, Sequence
+from typing import Dict, List, Any, Sequence, Literal
 import logging
 from pymatgen.electronic_structure.dos import CompleteDos
 
@@ -43,7 +45,77 @@ class UPETDosAdapter(BaseCalculator):
         ]
 
     def _run_code(self) -> str:
-        return """\
+        return _UPETDOS_WORKER_SCRIPT
+
+    @classmethod
+    def _deserialize_worker_value(cls, key: str, value: Any) -> Any:
+        """Deserialize custom objects from worker output."""
+        if key == "complete_dos" and isinstance(value, dict):
+            return CompleteDos.from_dict(value)
+        return value
+
+    @classmethod
+    def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Deserialize payload arrays inside a single result."""
+        if "properties" in result and isinstance(result["properties"], dict):
+            props = result["properties"]
+            updated_props = {}
+            for k, v in props.items():
+                updated_props[k] = cls._deserialize_worker_value(k, v)
+            result["properties"] = updated_props
+        return result
+
+    @classmethod
+    def _deserialize_results(
+        cls, results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Deserialize payload arrays inside a list of results."""
+        return [cls._deserialize_result(res) for res in results]
+
+    def run_on_structure(
+        self,
+        file_path: Path | str,
+        isif: int = 8,
+        optimizer: str = "FIRE",
+        fmax: float = 0.05,
+        objectives: Sequence[str] | None = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        res = super().run_on_structure(
+            file_path,
+            isif=isif,
+            optimizer=optimizer,
+            fmax=fmax,
+            objectives=objectives,
+            **kwargs,
+        )
+        return self._deserialize_result(res)
+
+    def run_on_directory(
+        self,
+        path: Path | str,
+        mode: str = "serial",
+        max_workers: int | None = None,
+        objectives: Sequence[str] | None = None,
+        isif: int = 8,
+        optimizer: str = "FIRE",
+        fmax: float = 0.05,
+        **kwargs,
+    ) -> List[Dict[str, Any]]:
+        results = super().run_on_directory(
+            path,
+            mode=mode,
+            max_workers=max_workers,
+            objectives=objectives,
+            isif=isif,
+            optimizer=optimizer,
+            fmax=fmax,
+            **kwargs,
+        )
+        return self._deserialize_results(results)
+
+
+_UPETDOS_WORKER_SCRIPT = """\
 import os
 import sys
 import json
@@ -103,59 +175,3 @@ def main():
 if __name__ == "__main__":
     main()
 """
-
-    def _deserialize_worker_value(self, key: str, value: Any) -> Any:
-        """Deserialize custom objects from worker output."""
-        if key == "complete_dos" and isinstance(value, dict):
-            return CompleteDos.from_dict(value)
-        return value
-
-    def _deserialize_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Deserialize payload arrays inside a single result."""
-        if "properties" in result and isinstance(result["properties"], dict):
-            props = result["properties"]
-            for k, v in list(props.items()):
-                props[k] = self._deserialize_worker_value(k, v)
-        return result
-
-    def run_on_structure(
-        self,
-        file_path: Path | str,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
-        objectives: Sequence[str] | None = None,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        res = super().run_on_structure(
-            file_path,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
-            objectives=objectives,
-            **kwargs,
-        )
-        return self._deserialize_result(res)
-
-    def run_on_directory(
-        self,
-        path: Path | str,
-        mode: str = "serial",
-        max_workers: int | None = None,
-        objectives: Sequence[str] | None = None,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
-        **kwargs,
-    ) -> List[Dict[str, Any]]:
-        results = super().run_on_directory(
-            path,
-            mode=mode,
-            max_workers=max_workers,
-            objectives=objectives,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
-            **kwargs,
-        )
-        return [self._deserialize_result(res) for res in results]
