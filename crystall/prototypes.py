@@ -27,16 +27,40 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 _STRUCTURE_FORMATS: dict[str, list[str]] = {
     # key   = pymatgen fmt= string used for reading and writing
-    # value = [*accepted_aliases] (no dots; "" matches bare files)
+    # value = [*accepted_aliases] (no dots)
     # value[0] is the extension crystALL uses when writing.
-    "poscar": ["vasp", "poscar", ""],
+    "poscar": ["vasp", "poscar"],
     "cif": ["cif", "mcif"],
     "xyz": ["xyz"],
     "json": ["json"],
 }
 
 
-def _write_structure(
+def _read_structure_format(
+    filepath: Union[str, os.PathLike], file_format: Union[str, None] = None
+) -> Union[Tuple[str, str], None]:
+    """Determine structure format, preferring file_format override if provided.
+
+    Returns (pymatgen_format, write_extension) or None if not recognized.
+    """
+    if file_format:
+        alias = file_format.lower().lstrip(".")
+    else:
+        import pathlib
+
+        path = pathlib.Path(filepath)
+        alias = path.suffix.lower().lstrip(".")
+        if not alias:
+            return None
+
+    for fmt, aliases in _STRUCTURE_FORMATS.items():
+        if alias in aliases:
+            return fmt, f".{aliases[0]}"
+
+    return None
+
+
+def _write_structure_format(
     structure: Structure,
     out_dir: str,
     name_stem: str,
@@ -85,7 +109,7 @@ def _substitute_candidate(
         st.replace_species(d)
 
         name_stem = name_root + ("-p" + str(p) if len(substitutions) > 1 else "")
-        _write_structure(st, out_dir, name_stem, file_format)
+        _write_structure_format(st, out_dir, name_stem, file_format)
         count += 1
 
     return count
@@ -109,7 +133,7 @@ def _generate_from_structures(
             substitutions: list of ordered element symbol lists, one per permutation.
         out_dir: Existing output directory path.
         parallel: If True, process candidates in parallel using ProcessPoolExecutor.
-        file_format: Output format alias forwarded to :func:`_write_structure`.
+        file_format: Output format alias forwarded to :func:`_write_structure_format`.
             Defaults to ``"poscar"`` (written with .vasp extension).
 
     Returns:
@@ -224,11 +248,17 @@ def run_local(
 
     for file in fileList:
         allS += 1
-        ext = os.path.splitext(file)[1]
-        if ext not in [".POSCAR", ".vasp"]:
+        file_path = os.path.join(prototype_path, file)
+        fmt_info = _read_structure_format(file_path)
+        if fmt_info is None:
             continue
 
-        s = Structure.from_file(os.path.join(prototype_path, file))
+        try:
+            s = Structure.from_file(file_path)
+        except Exception as e:
+            print(f"Skipping {file} due to parsing error: {e}")
+            continue
+
         if s.n_elems == nElements:
             nEl += 1
             if Composition(s.formula).anonymized_formula == aFormula:
@@ -470,7 +500,7 @@ def run_MPDD(
                         + e["metadata"]["affiliation"]
                     )
 
-                _write_structure(s, out_dir, name, file_format)
+                _write_structure_format(s, out_dir, name, file_format)
         print("Done.\n")
 
         return out_dir
@@ -774,7 +804,7 @@ def run_MPDD_devs(
                         + e["metadata"]["affiliation"]
                     )
 
-                _write_structure(s, out_dir, name, file_format)
+                _write_structure_format(s, out_dir, name, file_format)
                 targetPresent += 1
 
         print("Done.")
@@ -1232,7 +1262,7 @@ def run_optimade(
             entry_id_sanitized = re.sub(r"[?:*|><\\/]", "-", entry.get("id", "unknown"))
             name_stem = f"optimade-{provider_domain}-{entry_id_sanitized}"
 
-            _write_structure(s, out_dir, name_stem, file_format)
+            _write_structure_format(s, out_dir, name_stem, file_format)
             allS += 1
 
         print("Done.\n")

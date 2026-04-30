@@ -46,19 +46,9 @@ def _sanitize_model_code(name: str) -> str:
     return re.sub(r"_+", "_", sanitized)
 
 
-# key   = pymatgen fmt= string used for reading and writing
-# value = [canonical_write_ext, *accepted_aliases] (no dots; "" matches bare files)
-# value[0] is the extension used when writing; dot is prepended at use.
-# NOTE: Once crystALL is released on PyPI and added as a `layer2` dependency to all
-# micro-envs, worker scripts will import this mapping (and related helpers) directly
-# from the crystALL package rather than redefining it here.
-_STRUCTURE_FORMATS: dict[str, list[str]] = {
-    "poscar": ["vasp", "poscar", ""],
-    "cif":    ["cif", "mcif"],
-    "xyz":    ["xyz"],
-    "json":   ["json"],
-}
-
+# NOTE: Once crystALL is released on PyPI, worker scripts should import this
+# mapping directly from the crystALL package rather than redefining it.
+from crystall.prototypes import _STRUCTURE_FORMATS, _read_structure_format
 
 
 # ── Configuration helpers ───────────────────────────────────────────────────
@@ -105,7 +95,10 @@ class MLIPAdapter(BaseCalculator):
 
     @property
     def supported_os(self) -> List[str]:
-        return [str(x).lower() for x in self._config.get("os", ["windows", "macos", "linux"])]
+        return [
+            str(x).lower()
+            for x in self._config.get("os", ["windows", "macos", "linux"])
+        ]
 
     @property
     def supported_devices(self) -> List[str]:
@@ -121,7 +114,6 @@ class MLIPAdapter(BaseCalculator):
         model_name: str,
         device: Optional[str] = None,
         inference: Optional[List[BaseCalculator]] = None,
-        structure_format: Optional[str] = None,
     ):
         config = _load_mlips_config()
         if model_name not in config:
@@ -133,13 +125,6 @@ class MLIPAdapter(BaseCalculator):
         self._config = config[model_name]
         self._device_override = device.lower() if isinstance(device, str) else None
         self._resolved_device: Optional[str] = None
-        # Normalise user alias "vasp" → "poscar" to match pymatgen's fmt strings.
-        _user_alias: Dict[str, str] = {"vasp": "poscar"}
-        self._structure_format: Optional[str] = (
-            _user_alias.get(structure_format.lower(), structure_format.lower())
-            if structure_format is not None
-            else None
-        )
 
         self._inference_adapters: List[BaseCalculator] = []
 
@@ -155,25 +140,6 @@ class MLIPAdapter(BaseCalculator):
 
         if inference:
             self._resolve_inference(inference)
-
-    @staticmethod
-    def _infer_format(filepath: str) -> Tuple[str, str]:
-        """Return (pymatgen_fmt, output_extension) inferred from the input extension.
-
-        Falls back to ("poscar", ".vasp") for absent or unrecognised extensions,
-        which is correct for bare POSCAR files with no extension.
-        """
-        raw = os.path.splitext(filepath)[1].lower().lstrip(".")
-        fmt = next((f for f, v in _STRUCTURE_FORMATS.items() if raw in v), "poscar")
-        return fmt, "." + _STRUCTURE_FORMATS[fmt][0]
-
-    def _resolve_format(self, filepath: str) -> Tuple[str, str]:
-        """Return (pymatgen_fmt, output_extension), respecting structure_format override."""
-        if self._structure_format:
-            alias = self._structure_format.lower().lstrip(".")
-            fmt = next((f for f, v in _STRUCTURE_FORMATS.items() if alias in v), "poscar")
-            return fmt, "." + _STRUCTURE_FORMATS[fmt][0]
-        return self._infer_format(filepath)
 
     # ── Inference piping ───────────────────────────────────────────────────
 
@@ -336,7 +302,13 @@ class MLIPAdapter(BaseCalculator):
 
         abs_path = os.path.abspath(file_path)
         output_dir = os.path.dirname(abs_path)
-        _, out_ext = self._resolve_format(abs_path)
+
+        fmt_info = _read_structure_format(abs_path, kwargs.get("file_format"))
+        if fmt_info is None:
+            _, out_ext = "poscar", ".vasp"
+        else:
+            _, out_ext = fmt_info
+
         stem = os.path.splitext(os.path.basename(abs_path))[0] or os.path.basename(
             abs_path
         )
@@ -368,7 +340,7 @@ class MLIPAdapter(BaseCalculator):
         return parsed
 
     def _request_extras(self) -> dict:
-        """Include save_artifacts (base), calculator code, format vars, structure format."""
+        """Include save_artifacts (base), calculator code, format vars, model code."""
         extras = super()._request_extras()  # {"save_artifacts": self.save_artifacts}
         extras.update(
             {
@@ -377,8 +349,6 @@ class MLIPAdapter(BaseCalculator):
                 "model_code": self._model_code,  # sanitized code prefix for full-key labelling
             }
         )
-        if self._structure_format:
-            extras["structure_format"] = self._structure_format
         return extras
 
     @staticmethod
@@ -535,9 +505,9 @@ class MLIPAdapter(BaseCalculator):
                     if inf_desc
                     else f"(via {adapter.name})"
                 )
-                mlip_result.setdefault("properties", {})[
-                    f"{ns_code}: {ns_desc}"
-                ] = obj_val
+                mlip_result.setdefault("properties", {})[f"{ns_code}: {ns_desc}"] = (
+                    obj_val
+                )
 
         return mlip_result
 
@@ -623,21 +593,6 @@ import numpy as np
 STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
 
-_EXT_TO_PMG_FMT = {
-    ".vasp":   "poscar",
-    ".poscar": "poscar",
-    ".cif":    "cif",
-    ".xyz":    "xyz",
-    ".json":   "json",
-}
-_PMG_FMT_TO_EXT = {
-    "poscar": ".vasp",
-    "cif":    ".cif",
-    "xyz":    ".xyz",
-    "json":   ".json",
-}
-
-
 def main():
     req_path = sys.argv[1]
     res_path = sys.argv[2]
@@ -660,7 +615,7 @@ def main():
     fmax = req.get("fmax", 0.05)
     output_dir                = req["output_dir"]              # always set by host
     output_stem_prefix        = req.get("output_stem_prefix", "")
-    structure_format_override = req.get("structure_format")    # None → infer per file
+    file_formats_map          = req.get("file_formats_map", {})
 
     # ── ISIF mapping ────────────────────────────────────────────────
     isif_settings = {
@@ -826,13 +781,8 @@ def main():
             }
             
             # ── Write relaxed structure to disk ─────────────────────────────────
-            if structure_format_override:
-                pmg_fmt = structure_format_override
-                out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
-            else:
-                in_ext  = os.path.splitext(filepath)[1].lower()
-                pmg_fmt = _EXT_TO_PMG_FMT.get(in_ext, "poscar")
-                out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
+            # Use format determined by host
+            pmg_fmt, out_ext = file_formats_map.get(filepath, ("poscar", ".vasp"))
             
             # Strip extension to build stem; handles bare POSCAR files (no extension).
             in_stem      = os.path.splitext(filename)[0] or filename

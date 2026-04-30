@@ -737,15 +737,26 @@ class BaseCalculator:
         import subprocess as sp
         import tempfile
 
-        assert (
-            self.is_env_ready()
-        ), f"Micro-environment for '{self.name}' is not ready. Call setup_env() first."
+        assert self.is_env_ready(), (
+            f"Micro-environment for '{self.name}' is not ready. Call setup_env() first."
+        )
 
         code = self._run_code()
 
         isif = kwargs.pop("isif", 8)
         optimizer = kwargs.pop("optimizer", "FIRE")
         fmax = kwargs.pop("fmax", 0.05)
+        file_format = kwargs.pop("file_format", None)
+
+        from crystall.prototypes import _read_structure_format
+
+        file_formats_map = {}
+        for fp in file_paths:
+            fmt_info = _read_structure_format(fp, file_format)
+            if fmt_info is None:
+                file_formats_map[fp] = ("poscar", ".vasp")
+            else:
+                file_formats_map[fp] = fmt_info
 
         # Build request payload
         request = {
@@ -754,6 +765,8 @@ class BaseCalculator:
             "isif": isif,
             "optimizer": optimizer,
             "fmax": fmax,
+            "file_format": file_format,
+            "file_formats_map": file_formats_map,
         }
         # Merge adapter-specific extras (calculator code lines, format vars, etc.)
         request.update(self._request_extras())
