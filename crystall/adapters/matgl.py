@@ -1,14 +1,14 @@
-"""MatGL-backed static adapters with a shared micro-environment.
+"""MatGL-backed parametric adapter with a shared micro-environment.
 
-This module hosts four static adapters:
+This module hosts the ``MatGLAdapter``, which supports:
 
-- ``MEGNetStaticAdapter``
-- ``M3GNetStaticAdapter``
-- ``QETStaticAdapter``
-- ``CHGNetStaticAdapter``
+- MEGNet Formation Energy & Bandgap
+- M3GNet Formation Energy
+- QET Static (Ewald Energy, Dipole, Charges)
+- CHGNet Static (Energy, Magmoms)
 
-All adapters share one micro-env under ``<env_root>/matgl`` and execute
-self-contained worker scripts inside that environment.
+All models share one micro-env under ``<env_root>/matgl`` and execute
+a unified worker script inside that environment.
 """
 
 from __future__ import annotations
@@ -19,12 +19,15 @@ from typing import Any, Dict, List, Literal, Sequence
 
 from crystall.calculators import BaseCalculator
 
-
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
 
-class _BaseMatGLStaticAdapter(BaseCalculator):
-    """Shared behavior for MatGL static adapters."""
+class MatGLAdapter(BaseCalculator):
+    """Parametric adapter for MatGL models.
+
+    This adapter consolidates multiple MatGL-based static property predictions
+    and PES-based static calculations into a single interface.
+    """
 
     name = "MatGL"
     calculator_type: Literal["mlip", "inference"] = "inference"
@@ -173,246 +176,35 @@ class _BaseMatGLStaticAdapter(BaseCalculator):
         )
         return self._deserialize_results(results)
 
-
-class MEGNetStaticAdapter(_BaseMatGLStaticAdapter):
-    """MEGNet static scalar predictions."""
-
-    name = "MEGNetStatic"
-    calculator_type: Literal["mlip", "inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "Formation Energy MEGNet [eV/atom]": "MEGNet-MP-2018.6.1-Eform",
-        "Band Gap [eV]": "MEGNet-MP-2019.4.1-BandGap-mfi",
-    }
-
     def _run_code(self) -> str:
-        return _MEGNET_STATIC_WORKER_SCRIPT
+        return _MATGL_WORKER_SCRIPT
 
 
-class M3GNetStaticAdapter(_BaseMatGLStaticAdapter):
-    """M3GNet static scalar predictions."""
-
-    name = "M3GNetStatic"
-    calculator_type: Literal["mlip", "inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "Formation Energy M3GNet [eV/atom]": "M3GNet-MP-2018.6.1-Eform",
-    }
-
-    def _run_code(self) -> str:
-        return _M3GNET_STATIC_WORKER_SCRIPT
-
-
-class QETStaticAdapter(_BaseMatGLStaticAdapter):
-    """QET static adapter with derived objectives and charged structures."""
-
-    name = "QETStatic"
-    calculator_type: Literal["mlip", "inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "Electrostatic (Ewald) Energy [eV/cell]": "qet_static",
-        "Dipole Magnitude [e·Å]": "qet_static",
-        "Structure with Charges": "qet_static",
-    }
-
-    def _run_code(self) -> str:
-        return _QET_STATIC_WORKER_SCRIPT
-
-
-class CHGNetStaticAdapter(_BaseMatGLStaticAdapter):
-    """CHGNet static adapter implemented via MatGL only."""
-
-    name = "CHGNetStatic"
-    calculator_type: Literal["mlip", "inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "Static Energy [eV/atom]": "chgnet_static",
-        "Structure with Magmoms": "chgnet_static",
-    }
-
-    def _run_code(self) -> str:
-        return _CHGNET_STATIC_WORKER_SCRIPT
-
-
-_MEGNET_STATIC_WORKER_SCRIPT = """\
-import json
-import os
-import sys
-from decimal import Decimal, ROUND_DOWN
-
-import torch
-
-
-def round4(value):
-    return float(Decimal(str(float(value))).quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
-
-
-def tensor_scalar(value):
-    if isinstance(value, torch.Tensor):
-        if value.numel() != 1:
-            raise ValueError(f"Expected scalar tensor, got shape={tuple(value.shape)}")
-        return float(value.reshape(-1)[0].item())
-    if isinstance(value, (int, float)):
-        return float(value)
-    raise TypeError(f"Unsupported prediction type: {type(value)}")
-
-
-def main():
-    req_path = sys.argv[1]
-    res_path = sys.argv[2]
-
-    with open(req_path) as f:
-        req = json.load(f)
-
-    file_paths = req.get("file_paths", [])
-    if not file_paths:
-        with open(res_path, "w") as f:
-            json.dump({"results": []}, f)
-        return
-
-    requested = set(req.get("requested_objectives") or [])
-    if not requested:
-        requested = {
-            "Formation Energy MEGNet [eV/atom]",
-            "Band Gap [eV]",
-        }
-
-    import matgl
-
-    matgl.set_backend("DGL")
-    from pymatgen.core import Structure
-
-    model_eform = None
-    model_bandgap = None
-    if "Formation Energy MEGNet [eV/atom]" in requested:
-        model_eform = matgl.load_model("MEGNet-MP-2018.6.1-Eform")
-    if "Band Gap [eV]" in requested:
-        model_bandgap = matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
-
-    results = []
-    for filepath in file_paths:
-        filename = os.path.basename(filepath)
-        if not os.path.isfile(filepath):
-            continue
-
-        try:
-            structure = Structure.from_file(filepath)
-            props = {}
-
-            if model_eform is not None:
-                pred_eform = model_eform.predict_structure(structure)
-                props["Formation Energy MEGNet [eV/atom]"] = round4(
-                    tensor_scalar(pred_eform)
-                )
-
-            if model_bandgap is not None:
-                pred_bg = model_bandgap.predict_structure(
-                    structure=structure,
-                    state_attr=torch.tensor([0], dtype=torch.long),
-                )
-                props["Band Gap [eV]"] = round4(tensor_scalar(pred_bg))
-
-            results.append({"name": filename, "properties": props})
-        except Exception as exc:
-            print(f"[MEGNetStaticAdapter] Error processing {filename}: {exc}")
-            results.append({"name": filename, "properties": {}})
-
-    with open(res_path, "w") as f:
-        json.dump({"results": results}, f)
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-_M3GNET_STATIC_WORKER_SCRIPT = """\
-import json
-import os
-import sys
-from decimal import Decimal, ROUND_DOWN
-
-import torch
-
-
-def round4(value):
-    return float(Decimal(str(float(value))).quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
-
-
-def tensor_scalar(value):
-    if isinstance(value, torch.Tensor):
-        if value.numel() != 1:
-            raise ValueError(f"Expected scalar tensor, got shape={tuple(value.shape)}")
-        return float(value.reshape(-1)[0].item())
-    if isinstance(value, (int, float)):
-        return float(value)
-    raise TypeError(f"Unsupported prediction type: {type(value)}")
-
-
-def main():
-    req_path = sys.argv[1]
-    res_path = sys.argv[2]
-
-    with open(req_path) as f:
-        req = json.load(f)
-
-    file_paths = req.get("file_paths", [])
-    if not file_paths:
-        with open(res_path, "w") as f:
-            json.dump({"results": []}, f)
-        return
-
-    requested = set(req.get("requested_objectives") or [])
-    if not requested:
-        requested = {"Formation Energy M3GNet [eV/atom]"}
-
-    import matgl
-
-    matgl.set_backend("DGL")
-    from pymatgen.core import Structure
-
-    model = None
-    if "Formation Energy M3GNet [eV/atom]" in requested:
-        model = matgl.load_model("M3GNet-MP-2018.6.1-Eform")
-
-    results = []
-    for filepath in file_paths:
-        filename = os.path.basename(filepath)
-        if not os.path.isfile(filepath):
-            continue
-
-        try:
-            structure = Structure.from_file(filepath)
-            props = {}
-
-            if model is not None:
-                pred = model.predict_structure(structure)
-                props["Formation Energy M3GNet [eV/atom]"] = round4(tensor_scalar(pred))
-
-            results.append({"name": filename, "properties": props})
-        except Exception as exc:
-            print(f"[M3GNetStaticAdapter] Error processing {filename}: {exc}")
-            results.append({"name": filename, "properties": {}})
-
-    with open(res_path, "w") as f:
-        json.dump({"results": results}, f)
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-_QET_STATIC_WORKER_SCRIPT = """\
+_MATGL_WORKER_SCRIPT = """\
 import json
 import os
 import sys
 from decimal import Decimal, ROUND_DOWN
 
 import numpy as np
-
-
-STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
+import torch
 
 
 def round4(value):
     return float(Decimal(str(float(value))).quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
+
+
+def tensor_scalar(value):
+    if isinstance(value, torch.Tensor):
+        if value.numel() != 1:
+            raise ValueError(f"Expected scalar tensor, got shape={tuple(value.shape)}")
+        return float(value.reshape(-1)[0].item())
+    if isinstance(value, (int, float)):
+        return float(value)
+    raise TypeError(f"Unsupported prediction type: {type(value)}")
+
+
+STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
 
 def main():
@@ -429,12 +221,6 @@ def main():
         return
 
     requested = set(req.get("requested_objectives") or [])
-    if not requested:
-        requested = {
-            "Electrostatic (Ewald) Energy [eV/cell]",
-            "Dipole Magnitude [e·Å]",
-            "Structure with Charges",
-        }
 
     import matgl
 
@@ -444,8 +230,20 @@ def main():
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
 
-    potential = matgl.load_model("QET-MatQ-PES")
-    calculator = PESCalculator(potential)
+    # Objective to Model Mapping
+    OBJ_TO_MODEL = {
+        "MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom]": "MEGNet-MP-2018.6.1-Eform",
+        "MATGL_BG_MEGNET: Band Gap MEGNet [eV]": "MEGNet-MP-2019.4.1-BandGap-mfi",
+        "MATGL_EF_M3GNET: Formation Energy M3GNet [eV/atom]": "M3GNet-MP-2018.6.1-Eform",
+        "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]": "QET-MatQ-PES",
+        "MATGL_DIPOLE_QET: Dipole Magnitude [e·Å]": "QET-MatQ-PES",
+        "MATGL_STRUCT_CHARGES_QET: Structure with Charges": "QET-MatQ-PES",
+        "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
+        "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
+    }
+
+    needed_models = {OBJ_TO_MODEL[obj] for obj in requested if obj in OBJ_TO_MODEL}
+    loaded_models = {mname: matgl.load_model(mname) for mname in needed_models}
 
     results = []
     for filepath in file_paths:
@@ -455,130 +253,93 @@ def main():
 
         try:
             structure = Structure.from_file(filepath)
-            atoms = AseAtomsAdaptor.get_atoms(structure)
-            atoms.set_calculator(calculator)
-
-            # Trigger calculator and retrieve charges using documented ASE path.
-            _ = atoms.get_potential_energy()
-            charges = np.array(atoms.get_charges(), dtype=float).reshape(-1)
-            if charges.size != len(structure):
-                raise ValueError(
-                    f"Charge vector length mismatch: expected {len(structure)}, got {charges.size}"
-                )
-
+            atoms = None  # Lazy ASE atoms
             props = {}
 
-            if "Structure with Charges" in requested:
-                charged_struct = structure.copy()
-                charged_struct.add_site_property("charge", charges.tolist())
-                props["Structure with Charges"] = {
-                    STRUCTURE_MARKER_KEY: charged_struct.as_dict()
-                }
-
-            if "Electrostatic (Ewald) Energy [eV/cell]" in requested:
-                ewald_struct = structure.copy()
-                ewald_struct.add_oxidation_state_by_site(charges.tolist())
-                ew = EwaldSummation(ewald_struct)
-                props["Electrostatic (Ewald) Energy [eV/cell]"] = round4(ew.total_energy)
-
-            if "Dipole Magnitude [e·Å]" in requested:
-                cart = np.array(structure.cart_coords, dtype=float)
-                p_vec = np.sum(cart * charges.reshape(-1, 1), axis=0)
-                props["Dipole Magnitude [e·Å]"] = round4(np.linalg.norm(p_vec))
-
-            results.append({"name": filename, "properties": props})
-        except Exception as exc:
-            print(f"[QETStaticAdapter] Error processing {filename}: {exc}")
-            results.append({"name": filename, "properties": {}})
-
-    with open(res_path, "w") as f:
-        json.dump({"results": results}, f)
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-_CHGNET_STATIC_WORKER_SCRIPT = """\
-import json
-import os
-import sys
-from decimal import Decimal, ROUND_DOWN
-
-import numpy as np
-
-
-STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
-
-
-def round4(value):
-    return float(Decimal(str(float(value))).quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
-
-
-def main():
-    req_path = sys.argv[1]
-    res_path = sys.argv[2]
-
-    with open(req_path) as f:
-        req = json.load(f)
-
-    file_paths = req.get("file_paths", [])
-    if not file_paths:
-        with open(res_path, "w") as f:
-            json.dump({"results": []}, f)
-        return
-
-    requested = set(req.get("requested_objectives") or [])
-    if not requested:
-        requested = {
-            "Static Energy [eV/atom]",
-            "Structure with Magmoms",
-        }
-
-    import matgl
-
-    matgl.set_backend("DGL")
-    from matgl.ext._ase_dgl import PESCalculator
-    from pymatgen.core import Structure
-    from pymatgen.io.ase import AseAtomsAdaptor
-
-    potential = matgl.load_model("CHGNet-MatPES-PBE-2025.2.10-2.7M-PES")
-    calculator = PESCalculator(potential)
-
-    results = []
-    for filepath in file_paths:
-        filename = os.path.basename(filepath)
-        if not os.path.isfile(filepath):
-            continue
-
-        try:
-            structure = Structure.from_file(filepath)
-            atoms = AseAtomsAdaptor.get_atoms(structure)
-            atoms.set_calculator(calculator)
-
-            props = {}
-
-            if "Static Energy [eV/atom]" in requested:
-                total_energy = float(atoms.get_potential_energy())
-                n_atoms = max(len(atoms), 1)
-                props["Static Energy [eV/atom]"] = round4(total_energy / n_atoms)
-
-            if "Structure with Magmoms" in requested:
-                magmoms = np.array(atoms.get_magnetic_moments(), dtype=float).reshape(-1)
-                if magmoms.size != len(structure):
-                    raise ValueError(
-                        f"Magmom vector length mismatch: expected {len(structure)}, got {magmoms.size}"
+            # Property Predictions (MEGNet / M3GNet)
+            if "MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom]" in requested:
+                m = loaded_models.get("MEGNet-MP-2018.6.1-Eform")
+                if m:
+                    props["MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom]"] = round4(
+                        tensor_scalar(m.predict_structure(structure))
                     )
-                magmom_struct = structure.copy()
-                magmom_struct.add_site_property("magmom", magmoms.tolist())
-                props["Structure with Magmoms"] = {
-                    STRUCTURE_MARKER_KEY: magmom_struct.as_dict()
-                }
+
+            if "MATGL_BG_MEGNET: Band Gap MEGNet [eV]" in requested:
+                m = loaded_models.get("MEGNet-MP-2019.4.1-BandGap-mfi")
+                if m:
+                    props["MATGL_BG_MEGNET: Band Gap MEGNet [eV]"] = round4(
+                        tensor_scalar(
+                            m.predict_structure(
+                                structure=structure,
+                                state_attr=torch.tensor([0], dtype=torch.long),
+                            )
+                        )
+                    )
+
+            if "MATGL_EF_M3GNET: Formation Energy M3GNet [eV/atom]" in requested:
+                m = loaded_models.get("M3GNet-MP-2018.6.1-Eform")
+                if m:
+                    props["MATGL_EF_M3GNET: Formation Energy M3GNet [eV/atom]"] = round4(
+                        tensor_scalar(m.predict_structure(structure))
+                    )
+
+            # PES Predictions (QET)
+            qet_objs = {
+                "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]",
+                "MATGL_DIPOLE_QET: Dipole Magnitude [e·Å]",
+                "MATGL_STRUCT_CHARGES_QET: Structure with Charges",
+            }
+            if requested & qet_objs:
+                m = loaded_models.get("QET-MatQ-PES")
+                if m:
+                    if atoms is None:
+                        atoms = AseAtomsAdaptor.get_atoms(structure)
+                    atoms.set_calculator(PESCalculator(m))
+                    _ = atoms.get_potential_energy()
+                    charges = np.array(atoms.get_charges(), dtype=float).reshape(-1)
+
+                    if "MATGL_STRUCT_CHARGES_QET: Structure with Charges" in requested:
+                        s = structure.copy()
+                        s.add_site_property("charge", charges.tolist())
+                        props["MATGL_STRUCT_CHARGES_QET: Structure with Charges"] = {
+                            STRUCTURE_MARKER_KEY: s.as_dict()
+                        }
+                    if "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]" in requested:
+                        s = structure.copy()
+                        s.add_oxidation_state_by_site(charges.tolist())
+                        props["MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]"] = round4(
+                            EwaldSummation(s).total_energy
+                        )
+                    if "MATGL_DIPOLE_QET: Dipole Magnitude [e·Å]" in requested:
+                        cart = np.array(structure.cart_coords, dtype=float)
+                        p_vec = np.sum(cart * charges.reshape(-1, 1), axis=0)
+                        props["MATGL_DIPOLE_QET: Dipole Magnitude [e·Å]"] = round4(np.linalg.norm(p_vec))
+
+            # PES Predictions (CHGNet)
+            chg_objs = {"MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]", "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms"}
+            if requested & chg_objs:
+                m = loaded_models.get("CHGNet-MatPES-PBE-2025.2.10-2.7M-PES")
+                if m:
+                    if atoms is None:
+                        atoms = AseAtomsAdaptor.get_atoms(structure)
+                    atoms.set_calculator(PESCalculator(m))
+                    if "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]" in requested:
+                        props["MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]"] = round4(
+                            atoms.get_potential_energy() / max(len(atoms), 1)
+                        )
+                    if "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms" in requested:
+                        magmoms = np.array(atoms.get_magnetic_moments(), dtype=float).reshape(
+                            -1
+                        )
+                        s = structure.copy()
+                        s.add_site_property("magmom", magmoms.tolist())
+                        props["MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms"] = {
+                            STRUCTURE_MARKER_KEY: s.as_dict()
+                        }
 
             results.append({"name": filename, "properties": props})
         except Exception as exc:
-            print(f"[CHGNetStaticAdapter] Error processing {filename}: {exc}")
+            print(f"[MatGLAdapter] Error processing {filename}: {exc}")
             results.append({"name": filename, "properties": {}})
 
     with open(res_path, "w") as f:
@@ -588,11 +349,3 @@ def main():
 if __name__ == "__main__":
     main()
 """
-
-
-__all__ = [
-    "MEGNetStaticAdapter",
-    "M3GNetStaticAdapter",
-    "QETStaticAdapter",
-    "CHGNetStaticAdapter",
-]
