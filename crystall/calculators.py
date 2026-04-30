@@ -175,6 +175,59 @@ def load_adapters() -> Dict[str, Any]:
     return adapters
 
 
+def _sanitize_model_code(model_name: str) -> str:
+    """Convert an arbitrary MLIP model name to a valid objective code prefix.
+
+    Uppercases the string and replaces every character outside ``[A-Z0-9]``
+    with ``_``, then strips leading and trailing underscores.
+
+    Examples::
+
+        _sanitize_model_code("ORB-v2")    # → "ORB_V2"
+        _sanitize_model_code("CHGNet")    # → "CHGNET"
+        _sanitize_model_code("MACE-MP-0") # → "MACE_MP_0"
+    """
+    import re
+
+    return re.sub(r"[^A-Z0-9]", "_", model_name.upper()).strip("_")
+
+
+def _build_objective_registry(adapters: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    """Build a flat objective code registry from discovered adapters.
+
+    Args:
+        adapters: Mapping of adapter name → adapter instance, as returned by
+            ``load_adapters()``.
+
+    Returns:
+        Mapping of ``code -> {description, full_key, adapter, dispatch_key}``.
+        On duplicate codes across adapters, the first entry wins and a warning
+        is emitted.
+    """
+    registry: Dict[str, Dict[str, str]] = {}
+    for adapter_name, adapter in adapters.items():
+        om = getattr(adapter, "objectives_map", None)
+        if not isinstance(om, dict):
+            continue
+        for full_key, dispatch_key in om.items():
+            code, description = BaseCalculator._parse_objective_key(full_key)
+            if code in registry:
+                warnings.warn(
+                    f"Objective code '{code}' from adapter '{adapter_name}' "
+                    f"duplicates an existing entry from adapter "
+                    f"'{registry[code]['adapter']}'. The duplicate will be ignored. "
+                    f"Rename the code in one of the adapters to resolve this."
+                )
+                continue
+            registry[code] = {
+                "description": description,
+                "full_key": full_key,
+                "adapter": adapter_name,
+                "dispatch_key": dispatch_key,
+            }
+    return registry
+
+
 # ── BaseCalculator ───────────────────────────────────────────────────────────
 
 
@@ -199,7 +252,96 @@ class BaseCalculator:
 
     name: str
     objectives_map: Dict[str, str] = {}
+    """Mapping of objective key → dispatch key.
+
+    Keys MUST follow the format ``'CODE: description'`` where ``CODE`` is an
+    uppercase alphanumeric string with underscores (e.g. ``'ALIGNN_EF_MP'``),
+    and ``description`` is a human-readable label including units where relevant.
+
+    The code is the stable programmatic identifier used throughout CrystALLSearch.
+    The dispatch key (value) identifies which model/backend function produces
+    this result; multiple objectives may share the same dispatch key.
+
+    Deviation from the format triggers a warning at class definition time.
+    pySIPFENN model names are a known exception handled at the CrystALLSearch layer.
+    """
     calculator_type: Literal["mlip", "inference"] = "inference"
+    save_artifacts: bool = True
+    supported_os: List[str] = ["windows", "macos", "linux"]
+    supported_devices: List[str] = ["cpu", "cuda"]
+
+    @staticmethod
+    def _parse_objective_key(key: str) -> Tuple[str, str]:
+        """Parse an objectives_map key into (code, description).
+
+        Keys must follow 'CODE: description' format. If no ':' separator
+        is present (e.g. pySIPFENN model names used directly as codes),
+        the full string is returned as the code and description is empty.
+        """
+        code, _, description = key.partition(":")
+        return code.strip(), description.strip()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        om = cls.__dict__.get("objectives_map")
+        if not isinstance(om, dict):
+            return  # property-based (e.g. MLIPAdapter) or not overridden — skip
+        for key in om:
+            code, _ = BaseCalculator._parse_objective_key(key)
+            if (
+                not code
+                or not code[0].isalpha()
+                or not code.replace("_", "").isalnum()
+                or code != code.upper()
+            ):
+                warnings.warn(
+                    f"{cls.__name__}.objectives_map key {key!r} does not follow "
+                    f"'CODE: description' format (CODE must be uppercase alphanumeric "
+                    f"with underscores, e.g. 'ALIGNN_EF_MP: ...'). "
+                    f"The full string will be treated as the code until this is fixed.",
+                    stacklevel=2,
+                )
+
+    def _resolve_objectives_to_dispatch(
+        self, objectives: Optional[Sequence[str]]
+    ) -> List[str]:
+        """Resolve objective codes or full keys to dispatch key values.
+
+        Accepts any mix of:
+        - Short codes (e.g. ``'PHONAX_BS'``)
+        - Full ``objectives_map`` keys (e.g. ``'PHONAX_BS: Phonax Phonon Band Structure'``)
+        - ``None`` — returns **all** dispatch keys (compute everything)
+
+        Unrecognised entries emit a :class:`UserWarning` and are skipped so
+        that partial objective subsets never silently compute nothing.
+
+        Args:
+            objectives: Sequence of codes / full keys, or ``None``.
+
+        Returns:
+            List of dispatch key strings (the *values* of :attr:`objectives_map`).
+        """
+        if objectives is None:
+            return list(self.objectives_map.values())
+        # Build code → dispatch_key lookup in one pass
+        code_to_dispatch: Dict[str, str] = {}
+        for full_key, dispatch_key in self.objectives_map.items():
+            code, _ = self._parse_objective_key(full_key)
+            code_to_dispatch[code] = dispatch_key
+        result: List[str] = []
+        for obj in objectives:
+            if obj in self.objectives_map:
+                result.append(self.objectives_map[obj])  # full-key path
+            elif obj in code_to_dispatch:
+                result.append(code_to_dispatch[obj])  # code path
+            else:
+                warnings.warn(
+                    f"Objective '{obj}' not found in {self.name!r} objectives_map "
+                    f"(neither as a code nor as a full key). Skipping.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        return result
 
     @property
     def objectives(self) -> List[str]:
