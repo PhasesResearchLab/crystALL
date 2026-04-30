@@ -7,25 +7,25 @@ inside it via subprocess.
 MLIP adapters optionally support **piping** inference adapters on the
 relaxed structures::
 
-    chgnet = CHGNetStaticAdapter()
+    matgl = MatGLAdapter()
     alignn = AlignnAdapter()
-    adapter = MLIPAdapter("MACE-mh", inference=[chgnet, alignn])
+    adapter = MLIPAdapter("MACE-mh", inference=[matgl, alignn])
 
-Piped objectives appear in results with namespaced keys::
+Piped objectives appear in results with code-prefixed keys::
 
-    "MACE-mh::CHGNetStatic::Static Energy [eV/atom]"
-    "MACE-mh::ALIGNN::ALIGNN-Alexandria Bandgap [eV]"
+    "MACE_MH_MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom] (via MatGL)"
+    "MACE_MH_ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV] (via ALIGNN)"
 """
 
 import os
+import re
 import json
 import platform
 import warnings
 from pathlib import Path
-from typing import Dict, List, Sequence, Optional, Any, Literal
+from typing import Dict, List, Sequence, Optional, Any, Literal, Tuple
 
 from crystall.calculators import BaseCalculator
-
 
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
@@ -45,6 +45,23 @@ def _sanitize_model_code(name: str) -> str:
     sanitized = re.sub(r"[^A-Za-z0-9]", "_", name).upper().strip("_")
     return re.sub(r"_+", "_", sanitized)
 
+
+# Input file extension → pymatgen fmt string
+_EXT_TO_PMG_FMT: Dict[str, str] = {
+    ".vasp": "poscar",
+    ".poscar": "poscar",
+    ".cif": "cif",
+    ".xyz": "xyz",
+    ".json": "json",
+}
+
+# pymatgen fmt string → output file extension
+_PMG_FMT_TO_EXT: Dict[str, str] = {
+    "poscar": ".vasp",
+    "cif": ".cif",
+    "xyz": ".xyz",
+    "json": ".json",
+}
 
 
 # ── Configuration helpers ───────────────────────────────────────────────────
@@ -89,11 +106,25 @@ class MLIPAdapter(BaseCalculator):
 
     calculator_type: Literal["mlip", "inference"] = "mlip"
 
+    @property
+    def supported_os(self) -> List[str]:
+        return [str(x).lower() for x in self._config.get("os", ["windows", "macos", "linux"])]
+
+    @property
+    def supported_devices(self) -> List[str]:
+        allowed = self._config.get("device", ["cpu", "cuda"])
+        if isinstance(allowed, list):
+            values = allowed
+        else:
+            values = [allowed]
+        return [str(x).lower() for x in values]
+
     def __init__(
         self,
         model_name: str,
         device: Optional[str] = None,
         inference: Optional[List[BaseCalculator]] = None,
+        structure_format: Optional[str] = None,
     ):
         config = _load_mlips_config()
         if model_name not in config:
@@ -105,6 +136,14 @@ class MLIPAdapter(BaseCalculator):
         self._config = config[model_name]
         self._device_override = device.lower() if isinstance(device, str) else None
         self._resolved_device: Optional[str] = None
+        # Normalise user alias "vasp" → "poscar" to match pymatgen's fmt strings.
+        _user_alias: Dict[str, str] = {"vasp": "poscar"}
+        self._structure_format: Optional[str] = (
+            _user_alias.get(structure_format.lower(), structure_format.lower())
+            if structure_format is not None
+            else None
+        )
+
         self._inference_adapters: List[BaseCalculator] = []
 
         self.name = model_name
@@ -119,6 +158,26 @@ class MLIPAdapter(BaseCalculator):
 
         if inference:
             self._resolve_inference(inference)
+
+    @staticmethod
+    def _infer_format(filepath: str) -> Tuple[str, str]:
+        """Return (pymatgen_fmt, output_extension) inferred from the input extension.
+
+        Falls back to ("poscar", ".vasp") for absent or unrecognised extensions,
+        which is correct for bare POSCAR files with no extension.
+        """
+        ext = os.path.splitext(filepath)[1].lower()
+        pmg_fmt = _EXT_TO_PMG_FMT.get(ext, "poscar")
+        out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
+        return pmg_fmt, out_ext
+
+    def _resolve_format(self, filepath: str) -> Tuple[str, str]:
+        """Return (pymatgen_fmt, output_extension), respecting structure_format override."""
+        if self._structure_format:
+            pmg_fmt = self._structure_format
+            out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
+            return pmg_fmt, out_ext
+        return self._infer_format(filepath)
 
     # ── Inference piping ───────────────────────────────────────────────────
 
@@ -144,14 +203,20 @@ class MLIPAdapter(BaseCalculator):
     def objectives_map(self) -> Dict[str, str]:
         """Combined MLIP + piped inference objectives.
 
-        Piped objectives are namespaced as
-        ``"{mlip_name}::{adapter_name}::{original_objective}"``.
+        Piped objective codes are constructed as ``{mlip_code}_{inference_code}``,
+        e.g. 'ORB_V2_ALIGNN_EF_MP: ALIGNN-MP Formation Energy [eV/atom] (via ALIGNN)'.
         """
         combined = dict(self._own_objectives_map)
         for adapter in self._inference_adapters:
-            for obj in adapter.objectives_map:
-                namespaced = f"{self._model_name}::{adapter.name}::{obj}"
-                combined[namespaced] = f"pipe::{adapter.name}"
+            for full_key in adapter.objectives_map:
+                inf_code, description = BaseCalculator._parse_objective_key(full_key)
+                ns_code = f"{self._model_code}_{inf_code}"
+                ns_desc = (
+                    f"{description} (via {adapter.name})"
+                    if description
+                    else f"(via {adapter.name})"
+                )
+                combined[f"{ns_code}: {ns_desc}"] = f"pipe::{adapter.name}"
         return combined
 
     @objectives_map.setter
@@ -170,57 +235,27 @@ class MLIPAdapter(BaseCalculator):
     def python_version(self) -> str:
         return self._config.get("python_version", "3.11")
 
-    @staticmethod
-    def _current_os() -> str:
-        system = platform.system().lower()
-        if system == "darwin":
-            return "macos"
-        if system == "linux":
-            return "linux"
-        if system == "windows":
-            return "windows"
-        return system
-
-    def _allowed_os(self) -> List[str]:
-        allowed = self._config.get("os")
-        if not allowed:
-            return []
-        return [str(x).lower() for x in allowed]
-
-    def _assert_os_supported(self) -> None:
-        allowed = self._allowed_os()
-        if not allowed:
-            return
-        current = self._current_os()
-        if current not in allowed:
-            raise RuntimeError(
-                f"{self.name} is not supported on '{current}'. "
-                f"Allowed OS values: {allowed}."
-            )
-
     def _resolve_device(self) -> str:
         if self._resolved_device:
             return self._resolved_device
 
-        if self._device_override:
-            choice = self._device_override
-            if choice not in {"cpu", "cuda"}:
-                raise ValueError(
-                    f"Invalid device override '{choice}' for {self.name}. "
-                    "Use 'cpu' or 'cuda'."
-                )
-        elif self._current_os() == "linux":
-            # Before the micro-env exists (setup stage), use CPU as bootstrap.
-            # After setup, auto-detect CUDA availability in the micro-env.
-            if self.is_env_ready() and self._cuda_available_in_micro_env():
-                choice = "cuda"
-            else:
-                choice = "cpu"
-        else:
-            choice = str(self._config.get("device", "cpu")).lower()
+        candidate = self._device_override if self._device_override else "cpu"
 
-        self._resolved_device = choice
-        return choice
+        allowed = self._allowed_devices()
+        if allowed and candidate not in allowed:
+            raise ValueError(
+                f"[{self.name}] device='{candidate}' is not supported. "
+                f"Allowed values: {allowed}."
+            )
+
+        if candidate == "cuda" and not self._cuda_available_system():
+            raise RuntimeError(
+                f"[{self.name}] device='cuda' requested but CUDA is not available "
+                "on this system (nvidia-smi not found or returned non-zero)."
+            )
+
+        self._resolved_device = candidate
+        return candidate
 
     def _cuda_available_in_micro_env(self) -> bool:
         import subprocess as sp
@@ -288,19 +323,8 @@ class MLIPAdapter(BaseCalculator):
             "SFY_PATH": str(self._env_path()),
         }
         for k, v in self._config.get("custom", {}).items():
-            fmt[k] = str(v)
+            fmt[k] = self._resolve_env_value(k, str(v), self.name)
         return fmt
-
-    def setup_env(self) -> None:
-        self._assert_os_supported()
-        self._resolve_device()
-        super().setup_env()
-
-        # Re-resolve on Linux after setup so CUDA can be auto-selected
-        # based on the actual micro-env/runtime capability.
-        if self._current_os() == "linux" and not self._device_override:
-            self._resolved_device = None
-            print(f"[{self.name}] Auto-selected device: {self._resolve_device()}")
 
     def run_on_structure(
         self,
@@ -312,49 +336,54 @@ class MLIPAdapter(BaseCalculator):
         **kwargs,
     ) -> Dict[str, Any]:
         self._assert_os_supported()
-        if (
-            self._current_os() == "linux"
-            and not self._device_override
-            and self.is_env_ready()
-        ):
-            self._resolved_device = None
         self._resolve_device()
-        save_poscar = bool(kwargs.pop("save_poscar", False))
-        poscar_path = kwargs.pop("poscar_path", None)
+
+        abs_path = os.path.abspath(file_path)
+        output_dir = os.path.dirname(abs_path)
+        _, out_ext = self._resolve_format(abs_path)
+        stem = os.path.splitext(os.path.basename(abs_path))[0] or os.path.basename(
+            abs_path
+        )
+        # Naming convention: {model_name}_{stem}{fmt_ext}  e.g. ORB_Fe2O3.vasp
+        output_stem_prefix = f"{self._model_name}_"
+
         result = super().run_on_structure(
             file_path,
             isif=isif,
             optimizer=optimizer,
             fmax=fmax,
             objectives=objectives,
+            output_dir=output_dir,
+            output_stem_prefix=output_stem_prefix,
             **kwargs,
         )
         parsed = self._deserialize_result(result)
 
-        if save_poscar and isinstance(parsed, dict):
-            props = parsed.get("properties", {})
-            if isinstance(props, dict):
-                key = f"{self._model_name} Relaxed Structure"
-                relaxed_structure = props.get(key)
-                if relaxed_structure is not None:
-                    try:
-                        out_path = (
-                            str(poscar_path)
-                            if poscar_path
-                            else f"{os.path.basename(file_path)}_{self._model_name}.POSCAR"
-                        )
-                        relaxed_structure.to(fmt="poscar", filename=out_path)
-                    except Exception:
-                        pass
+        if self._inference_adapters:
+            saved_path = os.path.join(output_dir, f"{self._model_name}_{stem}{out_ext}")
+            if os.path.isfile(saved_path):
+                parsed = self._run_inference_pipe_single(saved_path, parsed)
+            else:
+                warnings.warn(
+                    f"[{self._model_name}] Relaxed structure not found at "
+                    f"'{saved_path}'; skipping inference piping for this structure."
+                )
 
         return parsed
 
     def _request_extras(self) -> dict:
-        """Include calculator code lines and format vars in the request."""
-        return {
-            "calculator_code_lines": self._config.get("calculator", []),
-            "format_vars": self.format_vars(),
-        }
+        """Include save_artifacts (base), calculator code, format vars, structure format."""
+        extras = super()._request_extras()  # {"save_artifacts": self.save_artifacts}
+        extras.update(
+            {
+                "calculator_code_lines": self._config.get("calculator", []),
+                "format_vars": self.format_vars(),
+                "model_code": self._model_code,  # sanitized code prefix for full-key labelling
+            }
+        )
+        if self._structure_format:
+            extras["structure_format"] = self._structure_format
+        return extras
 
     @staticmethod
     def _deserialize_worker_value(value: Any) -> Any:
@@ -409,29 +438,36 @@ class MLIPAdapter(BaseCalculator):
         optimizer: str = "FIRE",
         fmax: float = 0.05,
         **kwargs,
-    ) -> list[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         """Run MLIP relaxation on all structures in a directory.
 
-        Relaxed structures are optionally saved to ``<path>_<ModelName>/``
-        when ``save_poscar=True`` (or required by inference piping).
-        If inference adapters are configured, they run sequentially on the
-        relaxed structures and their results are merged with namespaced keys.
+        Relaxed structures are always saved to a sibling directory named
+        ``{model_name}_{input_dir_basename}/``.  If inference adapters are
+        configured they run on the saved relaxed structures and results are merged.
+
+        Args:
+            path: Input directory containing structure files.
+            mode: Dispatch mode passed to BaseCalculator.run_on_directory.
+            max_workers: Worker count for parallel mode.
+            objectives: Subset of objectives to compute.
+            isif: Relaxation ISIF flag.
+            optimizer: ASE optimizer name.
+            fmax: Force convergence threshold.
+            results_dir: Optional explicit path for the output directory.
+                Defaults to ``{parent_of_path}/{model_name}_{input_dir_basename}``.
+            **kwargs: Additional kwargs forwarded to the worker request.
         """
         self._assert_os_supported()
-        if (
-            self._current_os() == "linux"
-            and not self._device_override
-            and self.is_env_ready()
-        ):
-            self._resolved_device = None
         self._resolve_device()
-        save_poscar = bool(kwargs.pop("save_poscar", False))
-        if self._inference_adapters:
-            save_poscar = True
 
-        default_results_dir = f"{path}_{self.name}" if save_poscar else None
+        abs_path = os.path.abspath(path)
+        input_dir_name = os.path.basename(abs_path)
+        default_results_dir = os.path.join(
+            os.path.dirname(abs_path),
+            f"{self._model_name}_{input_dir_name}",
+        )
         results_dir = kwargs.pop("results_dir", default_results_dir)
-        kwargs["results_dir"] = results_dir
+
         mlip_results = super().run_on_directory(
             path,
             mode=mode,
@@ -440,24 +476,87 @@ class MLIPAdapter(BaseCalculator):
             isif=isif,
             optimizer=optimizer,
             fmax=fmax,
+            output_dir=results_dir,
+            output_stem_prefix="",  # files in sibling dir keep original names
             **kwargs,
         )
 
-        # Run piped inference adapters on relaxed structures
         if self._inference_adapters and os.path.isdir(results_dir):
-            mlip_results = self._run_inference_pipe(results_dir, mlip_results)
+            mlip_results = self._run_inference_pipe(
+                results_dir,
+                mlip_results,
+                save_artifacts=self.save_artifacts,
+            )
 
         return self._deserialize_results(mlip_results)
 
+    def _run_inference_pipe_single(
+        self,
+        relaxed_path: str,
+        mlip_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Execute piped inference adapters on a single relaxed structure file.
+
+        Results are merged into *mlip_result* with code-prefixed keys::
+
+            "{mlip_code}_{inf_code}"
+
+        ``save_artifacts`` is forwarded to each adapter so their workers honour
+        the same flag as this MLIPAdapter instance.
+
+        Args:
+            relaxed_path: Absolute path to the saved relaxed structure file.
+            mlip_result: Parsed result dict from MLIPAdapter for this structure.
+
+        Returns:
+            *mlip_result* updated with all piped adapter results.
+        """
+        for adapter in self._inference_adapters:
+            if not adapter.is_env_ready():
+                warnings.warn(
+                    f"Inference adapter '{adapter.name}' micro-env is not ready "
+                    f"— skipping. Call {type(adapter).__name__}().setup_env() first."
+                )
+                continue
+
+            print(
+                f"\n--- Running piped inference: {adapter.name} on {relaxed_path} ---"
+            )
+            try:
+                inferred = adapter.run_on_structure(
+                    relaxed_path,
+                    save_artifacts=self.save_artifacts,
+                )
+            except Exception as exc:
+                warnings.warn(f"Inference adapter '{adapter.name}' failed: {exc}")
+                continue
+
+            for obj_key, obj_val in inferred.get("properties", {}).items():
+                inf_code, inf_desc = BaseCalculator._parse_objective_key(obj_key)
+                ns_code = f"{self._model_code}_{inf_code}"
+                ns_desc = (
+                    f"{inf_desc} (via {adapter.name})"
+                    if inf_desc
+                    else f"(via {adapter.name})"
+                )
+                mlip_result.setdefault("properties", {})[
+                    f"{ns_code}: {ns_desc}"
+                ] = obj_val
+
+        return mlip_result
+
     def _run_inference_pipe(
-        self, relaxed_dir: str, mlip_results: List[Dict[str, Any]]
+        self,
+        relaxed_dir: str,
+        mlip_results: List[Dict[str, Any]],
+        save_artifacts: bool = True,
     ) -> List[Dict[str, Any]]:
         """Execute piped inference adapters on relaxed structures.
 
         Each adapter runs ``run_on_directory`` on *relaxed_dir*, and its
-        results are merged into *mlip_results* with namespaced keys::
+        results are merged into *mlip_results* with code-prefixed keys::
 
-            "{mlip_name}::{adapter_name}::{original_objective}"
+            "{mlip_code}_{inf_code}"
         """
         by_name: Dict[str, Dict[str, Any]] = {r["name"]: r for r in mlip_results}
 
@@ -471,7 +570,10 @@ class MLIPAdapter(BaseCalculator):
 
             print(f"\n--- Running piped inference: {adapter.name} on {relaxed_dir} ---")
             try:
-                inferred = adapter.run_on_directory(relaxed_dir)
+                inferred = adapter.run_on_directory(
+                    relaxed_dir,
+                    save_artifacts=save_artifacts,
+                )
             except Exception as exc:
                 warnings.warn(f"Inference adapter '{adapter.name}' failed: {exc}")
                 continue
@@ -481,8 +583,14 @@ class MLIPAdapter(BaseCalculator):
                 if name not in by_name:
                     continue
                 for obj_key, obj_val in inf_result.get("properties", {}).items():
-                    namespaced = f"{self._model_name}::{adapter.name}::{obj_key}"
-                    by_name[name]["properties"][namespaced] = obj_val
+                    inf_code, inf_desc = BaseCalculator._parse_objective_key(obj_key)
+                    ns_code = f"{self._model_code}_{inf_code}"
+                    ns_desc = (
+                        f"{inf_desc} (via {adapter.name})"
+                        if inf_desc
+                        else f"(via {adapter.name})"
+                    )
+                    by_name[name]["properties"][f"{ns_code}: {ns_desc}"] = obj_val
 
         return list(by_name.values())
 
@@ -519,6 +627,21 @@ import numpy as np
 STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
 
+_EXT_TO_PMG_FMT = {
+    ".vasp":   "poscar",
+    ".poscar": "poscar",
+    ".cif":    "cif",
+    ".xyz":    "xyz",
+    ".json":   "json",
+}
+_PMG_FMT_TO_EXT = {
+    "poscar": ".vasp",
+    "cif":    ".cif",
+    "xyz":    ".xyz",
+    "json":   ".json",
+}
+
+
 def main():
     req_path = sys.argv[1]
     res_path = sys.argv[2]
@@ -528,12 +651,20 @@ def main():
 
     file_paths = req["file_paths"]
     model_name = req["model_name"]
+    model_code = req.get("model_code", "")  # sanitized code prefix, e.g. 'ORB_V2'
+    # Helper: build a full objectives_map-compatible key
+    def _mk(code_suffix, description):
+        if model_code:
+            return f"{model_code}_{code_suffix}: {model_name} {description}"
+        return f"{model_name} {description}"  # backward-compat fallback
     calculator_code_lines = req["calculator_code_lines"]
     format_vars = req["format_vars"]
     isif = req.get("isif", 8)
     optimizer_name = req.get("optimizer", "FIRE")
     fmax = req.get("fmax", 0.05)
-    results_dir = req.get("results_dir")
+    output_dir                = req["output_dir"]              # always set by host
+    output_stem_prefix        = req.get("output_stem_prefix", "")
+    structure_format_override = req.get("structure_format")    # None → infer per file
 
     # ── ISIF mapping ────────────────────────────────────────────────
     isif_settings = {
@@ -637,7 +768,7 @@ def main():
         # Energy per atom (total energy, NOT formation energy)
         try:
             energy = atoms.get_potential_energy()
-            props[f"{model_name} Relaxed Energy [eV/atom]"] = to_float_4(
+            props[_mk("RELAX_E", "Relaxed Energy [eV/atom]")] = to_float_4(
                 energy / n_atoms
             )
         except Exception:
@@ -649,7 +780,7 @@ def main():
             if forces is not None:
                 f_arr = np.array(forces, dtype=float)
                 rms = float(np.sqrt(np.mean(f_arr ** 2)))
-                props[f"{model_name} Relaxed RMS Force [eV/A]"] = to_float_4(rms)
+                props[_mk("RELAX_F", "Relaxed RMS Force [eV/A]")] = to_float_4(rms)
         except Exception:
             pass
 
@@ -664,7 +795,7 @@ def main():
                         0.5 * ((xx - yy)**2 + (yy - zz)**2 + (zz - xx)**2)
                         + 3.0 * (xy**2 + xz**2 + yz**2)
                     ))
-                    props[f"{model_name} Relaxed Von Mises Stress [GPa]"] = (
+                    props[_mk("RELAX_STRESS", "Relaxed Von Mises Stress [GPa]")] = (
                         to_float_4(vm_eV * EV_A3_TO_GPA)
                     )
                 elif s.shape == (3, 3):
@@ -674,7 +805,7 @@ def main():
                         0.5 * ((xx - yy)**2 + (yy - zz)**2 + (zz - xx)**2)
                         + 3.0 * (xy**2 + xz**2 + yz**2)
                     ))
-                    props[f"{model_name} Relaxed Von Mises Stress [GPa]"] = (
+                    props[_mk("RELAX_STRESS", "Relaxed Von Mises Stress [GPa]")] = (
                         to_float_4(vm_eV * EV_A3_TO_GPA)
                     )
         except Exception:
@@ -683,7 +814,7 @@ def main():
         # Volume per atom
         try:
             volume = atoms.get_volume()
-            props[f"{model_name} Relaxed Volume [A^3/atom]"] = to_float_4(
+            props[_mk("RELAX_VOL", "Relaxed Volume [A^3/atom]")] = to_float_4(
                 volume / n_atoms
             )
         except Exception:
@@ -694,34 +825,37 @@ def main():
             from pymatgen.io.ase import AseAtomsAdaptor
 
             pmg_structure = AseAtomsAdaptor.get_structure(atoms)
-            props[f"{model_name} Relaxed Structure"] = {
+            props[_mk("RELAX_STRUCT", "Relaxed Structure")] = {
                 STRUCTURE_MARKER_KEY: pmg_structure.as_dict()
             }
+            
+            # ── Write relaxed structure to disk ─────────────────────────────────
+            if structure_format_override:
+                pmg_fmt = structure_format_override
+                out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
+            else:
+                in_ext  = os.path.splitext(filepath)[1].lower()
+                pmg_fmt = _EXT_TO_PMG_FMT.get(in_ext, "poscar")
+                out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
+            
+            # Strip extension to build stem; handles bare POSCAR files (no extension).
+            in_stem      = os.path.splitext(filename)[0] or filename
+            out_filename = f"{output_stem_prefix}{in_stem}{out_ext}"
+            os.makedirs(output_dir, exist_ok=True)
+            try:
+                pmg_structure.to(fmt=pmg_fmt, filename=os.path.join(output_dir, out_filename))
+            except Exception as _write_err:
+                print(
+                    f"[MLIPAdapter] Warning: could not write structure for "
+                    f"{filename}: {_write_err}"
+                )
+            # ────────────────────────────────────────────────────────────────────
         except Exception:
             pass
 
         results.append({"name": filename, "properties": props})
 
-    # ── Save relaxed structures to disk ─────────────────────────────
-    if results_dir:
-        os.makedirs(results_dir, exist_ok=True)
-        saved = 0
-        for r in results:
-            structure_payload = r["properties"].get(
-                f"{model_name} Relaxed Structure"
-            )
-            if structure_payload and isinstance(structure_payload, dict):
-                out_path = os.path.join(results_dir, r["name"])
-                try:
-                    pmg_data = structure_payload.get(STRUCTURE_MARKER_KEY)
-                    if isinstance(pmg_data, dict):
-                        from pymatgen.core import Structure
 
-                        Structure.from_dict(pmg_data).to(fmt="poscar", filename=out_path)
-                        saved += 1
-                except Exception:
-                    pass
-        print(f"[MLIPAdapter] Saved {saved} relaxed structures to {results_dir}")
 
     # ── Write results ───────────────────────────────────────────────
     with open(res_path, "w") as f:
