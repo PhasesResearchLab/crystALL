@@ -22,8 +22,41 @@ from statistics import mean
 
 from pymongo.database import Database
 from pymatgen.core import Structure, Composition, Element
-from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+
+
+_STRUCTURE_FORMATS: dict[str, list[str]] = {
+    # key   = pymatgen fmt= string used for reading and writing
+    # value = [*accepted_aliases] (no dots; "" matches bare files)
+    # value[0] is the extension crystALL uses when writing.
+    "poscar": ["vasp", "poscar", ""],
+    "cif": ["cif", "mcif"],
+    "xyz": ["xyz"],
+    "json": ["json"],
+}
+
+
+def _write_structure(
+    structure: Structure,
+    out_dir: str,
+    name_stem: str,
+    file_format: str = "poscar",
+) -> None:
+    """Write *structure* to *out_dir/name_stem.<ext>* using pymatgen's generic IO.
+
+    Args:
+        structure: pymatgen Structure to serialize.
+        out_dir: Existing output directory.
+        name_stem: Filename without extension. Characters illegal in filenames
+            (``? : * | > < \\ /``) are replaced with ``-`` before writing.
+        file_format: Output format alias. See ``_STRUCTURE_FORMATS`` for accepted
+            values. Defaults to ``"poscar"`` (written with .vasp extension).
+    """
+    alias = file_format.lower().lstrip(".")
+    fmt = next((f for f, v in _STRUCTURE_FORMATS.items() if alias in v), "poscar")
+    ext = "." + _STRUCTURE_FORMATS[fmt][0]
+    sanitized = re.sub(r"[?:*|><\\/]", "-", name_stem)
+    structure.to(fmt=fmt, filename=os.path.join(out_dir, sanitized + ext))
 
 
 def _substitute_candidate(
@@ -32,6 +65,7 @@ def _substitute_candidate(
     substitutions: list,
     sELtarget: List[str],
     out_dir: str,
+    file_format: str = "poscar",
 ) -> int:
     st_orig = Structure.from_dict(structure_dict)
     count = 0
@@ -50,14 +84,8 @@ def _substitute_candidate(
 
         st.replace_species(d)
 
-        if len(substitutions) > 1:
-            name = name_root + "-p" + str(p) + ".vasp"
-        else:
-            name = name_root + ".vasp"
-
-        sanitized_name = re.sub(r"[?:*|><\\/]", "-", name)
-        sP = Poscar(st)
-        sP.write_file(os.path.join(out_dir, sanitized_name))
+        name_stem = name_root + ("-p" + str(p) if len(substitutions) > 1 else "")
+        _write_structure(st, out_dir, name_stem, file_format)
         count += 1
 
     return count
@@ -68,9 +96,10 @@ def _generate_from_structures(
     candidates: Iterable[tuple[str, Structure, list]],
     out_dir: str,
     parallel: bool = True,
+    file_format: str = "poscar",
 ) -> int:
     """
-    Apply elemental substitution to candidate structures and write .vasp files.
+    Apply elemental substitution to candidate structures and write output files.
 
     Args:
         target_formula: Target composition used to derive the ordered target element list.
@@ -80,9 +109,11 @@ def _generate_from_structures(
             substitutions: list of ordered element symbol lists, one per permutation.
         out_dir: Existing output directory path.
         parallel: If True, process candidates in parallel using ProcessPoolExecutor.
+        file_format: Output format alias forwarded to :func:`_write_structure`.
+            Defaults to ``"poscar"`` (written with .vasp extension).
 
     Returns:
-        Total number of .vasp files written.
+        Total number of files written.
     """
     if isinstance(target_formula, str):
         composition = Composition(target_formula)
@@ -105,6 +136,7 @@ def _generate_from_structures(
         subs = [c[2] for c in candidates_list]
         sELtargets = [sELtarget] * len(candidates_list)
         out_dirs = [out_dir] * len(candidates_list)
+        file_formats = [file_format] * len(candidates_list)
 
         with concurrent.futures.ProcessPoolExecutor() as executor:
             results = executor.map(
@@ -114,6 +146,7 @@ def _generate_from_structures(
                 subs,
                 sELtargets,
                 out_dirs,
+                file_formats,
             )
             for count in results:
                 total_written += count
@@ -123,7 +156,12 @@ def _generate_from_structures(
     else:
         for name_root, structure, substitutions in candidates_list:
             count = _substitute_candidate(
-                name_root, structure.as_dict(), substitutions, sELtarget, out_dir
+                name_root,
+                structure.as_dict(),
+                substitutions,
+                sELtarget,
+                out_dir,
+                file_format,
             )
             total_written += count
             if total_written - last_reported >= 100:
@@ -133,13 +171,19 @@ def _generate_from_structures(
     return total_written
 
 
-def run_local(target_formula: Union[str, Composition], prototype_path: str) -> str:
+def run_local(
+    target_formula: Union[str, Composition],
+    prototype_path: str,
+    file_format: str = "poscar",
+) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous formula.
 
     Args:
         target_formula: The target formula as a string or pymatgen Composition object.
         prototype_path: Path to the directory containing prototype files.
+        file_format: Output format alias (e.g. ``"vasp"``, ``"cif"``, ``"xyz"``).
+            Defaults to ``"poscar"`` (written with .vasp extension).
 
     Returns:
         Path to the directory containing the generated prototypes.
@@ -244,9 +288,9 @@ def run_local(target_formula: Union[str, Composition], prototype_path: str) -> s
     formula_str = str(target_formula).replace(" ", "")
     out_dir = f"{formula_str}-local-prototypes"
     # Ensure we are not writing back into the prototype source directory
-    assert os.path.abspath(out_dir) != os.path.abspath(
-        prototype_path
-    ), "Output directory must differ from prototype_path"
+    assert os.path.abspath(out_dir) != os.path.abspath(prototype_path), (
+        "Output directory must differ from prototype_path"
+    )
 
     print(
         f"Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}"
@@ -268,7 +312,9 @@ def run_local(target_formula: Union[str, Composition], prototype_path: str) -> s
         newNameRoot = "local-" + str(spGroupA.get_crystal_system()) + "-" + base_name
         candidates.append((newNameRoot, s, permuts))
 
-    allS = _generate_from_structures(target_formula, candidates, out_dir)
+    allS = _generate_from_structures(
+        target_formula, candidates, out_dir, file_format=file_format
+    )
     print(
         f"\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes."
     )
@@ -282,6 +328,7 @@ def run_MPDD(
     target_prototypes: Literal["native", "non-native"],
     filter_prototypes: Literal["material.structID", "material.volNormStructID"],
     limit: int,
+    file_format: str = "poscar",
 ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous formula using the MPDD database.
@@ -293,6 +340,8 @@ def run_MPDD(
         target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
+        file_format: Output format alias (e.g. ``"vasp"``, ``"cif"``, ``"xyz"``).
+            Defaults to ``"poscar"`` (written with .vasp extension).
 
     Returns:
         Path to the directory containing the generated prototypes.
@@ -322,9 +371,9 @@ def run_MPDD(
             "Target formula must be a string or a pymatgen Composition object"
         )
     assert len(collections) > 0, "At least one collection must be specified"
-    assert isinstance(
-        MPDD, Database
-    ), "MPDD must be a pymongo Database object corresponding to the MPDD database or another database following (at least partially) the same schema"
+    assert isinstance(MPDD, Database), (
+        "MPDD must be a pymongo Database object corresponding to the MPDD database or another database following (at least partially) the same schema"
+    )
 
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
@@ -421,10 +470,7 @@ def run_MPDD(
                         + e["metadata"]["affiliation"]
                     )
 
-                p = Poscar(s)
-                p.write_file(
-                    out_dir + "/" + re.sub(r"[?:*|><\\/]", "-", name) + ".vasp"
-                )
+                _write_structure(s, out_dir, name, file_format)
         print("Done.\n")
 
         return out_dir
@@ -567,7 +613,9 @@ def run_MPDD(
 
                 candidates.append((nameRoot, s, permuts))
 
-            allS += _generate_from_structures(target_formula, candidates, out_dir)
+            allS += _generate_from_structures(
+                target_formula, candidates, out_dir, file_format=file_format
+            )
 
         print(
             f"Total number of unique prototypes: {Fore.GREEN}{Style.BRIGHT}{len(aggregated_data)}{Style.RESET_ALL} * {Fore.BLUE}{Style.BRIGHT}{permN}{Style.RESET_ALL} permutations each\n"
@@ -585,6 +633,7 @@ def run_MPDD_devs(
     target_prototypes: Literal["native", "non-native"],
     filter_prototypes: Literal["material.structID", "material.volNormStructID"],
     limit: int,
+    file_format: str = "poscar",
 ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
@@ -597,6 +646,8 @@ def run_MPDD_devs(
         target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
+        file_format: Output format alias (e.g. ``"vasp"``, ``"cif"``, ``"xyz"``).
+            Defaults to ``"poscar"`` (written with .vasp extension).
 
     Returns:
         Path to the directory containing the generated prototypes.
@@ -723,10 +774,7 @@ def run_MPDD_devs(
                         + e["metadata"]["affiliation"]
                     )
 
-                p = Poscar(s)
-                p.write_file(
-                    out_dir + "/" + re.sub(r"[?:*|><\\/]", "-", name) + ".vasp"
-                )
+                _write_structure(s, out_dir, name, file_format)
                 targetPresent += 1
 
         print("Done.")
@@ -882,7 +930,9 @@ def run_MPDD_devs(
 
                 candidates.append((nameRoot, s, substitutions))
 
-            allS += _generate_from_structures(target_formula, candidates, out_dir)
+            allS += _generate_from_structures(
+                target_formula, candidates, out_dir, file_format=file_format
+            )
 
         if allS > 0:
             print(
@@ -1049,9 +1099,24 @@ def run_optimade(
     target_prototypes: Literal["native", "non-native"] = "non-native",
     limit: int = 1000,
     parallel: bool = True,
+    file_format: str = "poscar",
 ) -> str:
     """
     Run prototype identification and elemental substitution using OPTIMADE databases.
+
+    Args:
+        target_formula: The target formula as a string or pymatgen Composition object.
+        base_urls: List of OPTIMADE provider base URLs to query.
+        target_prototypes: Specifies whether to use ``'native'`` or ``'non-native'``
+            compositions. Defaults to ``'non-native'``.
+        limit: Maximum number of results per provider. Defaults to 1000.
+        parallel: Whether to run elemental substitution in parallel (non-native branch
+            only). Defaults to True.
+        file_format: Output format alias (e.g. ``"vasp"``, ``"cif"``, ``"xyz"``).
+            Defaults to ``"poscar"`` (written with .vasp extension).
+
+    Returns:
+        Path to the directory containing the generated prototypes.
     """
     try:
         from optimade.client import OptimadeClient
@@ -1130,16 +1195,12 @@ def run_optimade(
             _t.join(timeout=2)
 
     all_entries = []
-    # all_results.get('structures', {}) structure depends on optimade version.
-    # OptimadeClient.all_results is a dict like {'structures': {'filter_str': {base_url: {'data': [...]}}}}
     structures_results = client.all_results.get("structures", {}).get(filter_str, {})
     for base_url, query_results in structures_results.items():
-        # query_results may be a QueryResults dataclass (optimade >= 1.x) or a plain dict
         if hasattr(query_results, "data"):
             entries = query_results.data if isinstance(query_results.data, list) else []
         else:
             entries = query_results.get("data", [])
-        # Add provider domain info for naming
         domain = base_url.split("//")[-1].split("/")[0]
         for e in entries:
             e["_provider_domain"] = domain
@@ -1169,10 +1230,9 @@ def run_optimade(
 
             provider_domain = entry.get("_provider_domain", "unknown")
             entry_id_sanitized = re.sub(r"[?:*|><\\/]", "-", entry.get("id", "unknown"))
-            name = f"optimade-{provider_domain}-{entry_id_sanitized}.vasp"
+            name_stem = f"optimade-{provider_domain}-{entry_id_sanitized}"
 
-            p = Poscar(s)
-            p.write_file(os.path.join(out_dir, name))
+            _write_structure(s, out_dir, name_stem, file_format)
             allS += 1
 
         print("Done.\n")
@@ -1200,7 +1260,11 @@ def run_optimade(
             candidates.append((name_root, s, permuts))
 
         allS = _generate_from_structures(
-            target_formula, candidates, out_dir, parallel=parallel
+            target_formula,
+            candidates,
+            out_dir,
+            parallel=parallel,
+            file_format=file_format,
         )
         print(
             f"\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes."

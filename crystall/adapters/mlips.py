@@ -46,22 +46,19 @@ def _sanitize_model_code(name: str) -> str:
     return re.sub(r"_+", "_", sanitized)
 
 
-# Input file extension → pymatgen fmt string
-_EXT_TO_PMG_FMT: Dict[str, str] = {
-    ".vasp": "poscar",
-    ".poscar": "poscar",
-    ".cif": "cif",
-    ".xyz": "xyz",
-    ".json": "json",
+# key   = pymatgen fmt= string used for reading and writing
+# value = [canonical_write_ext, *accepted_aliases] (no dots; "" matches bare files)
+# value[0] is the extension used when writing; dot is prepended at use.
+# NOTE: Once crystALL is released on PyPI and added as a `layer2` dependency to all
+# micro-envs, worker scripts will import this mapping (and related helpers) directly
+# from the crystALL package rather than redefining it here.
+_STRUCTURE_FORMATS: dict[str, list[str]] = {
+    "poscar": ["vasp", "poscar", ""],
+    "cif":    ["cif", "mcif"],
+    "xyz":    ["xyz"],
+    "json":   ["json"],
 }
 
-# pymatgen fmt string → output file extension
-_PMG_FMT_TO_EXT: Dict[str, str] = {
-    "poscar": ".vasp",
-    "cif": ".cif",
-    "xyz": ".xyz",
-    "json": ".json",
-}
 
 
 # ── Configuration helpers ───────────────────────────────────────────────────
@@ -166,17 +163,16 @@ class MLIPAdapter(BaseCalculator):
         Falls back to ("poscar", ".vasp") for absent or unrecognised extensions,
         which is correct for bare POSCAR files with no extension.
         """
-        ext = os.path.splitext(filepath)[1].lower()
-        pmg_fmt = _EXT_TO_PMG_FMT.get(ext, "poscar")
-        out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
-        return pmg_fmt, out_ext
+        raw = os.path.splitext(filepath)[1].lower().lstrip(".")
+        fmt = next((f for f, v in _STRUCTURE_FORMATS.items() if raw in v), "poscar")
+        return fmt, "." + _STRUCTURE_FORMATS[fmt][0]
 
     def _resolve_format(self, filepath: str) -> Tuple[str, str]:
         """Return (pymatgen_fmt, output_extension), respecting structure_format override."""
         if self._structure_format:
-            pmg_fmt = self._structure_format
-            out_ext = _PMG_FMT_TO_EXT.get(pmg_fmt, ".vasp")
-            return pmg_fmt, out_ext
+            alias = self._structure_format.lower().lstrip(".")
+            fmt = next((f for f, v in _STRUCTURE_FORMATS.items() if alias in v), "poscar")
+            return fmt, "." + _STRUCTURE_FORMATS[fmt][0]
         return self._infer_format(filepath)
 
     # ── Inference piping ───────────────────────────────────────────────────
