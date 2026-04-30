@@ -6,6 +6,7 @@ import tempfile
 import pytest
 import crystall
 import unittest
+from crystall.calculators import BaseCalculator
 import warnings
 import numpy as np
 from functools import partial
@@ -29,7 +30,9 @@ class TestTopLevelFunctions(unittest.TestCase):
             self.assertIsInstance(name, str)
             self.assertIsNotNone(adapter)
         # Also exercise the entry_points failure path which should be handled
-        with patch('importlib.metadata.entry_points', side_effect=Exception('EP failure')):
+        with patch(
+            "importlib.metadata.entry_points", side_effect=Exception("EP failure")
+        ):
             adapters = crystall.load_adapters()
             self.assertIsInstance(adapters, dict)
 
@@ -44,7 +47,9 @@ class TestTopLevelFunctions(unittest.TestCase):
             shutil.rmtree("Ni22Ru8-local-prototypes")
 
         # MPDD test setup mirrors previous TestMPDD
-        self.client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=100)
+        self.client = MongoClient(
+            "mongodb://localhost:27017/", serverSelectionTimeoutMS=100
+        )
         self.db = self.client["MPDD"]
         self.collection = self.db["curated"]
         self.target_formula_mpdd = "Ni26Ru8"  # "Ni26Ru8" for quick run or "Ni22Ru8" to stay consistent with local target
@@ -80,11 +85,15 @@ class TestTopLevelFunctions(unittest.TestCase):
 
         # Directory name and existence
         self.assertEqual(result, "Ni22Ru8-local-prototypes")
-        self.assertTrue(os.path.isdir(result), "Local prototypes directory was not created.")
+        self.assertTrue(
+            os.path.isdir(result), "Local prototypes directory was not created."
+        )
 
         # Basic sanity on number of generated files
         files = os.listdir(result)
-        self.assertGreater(len(files), 0, "run_local did not generate any local prototypes.")
+        self.assertGreater(
+            len(files), 0, "run_local did not generate any local prototypes."
+        )
 
     def test_run_MPDD(self) -> None:
         """Test the run_MPDD top-level function."""
@@ -95,7 +104,9 @@ class TestTopLevelFunctions(unittest.TestCase):
         result = crystall.run_MPDD(
             target_formula, self.db, collections, "native", filter_prototypes, limit
         )
-        self.assertTrue(os.path.exists(result), "The directory for MPDD prototypes was not created.")
+        self.assertTrue(
+            os.path.exists(result), "The directory for MPDD prototypes was not created."
+        )
 
     def test_run_MPDD_devs(self) -> None:
         """Test the run_MPDD_devs / compositional MPDD top-level function."""
@@ -105,10 +116,17 @@ class TestTopLevelFunctions(unittest.TestCase):
         filter_prototypes = "material.structID"
         limit = 100
         result = crystall.run_MPDD_devs(
-            target_composition, devs, self.db, collections, "native", filter_prototypes, limit
+            target_composition,
+            devs,
+            self.db,
+            collections,
+            "native",
+            filter_prototypes,
+            limit,
         )
         self.assertTrue(
-            os.path.exists(result), "The directory for compositional MPDD prototypes was not created."
+            os.path.exists(result),
+            "The directory for compositional MPDD prototypes was not created.",
         )
 
     def test_sorted_elements_list(self) -> None:
@@ -200,7 +218,9 @@ class TestCrystALLSearch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """Set up MPDD, create CrystALLSearch and generate both MPDD and local prototypes."""
-        cls.client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=100)
+        cls.client = MongoClient(
+            "mongodb://localhost:27017/", serverSelectionTimeoutMS=100
+        )
         cls.db = cls.client["MPDD"]
         cls.collection = cls.db["curated"]
 
@@ -234,10 +254,16 @@ class TestCrystALLSearch(unittest.TestCase):
         # initializer asks to run download_pysipfenn. We create a separate
         # instance under patched Calculator behavior and patch
         # CrystALLSearch.download_pysipfenn to ensure it's invoked.
-        with patch.object(crystall.core.Calculator, "findCompatibleModels", return_value=[]), \
-             patch("crystall.core.Calculator.network_list_available", new=[], create=True), \
-             patch("builtins.input", return_value=""), \
-             patch.object(crystall.CrystALLSearch, "download_pysipfenn") as dl_mock:
+        with (
+            patch.object(
+                crystall.core.Calculator, "findCompatibleModels", return_value=[]
+            ),
+            patch(
+                "crystall.core.Calculator.network_list_available", new=[], create=True
+            ),
+            patch("builtins.input", return_value=""),
+            patch.object(crystall.CrystALLSearch, "download_pysipfenn") as dl_mock,
+        ):
             # instantiate a temporary instance to trigger the no-models branch
             _tmp = crystall.CrystALLSearch(cls.target_formula)
             cls.init_download_called = dl_mock.called
@@ -249,9 +275,19 @@ class TestCrystALLSearch(unittest.TestCase):
     def test_download_pysipfenn(self) -> None:
         """Test downloading models from the MPDD database via download_pysipfenn."""
         # Patch out the expensive network/model download so test stays fast
-        with patch.object(self.cas.Calculator, "downloadModels") as mocked_dl, \
-             patch.object(self.cas.Calculator, "findCompatibleModels", return_value=["SIPFENN_Krajewski2022_NN30"]), \
-             patch.object(self.cas.Calculator, "network_list_available", new=["SIPFENN_Krajewski2022_NN30"]):
+        with (
+            patch.object(self.cas.Calculator, "downloadModels") as mocked_dl,
+            patch.object(
+                self.cas.Calculator,
+                "findCompatibleModels",
+                return_value=["SIPFENN_Krajewski2022_NN30"],
+            ),
+            patch.object(
+                self.cas.Calculator,
+                "network_list_available",
+                new=["SIPFENN_Krajewski2022_NN30"],
+            ),
+        ):
             self.cas.download_pysipfenn(mode="serial")
             mocked_dl.assert_called_once_with("SIPFENN_Krajewski2022_NN30")
 
@@ -266,9 +302,21 @@ class TestCrystALLSearch(unittest.TestCase):
         # Retry behavior: simulate downloadModels failing twice (HTTPError), then succeeding
         err1 = HTTPError(url=None, code=500, msg="err1", hdrs=None, fp=None)
         err2 = HTTPError(url=None, code=500, msg="err2", hdrs=None, fp=None)
-        with patch.object(self.cas.Calculator, "downloadModels", side_effect=[err1, err2, None]) as mocked_retry_dl, \
-             patch.object(self.cas.Calculator, "findCompatibleModels", return_value=["SIPFENN_Krajewski2022_NN30"]), \
-             patch.object(self.cas.Calculator, "network_list_available", new=["SIPFENN_Krajewski2022_NN30"]):
+        with (
+            patch.object(
+                self.cas.Calculator, "downloadModels", side_effect=[err1, err2, None]
+            ) as mocked_retry_dl,
+            patch.object(
+                self.cas.Calculator,
+                "findCompatibleModels",
+                return_value=["SIPFENN_Krajewski2022_NN30"],
+            ),
+            patch.object(
+                self.cas.Calculator,
+                "network_list_available",
+                new=["SIPFENN_Krajewski2022_NN30"],
+            ),
+        ):
             # use small retries and zero delay to keep test fast
             self.cas.download_pysipfenn(mode="serial", retries=3, delay=0)
             self.assertEqual(mocked_retry_dl.call_count, 3)
@@ -341,15 +389,20 @@ class TestCrystALLSearch(unittest.TestCase):
         # Unhappy path: invalid devs type should raise
         with self.assertRaises(AssertionError):
             self.cas.generate_MPDD(devs="not-a-dict")
-            
+
         # Ensure cas is left in a state with >0 prototypes for subsequent tests
-        self.cas.generate_MPDD(limit=10, target_prototypes="native", filter_prototypes="material.structID")
+        self.cas.generate_MPDD(
+            limit=10, target_prototypes="native", filter_prototypes="material.structID"
+        )
 
     @pytest.mark.order(3)
     def test_generate_local(self) -> None:
         """Test local prototype generation using MPDD prototypes as input prototypes."""
         # Ensure MPDD prototypes exist
-        if not (isinstance(self.cas.prototype_path, str) and os.path.isdir(self.cas.prototype_path)):
+        if not (
+            isinstance(self.cas.prototype_path, str)
+            and os.path.isdir(self.cas.prototype_path)
+        ):
             self.cas.generate_MPDD(limit=10)
 
         mpdd_path_after = self.cas.prototype_path
@@ -367,16 +420,22 @@ class TestCrystALLSearch(unittest.TestCase):
     def test_run_pysipfenn(self) -> None:
         """Test running pySIPFENN models end-to-end."""
         from unittest.mock import MagicMock
+
         self.cas.Calculator.loadModels = MagicMock()
         self.cas.Calculator.runFromDirectory = MagicMock()
         self.cas.Calculator.get_resultDictsWithNames = MagicMock(
-            return_value=[{"name": p["name"], "SIPFENN_Krajewski2022_NN30": -3.5} for p in self.cas.prototypes]
+            return_value=[
+                {"name": p["name"], "SIPFENN_Krajewski2022_NN30": -3.5}
+                for p in self.cas.prototypes
+            ]
         )
         self.cas.Calculator.descriptorData = [[0.1] * 30 for _ in self.cas.prototypes]
-        
+
         self.cas.run_pysipfenn(mode="serial")
         self.assertIsNotNone(self.cas.ks2022)
-        self.assertGreater(len(self.cas.ks2022), 0, "pySIPFENN did not generate any features.")
+        self.assertGreater(
+            len(self.cas.ks2022), 0, "pySIPFENN did not generate any features."
+        )
 
         # Note: unhappy path (missing prototypes folder) is handled via
         # assertion in run_pysipfenn, but constructing a fresh CrystALLSearch
@@ -392,7 +451,9 @@ class TestCrystALLSearch(unittest.TestCase):
         class DummyAdapter:
             objectives = ["ext_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None, **kwargs):
+            def run_on_directory(
+                self, path, mode="serial", max_workers=None, objectives=None, **kwargs
+            ):
                 return [
                     {"name": p["name"], "properties": {"ext_prop": 2.5}}
                     for p in self_test.cas.prototypes
@@ -418,7 +479,9 @@ class TestCrystALLSearch(unittest.TestCase):
         # Exercise objectives subset intersection branch
         self.cas.supported_calculators["dummy2"] = DummyAdapter
         self.cas.available_calculators["dummy2"] = ["ext_prop", "other_prop"]
-        self.cas.get_calculator_properties("dummy2", mode="serial", objectives=["ext_prop"])
+        self.cas.get_calculator_properties(
+            "dummy2", mode="serial", objectives=["ext_prop"]
+        )
         self.assertIn("ext_prop", self.cas.predicted_objectives)
         self.assertNotIn("other_prop", self.cas.predicted_objectives)
 
@@ -438,8 +501,12 @@ class TestCrystALLSearch(unittest.TestCase):
         class NoMatchAdapter:
             objectives = ["mismatch_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None):
-                return [{"name": "nonexistent.POSCAR", "properties": {"mismatch_prop": 1.0}}]
+            def run_on_directory(
+                self, path, mode="serial", max_workers=None, objectives=None
+            ):
+                return [
+                    {"name": "nonexistent.POSCAR", "properties": {"mismatch_prop": 1.0}}
+                ]
 
         self.cas.supported_calculators["nomatch"] = NoMatchAdapter
         self.cas.available_calculators["nomatch"] = ["mismatch_prop"]
@@ -450,10 +517,17 @@ class TestCrystALLSearch(unittest.TestCase):
         class PartialAdapter:
             objectives = ["ext_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None):
+            def run_on_directory(
+                self, path, mode="serial", max_workers=None, objectives=None
+            ):
                 # return only a single matching result to trigger the warning path
                 if len(self_test.cas.prototypes) > 0:
-                    return [{"name": self_test.cas.prototypes[0]["name"], "properties": {"ext_prop": 4.2}}]
+                    return [
+                        {
+                            "name": self_test.cas.prototypes[0]["name"],
+                            "properties": {"ext_prop": 4.2},
+                        }
+                    ]
                 return []
 
         self.cas.supported_calculators["partial"] = PartialAdapter
@@ -462,7 +536,9 @@ class TestCrystALLSearch(unittest.TestCase):
             warnings.simplefilter("always")
             self.cas.get_calculator_properties("partial")
             # Should have emitted at least one warnings.warn about returned N results
-            self.assertTrue(any("returned" in str(x.message) or "returned" in str(x) for x in w))
+            self.assertTrue(
+                any("returned" in str(x.message) or "returned" in str(x) for x in w)
+            )
 
     @pytest.mark.order(6)
     def test_get_mpdd_convexhull(self) -> None:
@@ -523,7 +599,9 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Unhappy path: invalid objective name should raise
         with self.assertRaises(AssertionError):
-            self.cas.filter_prototypes(max_prototypes=1, objective="nonexistent_objective")
+            self.cas.filter_prototypes(
+                max_prototypes=1, objective="nonexistent_objective"
+            )
 
     @pytest.mark.order(8)
     def test_cluster_prototypes_DBSCAN(self) -> None:
@@ -532,6 +610,7 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
+
         # Patch embed to avoid TSNE cost during tests
         def cheap_embed(self, same_composition: bool) -> None:
             feats = np.asarray(self.ks2022)
@@ -547,12 +626,19 @@ class TestCrystALLSearch(unittest.TestCase):
             self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
 
         from unittest.mock import MagicMock
-        mock_dbscan_inst = MagicMock()
-        mock_dbscan_inst.fit_predict.return_value = np.array([0, 0, 1, 1, -1][:len(self.cas.ks2022)])
-        mock_dbscan_inst.labels_ = np.array([0, 0, 1, 1, -1][:len(self.cas.ks2022)])
 
-        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
-             patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst):
+        mock_dbscan_inst = MagicMock()
+        mock_dbscan_inst.fit_predict.return_value = np.array(
+            [0, 0, 1, 1, -1][: len(self.cas.ks2022)]
+        )
+        mock_dbscan_inst.labels_ = np.array([0, 0, 1, 1, -1][: len(self.cas.ks2022)])
+
+        with (
+            patch.object(
+                crystall.CrystALLSearch, "_embed_features", cheap_embed
+            ),
+            patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst),
+        ):
             self.cas.cluster_prototypes_DBSCAN()
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
@@ -563,8 +649,12 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
-             patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst):
+        with (
+            patch.object(
+                crystall.CrystALLSearch, "_embed_features", cheap_embed
+            ),
+            patch("crystall.core.DBSCAN", return_value=mock_dbscan_inst),
+        ):
             self.cas.cluster_prototypes_DBSCAN(same_composition=True)
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
@@ -590,7 +680,7 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        
+
         def cheap_embed(self, same_composition: bool) -> None:
             # Use scaled features with minimal projection to avoid TSNE cost
             feats = np.asarray(self.ks2022)
@@ -608,14 +698,21 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Patch KMeans, __embed_features, and the k-range to keep silhouette search light
         from unittest.mock import MagicMock
-        mock_kmeans_inst = MagicMock()
-        mock_kmeans_inst.fit_predict.return_value = np.array([0, 0, 1, 1, 0][:len(self.cas.ks2022)])
-        mock_kmeans_inst.labels_ = np.array([0, 0, 1, 1, 0][:len(self.cas.ks2022)])
 
-        with patch("crystall.core.KMeans", return_value=mock_kmeans_inst), \
-             patch("crystall.core.silhouette_score", return_value=0.5), \
-             patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
-             patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
+        mock_kmeans_inst = MagicMock()
+        mock_kmeans_inst.fit_predict.return_value = np.array(
+            [0, 0, 1, 1, 0][: len(self.cas.ks2022)]
+        )
+        mock_kmeans_inst.labels_ = np.array([0, 0, 1, 1, 0][: len(self.cas.ks2022)])
+
+        with (
+            patch("crystall.core.KMeans", return_value=mock_kmeans_inst),
+            patch("crystall.core.silhouette_score", return_value=0.5),
+            patch.object(
+                crystall.CrystALLSearch, "_embed_features", cheap_embed
+            ),
+            patch("crystall.core.np.geomspace", return_value=np.array([2, 3])),
+        ):
             # Explicitly exercise silhouette-search path with fixed small cluster count
             self.cas.cluster_prototypes_KMeans(n_clusters=2)
             self.assertTrue(
@@ -639,13 +736,17 @@ class TestCrystALLSearch(unittest.TestCase):
         # exercise the fallback from 'top-candidates' to 'all-prototypes'.
         saved_top = self.cas.top_candidates
         self.cas.top_candidates = []
-        self.cas.export_table(content=['top-candidates'])
+        self.cas.export_table(content=["top-candidates"])
         self.cas.top_candidates = saved_top
 
         # Standard behavior: export both all-prototypes and top-candidates
         self.cas.export_table()
-        self.assertTrue(os.path.exists("all-prototypes.csv"), "Exported CSV file not found.")
-        self.assertTrue(os.path.exists("top-candidates.csv"), "Exported CSV file not found.")
+        self.assertTrue(
+            os.path.exists("all-prototypes.csv"), "Exported CSV file not found."
+        )
+        self.assertTrue(
+            os.path.exists("top-candidates.csv"), "Exported CSV file not found."
+        )
         os.remove("all-prototypes.csv")
         os.remove("top-candidates.csv")
 
@@ -660,7 +761,10 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Then generate and save the HTML file with clustered candidates
         self.cas.plot_barchart(save=True)
-        self.assertTrue(os.path.exists("barchart_clusterPrototypes.html"), "Bar chart HTML file not found.")
+        self.assertTrue(
+            os.path.exists("barchart_clusterPrototypes.html"),
+            "Bar chart HTML file not found.",
+        )
         os.remove("barchart_clusterPrototypes.html")
 
     @pytest.mark.order(12)
@@ -675,7 +779,10 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Save branch: write and then remove file
         self.cas.plot_2D(save=True)
-        self.assertTrue(os.path.exists("2D_clusterPrototypes.html"), "2D scatter plot HTML file not found.")
+        self.assertTrue(
+            os.path.exists("2D_clusterPrototypes.html"),
+            "2D scatter plot HTML file not found.",
+        )
         os.remove("2D_clusterPrototypes.html")
 
     @pytest.mark.order(13)
@@ -690,7 +797,10 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Save branch: write and then remove file
         self.cas.plot_3D(save=True)
-        self.assertTrue(os.path.exists("3D_clusterPrototypes.html"), "3D scatter plot HTML file not found.")
+        self.assertTrue(
+            os.path.exists("3D_clusterPrototypes.html"),
+            "3D scatter plot HTML file not found.",
+        )
         os.remove("3D_clusterPrototypes.html")
 
 
@@ -764,7 +874,9 @@ class TestBaseCalculator(unittest.TestCase):
         data_1d = [3.0, 4.0]
         rms = crystall.BaseCalculator.vector_to_scalar("rms", data_1d)
         total = crystall.BaseCalculator.vector_to_scalar("sum", data_1d)
-        self.assertAlmostEqual(rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5)  # or 3.5355339...
+        self.assertAlmostEqual(
+            rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5
+        )  # or 3.5355339...
         self.assertAlmostEqual(total, 7.0)
 
         # norm and mean on small arrays
@@ -847,10 +959,14 @@ class TestBaseCalculator(unittest.TestCase):
         """MLIPAdapter inference pipe should accept inference-role adapters."""
         from crystall.calculators import MLIPAdapter
         from crystall.calculators import AlignnAdapter
-        from crystall.calculators import CHGNetStaticAdapter
+        from crystall.calculators import MatGLAdapter
 
-        self.assertIsInstance(MLIPAdapter("MACE-mh", inference=[AlignnAdapter()]), MLIPAdapter)
-        self.assertIsInstance(MLIPAdapter("MACE-mh", inference=[CHGNetStaticAdapter()]), MLIPAdapter)
+        self.assertIsInstance(
+            MLIPAdapter("MACE-mh", inference=[AlignnAdapter()]), MLIPAdapter
+        )
+        self.assertIsInstance(
+            MLIPAdapter("MACE-mh", inference=[MatGLAdapter()]), MLIPAdapter
+        )
 
     def test_mlip_inference_rejects_mlip_adapters(self) -> None:
         """MLIPAdapter inference pipe should reject MLIP-role adapters."""
@@ -860,5 +976,388 @@ class TestBaseCalculator(unittest.TestCase):
             MLIPAdapter("ORB", inference=[MLIPAdapter("MACE-mh")])
         self.assertIn("calculator_type='mlip'", str(ctx.exception))
 
-if __name__ == '__main__':
+class TestBaseCalculatorSchemaGuards(unittest.TestCase):
+    """Tests for the adapter schema guards introduced in TODO_260429_Adapter_Schema_Guards.
+
+    Covers:
+      - disk-space warning auto-proceeds in non-interactive sessions
+      - setup_env aborts cleanly on interactive 'n' input
+      - _setup_preflight fires before the cached-env short-circuit
+      - _resolve_device behaviour for cpu / cuda
+      - MLIPAdapter and DeePAWAdapter do not override setup_env
+      - NequIP MLIP config raises on unsupported OS via base guard
+      - all concrete non-MLIP adapters have explicit supported_os / supported_devices
+    """
+
+    # ── Minimal concrete subclass for hook / device tests ───────────────
+    class _GuardAdapter(BaseCalculator):
+        name = "_Guard"
+        objectives_map = {"GUARD_X: Guard test output": "guard"}
+        supported_os = ["linux", "macos", "windows"]
+        supported_devices = ["cpu", "cuda"]
+
+        def _env_path(self):
+            from pathlib import Path
+            return Path(self._tmp) / "env"
+
+        def _run_code(self):
+            return "print('ok')"
+
+    # ── 1. Non-interactive session: disk-space warning auto-proceeds ─────
+    def test_setup_env_non_interactive_auto_proceeds(self):
+        """setup_env must print the warning and continue without prompting when stdin is not a tty."""
+        import tempfile, io
+        from unittest.mock import patch, MagicMock
+        adapter = self._GuardAdapter()
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter._tmp = tmp
+            with (
+                patch("sys.stdin", io.StringIO("")),          # isatty() → False
+                patch.object(adapter, "_uv_bin", return_value="uv"),
+                patch("subprocess.run", return_value=MagicMock(returncode=0)),
+                patch.object(adapter, "_install_layer2"),
+                patch.object(adapter, "setup_commands", return_value=[]),
+                patch.object(adapter, "format_vars", return_value={}),
+                patch("builtins.input") as mock_input,
+            ):
+                try:
+                    adapter.setup_env()
+                except Exception:
+                    pass
+            mock_input.assert_not_called()
+
+    # ── 2. Interactive 'n': setup_env aborts ─────────────────────────────
+    def test_setup_env_aborts_on_n_response(self):
+        """setup_env must return early and skip installation when user enters 'n'."""
+        import tempfile, io
+        from unittest.mock import patch, MagicMock
+        adapter = self._GuardAdapter()
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter._tmp = tmp
+            tty_stdin = MagicMock()
+            tty_stdin.isatty.return_value = True
+            with (
+                patch("sys.stdin", tty_stdin),
+                patch("builtins.input", return_value="n"),
+                patch("subprocess.run") as mock_run,
+            ):
+                adapter.setup_env()
+            mock_run.assert_not_called()
+
+    # ── 3. _setup_preflight fires BEFORE the cached-env short-circuit ────
+    def test_setup_preflight_fires_before_cache_check(self):
+        """_setup_preflight must be called even when the env is already ready."""
+        import tempfile
+        from unittest.mock import patch, call
+        adapter = self._GuardAdapter()
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter._tmp = tmp
+            call_log = []
+            with (
+                patch.object(
+                    adapter, "_setup_preflight",
+                    side_effect=lambda: call_log.append("preflight")
+                ),
+                patch.object(
+                    adapter, "is_env_ready",
+                    side_effect=lambda: call_log.append("cache_check") or True
+                ),
+            ):
+                adapter.setup_env()
+        self.assertEqual(call_log[0], "preflight", "preflight must fire before cache check")
+        self.assertIn("cache_check", call_log)
+
+    # ── 4. _resolve_device('cuda') raises when CUDA unavailable ──────────
+    def test_resolve_device_cuda_raises_when_unavailable(self):
+        """_resolve_device must raise RuntimeError for 'cuda' when the system has no GPU."""
+        from unittest.mock import patch
+        adapter = self._GuardAdapter()
+        with patch.object(type(adapter), "_cuda_available_system", return_value=False):
+            with self.assertRaises(RuntimeError) as ctx:
+                adapter._resolve_device("cuda")
+        self.assertIn("cuda", str(ctx.exception).lower())
+
+    # ── 5. _resolve_device('cpu') always succeeds ────────────────────────
+    def test_resolve_device_cpu_always_succeeds(self):
+        """_resolve_device must accept 'cpu' unconditionally."""
+        adapter = self._GuardAdapter()
+        result = adapter._resolve_device("cpu")
+        self.assertEqual(result, "cpu")
+
+    # ── 6. MLIPAdapter does not override setup_env ───────────────────────
+    def test_mlip_adapter_does_not_override_setup_env(self):
+        from crystall.calculators import MLIPAdapter
+        self.assertIs(
+            MLIPAdapter.setup_env,
+            BaseCalculator.setup_env,
+            "MLIPAdapter must not override setup_env",
+        )
+
+    # ── 7. DeePAWAdapter does not override setup_env ─────────────────────
+    def test_deepaw_adapter_does_not_override_setup_env(self):
+        from crystall.calculators import DeePAWAdapter
+        self.assertIs(
+            DeePAWAdapter.setup_env,
+            BaseCalculator.setup_env,
+            "DeePAWAdapter must not override setup_env",
+        )
+
+    # ── 8. NequIP MLIP config raises on non-Linux OS ─────────────────────
+    def test_nequip_mlip_raises_on_non_linux_os(self):
+        """NequIP is linux-only; _assert_os_supported must raise on macOS."""
+        from unittest.mock import patch
+        from crystall.calculators import MLIPAdapter
+        adapter = MLIPAdapter("NequIP")
+        with patch("platform.system", return_value="Darwin"):
+            with self.assertRaises(RuntimeError) as ctx:
+                adapter._assert_os_supported()
+        self.assertIn("linux", str(ctx.exception).lower())
+
+    # ── 9. All concrete non-MLIP adapters have explicit declarations ──────
+    def test_all_concrete_adapters_declare_supported_os_and_devices(self):
+        """Every concrete non-MLIP adapter must declare supported_os and supported_devices
+        as non-empty class-level attributes (not inherited from BaseCalculator unchanged)."""
+        from crystall.calculators import (
+            AlignnAdapter,
+            DeePAWAdapter,
+            MatGLAdapter,
+            PhonaxAdapter,
+            UPETDosAdapter,
+        )
+
+        adapters = [
+            AlignnAdapter,
+            DeePAWAdapter,
+            MatGLAdapter,
+            UPETDosAdapter,
+            PhonaxAdapter,
+        ]
+        for cls in adapters:
+            with self.subTest(adapter=cls.__name__):
+                self.assertIn(
+                    "supported_os", cls.__dict__,
+                    f"{cls.__name__} must declare supported_os as a class attribute",
+                )
+                self.assertIn(
+                    "supported_devices", cls.__dict__,
+                    f"{cls.__name__} must declare supported_devices as a class attribute",
+                )
+                self.assertTrue(
+                    cls.__dict__["supported_os"],
+                    f"{cls.__name__}.supported_os must be non-empty",
+                )
+                self.assertTrue(
+                    cls.__dict__["supported_devices"],
+                    f"{cls.__name__}.supported_devices must be non-empty",
+                )
+
+
+class TestObjectiveRegistry(unittest.TestCase):
+    """Tests for objective code registry helpers (TODO_260429_Objective_Code_Registry, tests 1-4)."""
+
+    # ── Test 1: _parse_objective_key ──────────────────────────────────────
+
+    def test_parse_objective_key(self) -> None:
+        """_parse_objective_key splits on the first ':' only and strips whitespace."""
+        parse = crystall.BaseCalculator._parse_objective_key
+
+        cases = [
+            # (input_key,                                    expected_code,     expected_description)
+            ("ALIGNN_EF_MP: Formation energy", "ALIGNN_EF_MP", "Formation energy"),
+            ("EF_SIPFENN_NN30", "EF_SIPFENN_NN30", ""),  # pySIPFENN — no colon
+            (
+                "MATGL_EF_MP: Formation Energy (eV/atom)",
+                "MATGL_EF_MP",
+                "Formation Energy (eV/atom)",
+            ),
+            (
+                "  UPET_DOS : Density of states  ",
+                "UPET_DOS",
+                "Density of states",
+            ),  # extra whitespace
+            (
+                "CODE: desc: extra colon",
+                "CODE",
+                "desc: extra colon",
+            ),  # only first ':' is split
+        ]
+
+        for key, expected_code, expected_desc in cases:
+            with self.subTest(key=key):
+                code, desc = parse(key)
+                self.assertEqual(code, expected_code)
+                self.assertEqual(desc, expected_desc)
+
+    # ── Test 2: __init_subclass__ warning on non-conformant keys ─────────
+
+    def test_init_subclass_warning(self) -> None:
+        """A subclass with objectives_map keys violating CODE format must emit UserWarning."""
+
+        with self.assertWarns(UserWarning) as ctx:
+            # Defining the class triggers __init_subclass__ validation immediately
+            class _BadAdapter(crystall.BaseCalculator):
+                name = "bad-adapter"
+                # lowercase 'bad_key' violates the all-uppercase requirement
+                objectives_map = {"bad_key: some description": "bad_key"}
+
+        warning_messages = [str(w.message) for w in ctx.warnings]
+        self.assertTrue(
+            any("bad_key: some description" in msg for msg in warning_messages),
+            "Warning should identify the offending objectives_map key",
+        )
+        self.assertTrue(
+            any("_BadAdapter" in msg for msg in warning_messages),
+            "Warning should identify the class that carries the bad key",
+        )
+
+    # ── Test 3: _build_objective_registry duplicate code handling ─────────
+
+    def test_build_objective_registry_deduplication(self) -> None:
+        """Duplicate codes across adapters: first entry wins and a UserWarning is emitted."""
+        from crystall.calculators import _build_objective_registry
+
+        class _Dup1(crystall.BaseCalculator):
+            name = "dup-1"
+            objectives_map = {"DUPCODE: Formation Energy from adapter 1": "ef_dup1"}
+
+        class _Dup2(crystall.BaseCalculator):
+            name = "dup-2"
+            objectives_map = {"DUPCODE: Formation Energy from adapter 2": "ef_dup2"}
+
+        adapters = {"dup-1": _Dup1(), "dup-2": _Dup2()}
+
+        with self.assertWarns(UserWarning) as ctx:
+            registry = _build_objective_registry(adapters)
+
+        # First entry must be preserved
+        self.assertIn("DUPCODE", registry)
+        self.assertEqual(registry["DUPCODE"]["adapter"], "dup-1")
+        self.assertEqual(
+            registry["DUPCODE"]["description"], "Formation Energy from adapter 1"
+        )
+        self.assertEqual(registry["DUPCODE"]["dispatch_key"], "ef_dup1")
+
+        # Warning must name both the duplicate code and the offending adapter
+        warning_texts = [str(w.message) for w in ctx.warnings]
+        self.assertTrue(
+            any("DUPCODE" in t and "dup-2" in t for t in warning_texts),
+            "Warning should name the duplicate code and the second adapter",
+        )
+
+    # ── Test 4: _sanitize_model_code ─────────────────────────────────────
+
+    def test_sanitize_model_code(self) -> None:
+        """_sanitize_model_code produces uppercase alphanumeric-with-underscore code prefixes."""
+        from crystall.calculators import _sanitize_model_code
+
+        cases = [
+            ("ORB-v2", "ORB_V2"),
+            ("CHGNet", "CHGNET"),
+            ("MACE-MP-0", "MACE_MP_0"),
+            ("orb", "ORB"),
+            ("M3GNet-MP", "M3GNET_MP"),
+        ]
+
+        for model_name, expected in cases:
+            with self.subTest(model_name=model_name):
+                self.assertEqual(_sanitize_model_code(model_name), expected)
+
+    # ── Shared helper ────────────────────────────────────────────
+
+    @staticmethod
+    def _make_minimal_search(registry, predicted, available=None):
+        """Build a CrystALLSearch instance with only the state _resolve_to_code needs.
+
+        Uses ``object.__new__`` to bypass ``__init__`` so no MongoDB connection
+        or pySIPFENN models are required.
+        """
+        cas = object.__new__(crystall.CrystALLSearch)
+        cas._objective_registry = registry
+        cas.predicted_objectives = list(predicted)
+        cas.available_calculators = available if available is not None else {}
+        return cas
+
+    # ── Test 5: MLIPAdapter piped objective code format ─────────────────
+
+    def test_mlip_piped_code_format(self) -> None:
+        """Piped MLIP objective keys use '_' as the namespace separator (no '::' in keys)."""
+        from crystall.calculators import MLIPAdapter
+
+        fake_config = {
+            "FAKE-ML": {
+                "python_version": "3.11",
+                "layer2_dependencies": [],
+                "setup_commands": [],
+                "os": ["linux", "macos", "windows"],
+            }
+        }
+
+        class _DummyInfAdapter(crystall.BaseCalculator):
+            name = "dummy-inf"
+            objectives_map = {"DUMMY_EF: Dummy formation energy (eV/atom)": "dummy_ef"}
+
+        with patch(
+            "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
+        ):
+            adapter = MLIPAdapter("FAKE-ML", inference=[_DummyInfAdapter()])
+
+        om = adapter.objectives_map
+
+        # No '::' may appear in any objectives_map key
+        for key in om:
+            self.assertNotIn(
+                "::", key, f"Key {key!r} must not use '::' as a code separator"
+            )
+
+        # The piped key must follow FAKE_ML_DUMMY_EF: <desc> (via dummy-inf)
+        piped = [k for k in om if "DUMMY_EF" in k and "via" in k]
+        self.assertEqual(len(piped), 1, "Expected exactly one piped key for DUMMY_EF")
+        self.assertTrue(
+            piped[0].startswith("FAKE_ML_DUMMY_EF: "),
+            f"Piped key has unexpected prefix: {piped[0]!r}",
+        )
+        self.assertIn("(via dummy-inf)", piped[0])
+
+    # ── Test 6: _resolve_to_code accepts a bare code ──────────────────
+
+    def test_resolve_to_code_accepts_code(self) -> None:
+        """_resolve_to_code passes a bare registered code through unchanged."""
+        cas = self._make_minimal_search(
+            registry={"ALIGNN_EF_MP": {"description": "Formation energy"}},
+            predicted=["ALIGNN_EF_MP"],
+        )
+        self.assertEqual(cas._resolve_to_code("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
+
+    # ── Test 7: _resolve_to_code accepts a full 'CODE: description' key ──
+
+    def test_resolve_to_code_accepts_full_key(self) -> None:
+        """_resolve_to_code extracts the bare code from a full 'CODE: description' key."""
+        cas = self._make_minimal_search(
+            registry={"ALIGNN_EF_MP": {"description": "Formation energy"}},
+            predicted=["ALIGNN_EF_MP"],
+        )
+        self.assertEqual(
+            cas._resolve_to_code("ALIGNN_EF_MP: Formation energy (eV/atom)"),
+            "ALIGNN_EF_MP",
+        )
+
+    # ── Test 8: _resolve_to_code raises ValueError with a hint ───────────
+
+    def test_resolve_to_code_raises_on_unknown(self) -> None:
+        """_resolve_to_code raises ValueError naming the bad code and a prefix-matched hint."""
+        cas = self._make_minimal_search(
+            registry={"ALIGNN_EF_MP": {"description": "Formation energy"}},
+            predicted=["ALIGNN_EF_MP"],
+        )
+        # 'ALIGNN_BG_MP' shares the 'ALIG' prefix with the only known code
+        with self.assertRaises(ValueError) as ctx:
+            cas._resolve_to_code("ALIGNN_BG_MP")
+        msg = str(ctx.exception)
+        self.assertIn("ALIGNN_BG_MP", msg, "Error must name the unrecognised code")
+        self.assertIn(
+            "ALIGNN_EF_MP", msg, "Error must suggest the prefix-matched candidate"
+        )
+
+
+if __name__ == "__main__":
     unittest.main()

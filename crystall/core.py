@@ -28,7 +28,7 @@ from itertools import groupby, permutations, product, combinations
 from operator import itemgetter
 from statistics import mean
 from typing import Any, Sequence, List, Dict, Union, Literal, Optional, Tuple
-from crystall.calculators import load_adapters
+from crystall.calculators import load_adapters, BaseCalculator, _build_objective_registry
 
 # ML / Data
 from pymongo.database import Database
@@ -63,7 +63,6 @@ from crystall.prototypes import (
     comp2comp_q,
     ordered_allowed_substitutions,
 )
-
 
 # Convenience High-Level API Classes **********************************************************
 
@@ -120,6 +119,9 @@ class CrystALLSearch:
         # Internal parameters to use during the processing steps
         self.available_calculators: Dict[str, List[str]] = {}
         self.predicted_objectives: List[str] = []
+        self._objective_registry: Dict[
+            str, Any
+        ] = {}  # code -> ObjectiveEntry, built after adapters load
         self.ks2022: np.ndarray = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
@@ -155,33 +157,61 @@ class CrystALLSearch:
                 )
             )
         else:
-            user_input = input(
-                "pySIPFENN models not found. Would you like to automatically run `download_pysipfenn`? ([y]/n):"
-            )
-            if user_input.lower() in ("y", ""):
+            if sys.stdin.isatty():
+                _response = input(
+                    "pySIPFENN models not found. Would you like to automatically run "
+                    "`download_pysipfenn`? (Y/n): "
+                )
+                _proceed = _response.strip().lower() in ("y", "")
+            else:
+                print(
+                    "pySIPFENN models not found — running `download_pysipfenn` automatically "
+                    "(non-interactive session)."
+                )
+                _proceed = True
+            if _proceed:
                 self.download_pysipfenn()
 
         # Supported calculators include builtin pySIPFENN and external adapters via entry points
         self.supported_calculators: Dict[str, Any] = {"pySIPFENN": None}
         self.supported_calculators.update(load_adapters())
 
-        # Check environment readiness for each adapter (without auto-installing)
-        for calc_name, adapter in list(self.supported_calculators.items()):
+        # Pre-instantiate all adapter entries once so every subsequent step (registry build,
+        # readiness check, objective extraction) works with live instances — never raw classes.
+        for _name in list(self.supported_calculators):
+            if _name == "pySIPFENN":
+                continue
+            _entry = self.supported_calculators[_name]
+            if isinstance(_entry, type):
+                try:
+                    self.supported_calculators[_name] = _entry()
+                except Exception as e:
+                    warnings.warn(f"Could not instantiate adapter '{_name}': {e}")
+                    self.supported_calculators.pop(_name)
+
+        # Build the objective registry from all instantiated adapters (code -> ObjectiveEntry).
+        self._objective_registry = _build_objective_registry(
+            {
+                name: adp
+                for name, adp in self.supported_calculators.items()
+                if name != "pySIPFENN"
+            }
+        )
+
+        # Check environment readiness for each adapter (without auto-installing).
+        # All entries are already instances at this point — no isinstance guard needed.
+        for calc_name, adapter in self.supported_calculators.items():
             if calc_name == "pySIPFENN":
                 continue
 
-            # Entry points may return classes; instantiate once and keep instance.
-            if isinstance(adapter, type):
-                try:
-                    adapter = adapter()
-                    self.supported_calculators[calc_name] = adapter
-                except Exception as e:
-                    warnings.warn(f"Could not instantiate adapter '{calc_name}': {e}")
-                    continue
-
-            # All adapters inherit BaseCalculator — check micro-env readiness.
             if hasattr(adapter, "is_env_ready") and adapter.is_env_ready():
-                self.available_calculators[calc_name] = list(adapter.objectives)
+                # Store only the short code for each objective (not the full "CODE: description" key)
+                # so that available_calculators, predicted_objectives, and prototype keys
+                # all share the same code-based namespace.
+                self.available_calculators[calc_name] = [
+                    BaseCalculator._parse_objective_key(k)[0]
+                    for k in adapter.objectives_map.keys()
+                ]
 
         # Print the status of calculators (found if present in available_calculators)
         for calc_name in self.supported_calculators.keys():
@@ -264,16 +294,20 @@ class CrystALLSearch:
                 "\nSome objectives do not have predictions calculated and will not be considered for classification."
             )
             for obj in flat_available:
+                description = self._objective_registry.get(obj, {}).get(
+                    "description", ""
+                )
+                label = f"{obj}: {description}" if description else obj
                 if obj not in self.predicted_objectives:
                     try:
-                        print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                        print(f"{Style.DIM}✘ {Style.BRIGHT}{label}{Style.RESET_ALL}")
                     except UnicodeEncodeError:
-                        print(f"{Style.DIM}x {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                        print(f"{Style.DIM}x {Style.BRIGHT}{label}{Style.RESET_ALL}")
                 else:
                     try:
-                        print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}✔ {Style.BRIGHT}{label}{Style.RESET_ALL}")
                     except UnicodeEncodeError:
-                        print(f"{Fore.GREEN}v {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}v {Style.BRIGHT}{label}{Style.RESET_ALL}")
 
     def download_pysipfenn(
         self, mode: Literal["serial", "parallel"] = "parallel", retries=3, delay=5
@@ -604,9 +638,9 @@ class CrystALLSearch:
                     "base_url": provider["base_url"],
                     "description": provider["description"],
                     "active": provider_id in active_ids,
-                    "reachable": reachability.get(provider_id)
-                    if check_reachable
-                    else None,
+                    "reachable": (
+                        reachability.get(provider_id) if check_reachable else None
+                    ),
                 }
             )
 
@@ -960,7 +994,14 @@ class CrystALLSearch:
             name = r.get("name") if isinstance(r, dict) else None
             props = r.get("properties", {}) if isinstance(r, dict) else {}
             if name in name_to_index:
-                self.prototypes[name_to_index[name]].update(props)
+                # Bug 3 fix: recode full "CODE: description" keys to bare codes before
+                # merging into prototypes, so that define_objective / filter_prototypes
+                # can look up values with the same short code used in predicted_objectives.
+                recoded = {
+                    BaseCalculator._parse_objective_key(k)[0]: v
+                    for k, v in props.items()
+                }
+                self.prototypes[name_to_index[name]].update(recoded)
                 matched += 1
 
         if matched == 0:
@@ -968,13 +1009,16 @@ class CrystALLSearch:
                 "No calculator predictions matched any prototype names. Ensure filenames are preserved."
             )
 
-        # Track only objectives actually produced (respecting user selection)
+        # Track only objectives actually produced (respecting user selection).
+        # Bug 4 fix: extract code from each key (not the full key) and include all
+        # objective types — not just scalars — so that Structure / DOS objectives
+        # are also registered in predicted_objectives.
         produced_objectives = set()
         for r in results:
             props = r.get("properties", {}) if isinstance(r, dict) else {}
-            for key, val in props.items():
-                if isinstance(val, (int, float)):
-                    produced_objectives.add(key)
+            for key in props:
+                code, _ = BaseCalculator._parse_objective_key(key)
+                produced_objectives.add(code)
         # If user passed a subset, intersect
         if objectives is not None:
             produced_objectives = produced_objectives.intersection(set(objectives))
@@ -1092,8 +1136,9 @@ class CrystALLSearch:
             "No prototypes identified. Please run `generate_MPDD` or `generate_local` first."
         )
 
-        # Ensure all referenced objectives exist among predictions
-        missing = [o for o in objectives if o not in self.predicted_objectives]
+        # Resolve every input to its canonical code, then validate against predictions
+        resolved = [self._resolve_to_code(o) for o in objectives]
+        missing = [r for r in resolved if r not in self.predicted_objectives]
         assert not missing, (
             f"All objectives must exist in predicted objectives. Missing: {missing}"
         )
@@ -1129,7 +1174,7 @@ class CrystALLSearch:
         computed_count = 0
         for i, prototype in enumerate(self.prototypes):
             # Gather values for this prototype
-            values = [prototype.get(obj) for obj in objectives]
+            values = [prototype.get(r) for r in resolved]
             # All referenced values must be numeric
             if not all(isinstance(v, (int, float)) for v in values):
                 # Skip this prototype if any required value missing or non-numeric
@@ -1177,6 +1222,7 @@ class CrystALLSearch:
         )
 
         objective = objective if objective is not None else self.predicted_objectives[0]
+        objective = self._resolve_to_code(objective)
         assert objective in self.predicted_objectives, (
             "Objective should be one of the calculated objectives and/or their average: "
             + ", ".join(self.predicted_objectives)
@@ -1559,16 +1605,18 @@ class CrystALLSearch:
         """
 
         objective = objective if objective is not None else self.predicted_objectives[0]
-
-        assert objective in self.predicted_objectives, (
-            "Objective should be one of the calculated objectives and/or their average: "
-            + ", ".join(self.predicted_objectives)
-        )
         assert isinstance(objective, str) or isinstance(objective, list), (
             "Objective must be a single value specified as a string or a list with a single string"
         )
         assert not (isinstance(objective, list) and len(objective) != 1), (
             "If objective is given as a list, it must contain exactly one string"
+        )
+        if isinstance(objective, list):
+            objective = objective[0]
+        objective = self._resolve_to_code(objective)
+        assert objective in self.predicted_objectives, (
+            "Objective should be one of the calculated objectives and/or their average: "
+            + ", ".join(self.predicted_objectives)
         )
 
         if not self.top_candidates:
@@ -1723,16 +1771,18 @@ class CrystALLSearch:
         """
 
         objective = objective if objective is not None else self.predicted_objectives[0]
-
-        assert objective in self.predicted_objectives, (
-            "Objective should be one of the calculated objectives and/or their average: "
-            + ", ".join(self.predicted_objectives)
-        )
         assert isinstance(objective, str) or isinstance(objective, list), (
             "Objective must be a single value specified as a string or a list with a single string"
         )
         assert not (isinstance(objective, list) and len(objective) != 1), (
             "If objective is given as a list, it must contain exactly one string"
+        )
+        if isinstance(objective, list):
+            objective = objective[0]
+        objective = self._resolve_to_code(objective)
+        assert objective in self.predicted_objectives, (
+            "Objective should be one of the calculated objectives and/or their average: "
+            + ", ".join(self.predicted_objectives)
         )
 
         if not self.top_candidates:
@@ -1931,16 +1981,18 @@ class CrystALLSearch:
         """
 
         objective = objective if objective is not None else self.predicted_objectives[0]
-
-        assert objective in self.predicted_objectives, (
-            "Objective should be one of the calculated objectives and/or their average: "
-            + ", ".join(self.predicted_objectives)
-        )
         assert isinstance(objective, str) or isinstance(objective, list), (
             "Objective must be a single value specified as a string or a list with a single string"
         )
         assert not (isinstance(objective, list) and len(objective) != 1), (
             "If objective is given as a list, it must contain exactly one string"
+        )
+        if isinstance(objective, list):
+            objective = objective[0]
+        objective = self._resolve_to_code(objective)
+        assert objective in self.predicted_objectives, (
+            "Objective should be one of the calculated objectives and/or their average: "
+            + ", ".join(self.predicted_objectives)
         )
 
         if not self.top_candidates:
