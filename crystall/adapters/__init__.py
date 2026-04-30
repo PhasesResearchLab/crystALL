@@ -8,24 +8,18 @@ either the canonical ``from crystall.calculators import AlignnAdapter`` path
 """
 
 from crystall.adapters.alignn import AlignnAdapter
-from crystall.adapters.matgl import (
-    CHGNetStaticAdapter,
-    M3GNetStaticAdapter,
-    MEGNetStaticAdapter,
-    QETStaticAdapter,
-)
-from crystall.adapters.mlips import MLIPAdapter, discover_mlip_adapters
 from crystall.adapters.deepaw import DeePAWAdapter
+from crystall.adapters.matgl import MatGLAdapter
+from crystall.adapters.mlips import MLIPAdapter, discover_mlip_adapters
 from crystall.adapters.phonax import PhonaxAdapter
+from crystall.adapters.upetdos import UPETDosAdapter
 
 __all__ = [
     "AlignnAdapter",
-    "CHGNetStaticAdapter",
     "DeePAWAdapter",
-    "MEGNetStaticAdapter",
-    "M3GNetStaticAdapter",
-    "PhonaxAdapter",
-    "QETStaticAdapter",
+    "MatGLAdapter",
     "MLIPAdapter",
+    "PhonaxAdapter",
+    "UPETDosAdapter",
     "discover_mlip_adapters",
 ]
