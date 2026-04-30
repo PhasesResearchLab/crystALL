@@ -12,8 +12,8 @@ def test_upetdos_adapter_setup():
     adapter = UPETDosAdapter()
     assert adapter.name == "UPET-DOS"
     assert adapter.calculator_type == "inference"
-    assert "UPET-MAD DOS" in adapter.objectives_map
-    assert adapter.objectives_map["UPET-MAD DOS"] == "complete_dos"
+    assert "UPETDOS_DOS: UPET-MAD DOS" in adapter.objectives_map
+    assert adapter.objectives_map["UPETDOS_DOS: UPET-MAD DOS"] == "complete_dos"
 
     cmds = adapter.setup_commands()
     assert any("upet" in cmd for cmd in cmds)

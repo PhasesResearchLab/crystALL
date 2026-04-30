@@ -25,16 +25,16 @@ class TestAlignnAdapterContract(unittest.TestCase):
     def test_objectives_map_keys(self):
         """objectives_map must contain the expected ALIGNN objectives."""
         expected = {
-            "ALIGNN-MP Formation Energy [eV/atom]",
-            "ALIGNN-MP PBE Bandgap [eV]",
-            "ALIGNN-JARVIS Formation Energy [eV/atom]",
-            "ALIGNN-JARVIS MBJ Bandgap [eV]",
-            "ALIGNN-JARVIS Shear Modulus [GPa]",
-            "ALIGNN-JARVIS Bulk Modulus [GPa]",
-            "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
-            "ALIGNN-Alexandria Bandgap [eV]",
-            "ALIGNN-Alexandria Formation Energy [eV/atom]",
-            "ALIGNN-Alexandria Volume Per Atom [A^3]",
+            "ALIGNN_EF_MP: ALIGNN-MP Formation Energy [eV/atom]",
+            "ALIGNN_BG_MP: ALIGNN-MP PBE Bandgap [eV]",
+            "ALIGNN_EF_JV: ALIGNN-JARVIS Formation Energy [eV/atom]",
+            "ALIGNN_BG_JV_MBJ: ALIGNN-JARVIS MBJ Bandgap [eV]",
+            "ALIGNN_SHEAR_JV: ALIGNN-JARVIS Shear Modulus [GPa]",
+            "ALIGNN_BULK_JV: ALIGNN-JARVIS Bulk Modulus [GPa]",
+            "ALIGNN_EXFOL_JV: ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
+            "ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV]",
+            "ALIGNN_EF_ALEX: ALIGNN-Alexandria Formation Energy [eV/atom]",
+            "ALIGNN_VOL_ALEX: ALIGNN-Alexandria Volume Per Atom [A^3]",
         }
         self.assertEqual(set(self.adapter.objectives_map.keys()), expected)
 

@@ -29,6 +29,18 @@ from crystall.calculators import BaseCalculator
 
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
+def _sanitize_model_code(name: str) -> str:
+    """Convert an arbitrary model name string into a valid objective code prefix.
+
+    Replaces any character that is not alphanumeric or underscore with '_',
+    uppercases the result, and strips leading/trailing underscores.
+    Consecutive underscores are collapsed.
+    E.g. 'ORB-v2' -> 'ORB_V2', 'CHGNet' -> 'CHGNET', 'MACE-MP-0' -> 'MACE_MP_0'.
+    """
+    sanitized = re.sub(r"[^A-Za-z0-9]", "_", name).upper().strip("_")
+    return re.sub(r"_+", "_", sanitized)
+
+
 
 # ── Configuration helpers ───────────────────────────────────────────────────
 
@@ -91,12 +103,13 @@ class MLIPAdapter(BaseCalculator):
         self._inference_adapters: List[BaseCalculator] = []
 
         self.name = model_name
+        self._model_code = _sanitize_model_code(model_name)
         self._own_objectives_map = {
-            f"{model_name} Relaxed Energy [eV/atom]": "ase_relax",
-            f"{model_name} Relaxed RMS Force [eV/A]": "ase_relax",
-            f"{model_name} Relaxed Von Mises Stress [GPa]": "ase_relax",
-            f"{model_name} Relaxed Volume [A^3/atom]": "ase_relax",
-            f"{model_name} Relaxed Structure": "ase_relax",
+            f"{self._model_code}_RELAX_E: {model_name} Relaxed Energy [eV/atom]": "ase_relax",
+            f"{self._model_code}_RELAX_F: {model_name} Relaxed RMS Force [eV/A]": "ase_relax",
+            f"{self._model_code}_RELAX_STRESS: {model_name} Relaxed Von Mises Stress [GPa]": "ase_relax",
+            f"{self._model_code}_RELAX_VOL: {model_name} Relaxed Volume [A^3/atom]": "ase_relax",
+            f"{self._model_code}_RELAX_STRUCT: {model_name} Relaxed Structure": "ase_relax",
         }
 
         if inference:

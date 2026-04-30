@@ -38,7 +38,7 @@ class DeePAWAdapter(BaseCalculator):
     name = "DeePAW"
     calculator_type: Literal["mlip", "inference"] = "inference"
     objectives_map: Dict[str, str] = {
-        "DeePAW Charge Density": "deepaw_charge_density",
+        "DEEPAW_RHO: DeePAW Charge Density": "deepaw_charge_density",
     }
 
     def __init__(self, nx: int = 40, ny: int = 40, nz: int = 40, **kwargs):

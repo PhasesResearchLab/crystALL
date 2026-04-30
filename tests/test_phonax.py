@@ -32,8 +32,8 @@ class TestPhonaxAdapterContract(unittest.TestCase):
 
     def test_objectives_map_keys(self):
         expected = {
-            "Phonax Phonon Band Structure": "phonon_band_structure",
-            "Phonax Phonon DOS": "phonon_dos",
+            "PHONAX_BS: Phonax Phonon Band Structure": "phonon_band_structure",
+            "PHONAX_DOS: Phonax Phonon DOS": "phonon_dos",
         }
         self.assertEqual(self.adapter.objectives_map, expected)
 

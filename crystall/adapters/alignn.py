@@ -26,16 +26,16 @@ class AlignnAdapter(BaseCalculator):
     name = "ALIGNN"
     calculator_type: Literal["mlip", "inference"] = "inference"
     objectives_map: Dict[str, str] = {
-        "ALIGNN-MP Formation Energy [eV/atom]": "mp_e_form",
-        "ALIGNN-MP PBE Bandgap [eV]": "mp_bandgap",
-        "ALIGNN-JARVIS Formation Energy [eV/atom]": "jv_e_form",
-        "ALIGNN-JARVIS MBJ Bandgap [eV]": "jv_mbj_bandgap",
-        "ALIGNN-JARVIS Shear Modulus [GPa]": "jv_mepscnn_kv",
-        "ALIGNN-JARVIS Bulk Modulus [GPa]": "jv_mepscnn_gv",
-        "ALIGNN-JARVIS Exfoliation Energy [meV/atom]": "jv_exfoliation_energy",
-        "ALIGNN-Alexandria Bandgap [eV]": "alex_bandgap",
-        "ALIGNN-Alexandria Formation Energy [eV/atom]": "alex_e_form",
-        "ALIGNN-Alexandria Volume Per Atom [A^3]": "alex_volume_per_atom",
+        "ALIGNN_EF_MP: ALIGNN-MP Formation Energy [eV/atom]": "mp_e_form",
+        "ALIGNN_BG_MP: ALIGNN-MP PBE Bandgap [eV]": "mp_bandgap",
+        "ALIGNN_EF_JV: ALIGNN-JARVIS Formation Energy [eV/atom]": "jv_e_form",
+        "ALIGNN_BG_JV_MBJ: ALIGNN-JARVIS MBJ Bandgap [eV]": "jv_mbj_bandgap",
+        "ALIGNN_SHEAR_JV: ALIGNN-JARVIS Shear Modulus [GPa]": "jv_mepscnn_kv",
+        "ALIGNN_BULK_JV: ALIGNN-JARVIS Bulk Modulus [GPa]": "jv_mepscnn_gv",
+        "ALIGNN_EXFOL_JV: ALIGNN-JARVIS Exfoliation Energy [meV/atom]": "jv_exfoliation_energy",
+        "ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV]": "alex_bandgap",
+        "ALIGNN_EF_ALEX: ALIGNN-Alexandria Formation Energy [eV/atom]": "alex_e_form",
+        "ALIGNN_VOL_ALEX: ALIGNN-Alexandria Volume Per Atom [A^3]": "alex_volume_per_atom",
     }
 
     # ── Micro-env path ──────────────────────────────────────────────────────

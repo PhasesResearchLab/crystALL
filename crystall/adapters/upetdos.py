@@ -19,9 +19,9 @@ class UPETDosAdapter(BaseCalculator):
     name = "UPET-DOS"
     calculator_type = "inference"
     objectives_map: Dict[str, str] = {
-        "UPET-MAD DOS": "complete_dos",
-        "UPET-MAD Bandgap [eV]": "bandgap",
-        "UPET-MAD Fermi Level [eV]": "fermi_level",
+        "UPETDOS_DOS: UPET-MAD DOS": "complete_dos",
+        "UPETDOS_BG: UPET-MAD Bandgap [eV]": "bandgap",
+        "UPETDOS_EF: UPET-MAD Fermi Level [eV]": "fermi_level",
     }
 
     def _env_path(self) -> Path:

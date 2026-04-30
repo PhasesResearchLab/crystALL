@@ -36,7 +36,7 @@ class TestDeePAWAdapterMetadata(unittest.TestCase):
     def test_objectives_map_keys(self):
         self.assertEqual(
             set(self.adapter.objectives_map.keys()),
-            {"DeePAW Charge Density"},
+            {"DEEPAW_RHO: DeePAW Charge Density"},
         )
 
     def test_objectives_property_matches_map(self):

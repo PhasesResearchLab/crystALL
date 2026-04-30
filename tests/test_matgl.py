@@ -26,8 +26,14 @@ class TestCHGNetStaticAdapterContract(unittest.TestCase):
 
     def test_objectives_map_keys(self):
         expected = {
-            "Static Energy [eV/atom]",
-            "Structure with Magmoms",
+            "MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom]",
+            "MATGL_BG_MEGNET: Band Gap MEGNet [eV]",
+            "MATGL_EF_M3GNET: Formation Energy M3GNet [eV/atom]",
+            "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]",
+            "MATGL_DIPOLE_QET: Dipole Magnitude [e\u00b7\u00c5]",
+            "MATGL_STRUCT_CHARGES_QET: Structure with Charges",
+            "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]",
+            "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms",
         }
         self.assertEqual(set(self.adapter.objectives_map.keys()), expected)
 

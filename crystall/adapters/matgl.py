@@ -28,6 +28,17 @@ class _BaseMatGLStaticAdapter(BaseCalculator):
 
     calculator_type: Literal["mlip", "inference"] = "inference"
 
+    objectives_map: Dict[str, str] = {
+        "MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom]": "MEGNet-MP-2018.6.1-Eform",
+        "MATGL_BG_MEGNET: Band Gap MEGNet [eV]": "MEGNet-MP-2019.4.1-BandGap-mfi",
+        "MATGL_EF_M3GNET: Formation Energy M3GNet [eV/atom]": "M3GNet-MP-2018.6.1-Eform",
+        "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]": "QET-MatQ-PES",
+        "MATGL_DIPOLE_QET: Dipole Magnitude [e·Å]": "QET-MatQ-PES",
+        "MATGL_STRUCT_CHARGES_QET: Structure with Charges": "QET-MatQ-PES",
+        "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
+        "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
+    }
+
     def _env_path(self) -> Path:
         return self._env_root() / "matgl"
 
