@@ -242,6 +242,7 @@ class MLIPAdapter(BaseCalculator):
             warnings.warn(f"[{self.name}] CUDA probe failed in micro-env: {exc}")
             return False
 
+    @staticmethod
     def _resolve_env_value(key: str, value: str, model_name: str) -> str:
         """Resolve a custom config value, substituting env-var placeholders.
 
