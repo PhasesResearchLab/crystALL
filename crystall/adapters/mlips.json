@@ -17,7 +17,7 @@
             "linux"
         ]
     },
-    "FAIRChem-oc": {
+    "FAIRChem": {
         "setup": [
             "pip install 'fairchem-core~=2.16.0' huggingface_hub",
             "export HF_HOME='{SFY_PATH}'; hf auth login --token {hf_token}"
@@ -37,7 +37,7 @@
             "linux"
         ],
         "custom": {
-            "task_name": "oc25",
+            "task_name": "omat",
             "hf_token": "${HF_TOKEN} Request access at https://huggingface.co/facebook/UMA"
         }
     },
