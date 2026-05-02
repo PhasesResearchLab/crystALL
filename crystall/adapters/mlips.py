@@ -203,7 +203,7 @@ class MLIPAdapter(BaseCalculator):
 
         candidate = self._device_override if self._device_override else "cpu"
 
-        allowed = self._allowed_devices()
+        allowed = self.supported_devices
         if allowed and candidate not in allowed:
             raise ValueError(
                 f"[{self.name}] device='{candidate}' is not supported. "
