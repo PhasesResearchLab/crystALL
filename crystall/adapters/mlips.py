@@ -368,14 +368,13 @@ class MLIPAdapter(BaseCalculator):
         if isinstance(value, dict):
             if _STRUCTURE_MARKER_KEY in value:
                 payload = value.get(_STRUCTURE_MARKER_KEY)
-                if isinstance(payload, dict):
+                if isinstance(payload, str):
                     try:
-                        from pymatgen.core import Structure
+                        from pymatgen.io.vasp.inputs import Poscar
 
-                        return Structure.from_dict(payload)
+                        return Poscar.from_str(payload).structure
                     except Exception:
                         return value
-                return value
             return {
                 k: MLIPAdapter._deserialize_worker_value(v) for k, v in value.items()
             }
@@ -604,6 +603,14 @@ import numpy as np
 
 STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
+# Mirrors crystall.prototypes._STRUCTURE_FORMATS.
+# key   = pymatgen fmt string; value[0] = ASE format= string / write extension (no dot).
+_STRUCTURE_FORMATS = {
+    "poscar": ["vasp", "poscar"],
+    "cif":    ["cif",  "mcif"],
+    "xyz":    ["xyz"],
+    "json":   ["json"],
+}
 
 def main():
     req_path = sys.argv[1]
@@ -783,33 +790,32 @@ def main():
         except Exception:
             pass
 
-        # Relaxed structure as serialized pymatgen.Structure
+        # ── Serialize relaxed structure as POSCAR string (ASE, no pymatgen) ─
+        poscar_buf = io.StringIO()
         try:
-            from pymatgen.io.ase import AseAtomsAdaptor
-
-            pmg_structure = AseAtomsAdaptor.get_structure(atoms)
+            write(poscar_buf, atoms, format="vasp")
             props[_mk("RELAX_STRUCT", "Relaxed Structure")] = {
-                STRUCTURE_MARKER_KEY: pmg_structure.as_dict()
+                STRUCTURE_MARKER_KEY: poscar_buf.getvalue()
             }
-            
-            # ── Write relaxed structure to disk ─────────────────────────────────
-            # Use format determined by host
-            pmg_fmt, out_ext = file_formats_map.get(filepath, ("poscar", ".vasp"))
-            
-            # Strip extension to build stem; handles bare POSCAR files (no extension).
-            in_stem      = os.path.splitext(filename)[0] or filename
-            out_filename = f"{output_stem_prefix}{in_stem}{out_ext}"
-            os.makedirs(output_dir, exist_ok=True)
-            try:
-                pmg_structure.to(fmt=pmg_fmt, filename=os.path.join(output_dir, out_filename))
-            except Exception as _write_err:
-                print(
-                    f"[MLIPAdapter] Warning: could not write structure for "
-                    f"{filename}: {_write_err}"
-                )
-            # ────────────────────────────────────────────────────────────────────
-        except Exception:
-            pass
+        except Exception as _ser_err:
+            print(
+                f"[MLIPAdapter] Warning: could not serialize structure for "
+                f"{filename}: {_ser_err}"
+            )
+
+        # ── Write relaxed structure to disk ──────────────────────────────────
+        pmg_fmt, out_ext = file_formats_map.get(filepath, ("poscar", ".vasp"))
+        ase_fmt = _STRUCTURE_FORMATS.get(pmg_fmt, ["vasp"])[0]
+        in_stem = os.path.splitext(filename)[0] or filename
+        out_filename = f"{output_stem_prefix}{in_stem}{out_ext}"
+        os.makedirs(output_dir, exist_ok=True)
+        try:
+            write(os.path.join(output_dir, out_filename), atoms, format=ase_fmt)
+        except Exception as _write_err:
+            print(
+                f"[MLIPAdapter] Warning: could not write structure for "
+                f"{filename}: {_write_err}"
+            )
 
         results.append({"name": filename, "properties": props})
 
