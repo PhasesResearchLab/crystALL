@@ -372,74 +372,6 @@ class CrystALLSearch:
             delay: Delay between retry attempts in seconds.
         """
 
-        def _download_with_urllib_fallback(network: str) -> None:
-            """Fallback downloader for Zenodo-hosted ONNX models.
-
-            This avoids SmartDL's multi-thread/range-request path when endpoints
-            reject it with HTTP 403.
-            """
-            import glob
-            import urllib.request
-
-            model_meta = self.Calculator.models.get(network, {})
-            model_url = model_meta.get("URL_ONNX")
-            if not model_url:
-                raise RuntimeError(f"No URL_ONNX found for model '{network}'.")
-
-            model_dir = importlib.resources.files("pysipfenn.modelsSIPFENN")
-            target_path = os.fspath(model_dir.joinpath(f"{network}.onnx"))
-
-            # If a valid-sized file already exists, keep it.
-            if os.path.isfile(target_path) and os.path.getsize(target_path) > 1_000_000:
-                print(f"Using existing local model file: {target_path}")
-                self.Calculator.updateModelAvailability()
-                return
-
-            # Remove stale SmartDL shard files if present.
-            for shard in glob.glob(target_path + ".*"):
-                try:
-                    os.remove(shard)
-                except OSError:
-                    pass
-
-            print(f"Fallback download (urllib): {model_url}")
-            with urllib.request.urlopen(
-                urllib.request.Request(model_url), timeout=180
-            ) as resp:
-                expected_size = resp.headers.get("Content-Length")
-                expected_size = (
-                    int(expected_size)
-                    if expected_size and expected_size.isdigit()
-                    else None
-                )
-
-                downloaded = 0
-                with open(target_path, "wb") as out_f:
-                    while True:
-                        chunk = resp.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        out_f.write(chunk)
-                        downloaded += len(chunk)
-
-            if expected_size is not None and downloaded != expected_size:
-                raise RuntimeError(
-                    f"Fallback download incomplete: got {downloaded} bytes, expected {expected_size}."
-                )
-
-            if not os.path.isfile(target_path):
-                raise RuntimeError(
-                    f"Fallback download failed; file not found: {target_path}"
-                )
-
-            size = os.path.getsize(target_path)
-            if size <= 1_000_000:
-                raise RuntimeError(
-                    f"Fallback download produced suspiciously small file ({size} bytes): {target_path}"
-                )
-
-            self.Calculator.updateModelAvailability()
-
         print("Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
         for attempt in range(retries):
             try:
@@ -453,24 +385,6 @@ class CrystALLSearch:
                 break  # Exit the loop if successful
             except HTTPError as e:
                 print(f"HTTPError: {e.code} - {e.reason}")
-                if e.code == 403:
-                    print(
-                        "Detected 403 during SmartDL download; trying urllib fallback..."
-                    )
-                    _download_with_urllib_fallback("SIPFENN_Krajewski2022_NN30")
-                    self.available_calculators["pySIPFENN"] = list(
-                        set(
-                            self.Calculator.findCompatibleModels("KS2022")
-                        ).intersection(set(self.Calculator.network_list_available))
-                    )
-                    break
-                if attempt < retries - 1:
-                    print(f"Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    raise
-            except Exception as e:
-                print(f"Download error: {e}")
                 if attempt < retries - 1:
                     print(f"Retrying in {delay} seconds...")
                     time.sleep(delay)
