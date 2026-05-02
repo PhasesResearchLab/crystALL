@@ -289,6 +289,17 @@ class MLIPAdapter(BaseCalculator):
             fmt[k] = self._resolve_env_value(k, str(v), self.name)
         return fmt
 
+    def _setup_preflight(self) -> None:
+        """Extend base preflight checks with env-var validation.
+
+        Calls :meth:`format_vars` eagerly so that any missing required
+        environment variables (e.g. ``HF_TOKEN``) raise an :exc:`OSError`
+        immediately — before the venv is created or any download begins —
+        consistent with the OS and device checks already performed here.
+        """
+        super()._setup_preflight()
+        self.format_vars()
+
     def run_on_structure(
         self,
         file_path: str,
