@@ -30,35 +30,35 @@ def _register_citations() -> None:
     """
     due.cite(
         Doi("10.1038/s41524-021-00650-1"),
-        description="Atomistic Line Graph Neural Network (ALIGNN) for materials property prediction",
+        description="ALIGNN: Atomistic line graph neural network for improved materials property predictions",
         path="crystall.calculators",
         tags=["reference-implementation"],
         cite_module=True,
     )
     due.cite(
         Doi("10.1038/s42256-023-00716-3"),
-        description="CHGNet: pretrained universal neural network potential for charge-informed atomistic modeling",
+        description="CHGNet: A pretrained universal neural network potential for charge-informed atomistic modelling",
         path="crystall.calculators",
         tags=["reference-implementation"],
         cite_module=True,
     )
     due.cite(
         Doi("10.1021/acs.chemmater.9b01294"),
-        description="MEGNet: graph network for molecules and crystals property prediction",
+        description="MEGNet: Graph networks as a universal machine learning framework for molecules and crystals",
         path="crystall.calculators",
         tags=["reference-implementation"],
         cite_module=True,
     )
     due.cite(
         Doi("10.1038/s43588-022-00349-3"),
-        description="M3GNet: universal neural network interatomic potential for materials",
+        description="M3GNet: A universal graph deep learning interatomic potential for the periodic table",
         path="crystall.calculators",
         tags=["reference-implementation"],
         cite_module=True,
     )
     due.cite(
         Doi("10.48550/arXiv.2511.07249"),
-        description="QET calculator exposed through the matgl adapter stack",
+        description="QET: A fast, accurate, and reactive equivariant foundation potential",
         path="crystall.calculators",
         tags=["reference-implementation"],
         cite_module=True,
@@ -86,6 +86,62 @@ def _register_citations() -> None:
   url={https://openreview.net/forum?id=xxyHjer00Y}
 }"""),
         description="Phonax: machine-learning model for phonon-related predictions exposed through crystALL",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.48550/arXiv.2506.23971"),
+        description="UMA: A family of universal models for atoms",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.1103/PhysRevX.14.021036"),
+        description="GRACE: Graph atomic cluster expansion for semilocal interactions beyond equivariant message passing",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.48550/arXiv.2205.06643"),
+        description="MACE: Fast and accurate machine learning interatomic potentials with higher order equivariant message passing",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.48550/arXiv.2405.04967"),
+        description="MatterSim: A deep learning atomistic model across elements, temperatures and pressures",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.1038/s41467-022-29939-5"),
+        description="NequIP: E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.48550/arXiv.2504.06231"),
+        description="ORB: A fast, scalable neural network potential",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.1021/acs.jctc.4c00190"),
+        description="SevenNet: A graph neural network interatomic potential package supporting efficient multi-GPU parallel molecular dynamics simulations",
+        path="crystall.calculators",
+        tags=["reference-implementation"],
+        cite_module=True,
+    )
+    due.cite(
+        Doi("10.48550/arXiv.2601.16195"),
+        description="UPET: Universal interatomic potentials for advanced materials modeling",
         path="crystall.calculators",
         tags=["reference-implementation"],
         cite_module=True,
