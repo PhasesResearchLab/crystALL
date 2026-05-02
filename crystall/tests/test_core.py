@@ -15,6 +15,10 @@ from pymatgen.core import Composition
 from pymongo import MongoClient
 from sklearn.cluster import KMeans
 
+IN_GITHUB_ACTIONS = (
+    os.getenv("GITHUB_ACTIONS") == "true" and os.getenv("MODELS_FETCHED") != "true"
+)
+
 
 class TestTopLevelFunctions(unittest.TestCase):
     """Tests for top-level prototype generation functions (local + MPDD)."""
@@ -27,7 +31,7 @@ class TestTopLevelFunctions(unittest.TestCase):
             self.assertIsInstance(name, str)
             self.assertIsNotNone(adapter)
         # Also exercise the entry_points failure path which should be handled
-        with patch('crystall.core.entry_points', side_effect=Exception('EP failure')):
+        with patch("crystall.core.entry_points", side_effect=Exception("EP failure")):
             adapters = crystall.load_adapters()
             self.assertIsInstance(adapters, dict)
 
@@ -42,7 +46,9 @@ class TestTopLevelFunctions(unittest.TestCase):
             shutil.rmtree("Ni22Ru8-local-prototypes")
 
         # MPDD test setup mirrors previous TestMPDD
-        self.client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=100)
+        self.client = MongoClient(
+            "mongodb://localhost:27017/", serverSelectionTimeoutMS=100
+        )
         self.db = self.client["MPDD"]
         self.collection = self.db["curated"]
         self.target_formula_mpdd = "Ni26Ru8"  # "Ni26Ru8" for quick run or "Ni22Ru8" to stay consistent with local target
@@ -78,11 +84,15 @@ class TestTopLevelFunctions(unittest.TestCase):
 
         # Directory name and existence
         self.assertEqual(result, "Ni22Ru8-local-prototypes")
-        self.assertTrue(os.path.isdir(result), "Local prototypes directory was not created.")
+        self.assertTrue(
+            os.path.isdir(result), "Local prototypes directory was not created."
+        )
 
         # Basic sanity on number of generated files
         files = os.listdir(result)
-        self.assertGreater(len(files), 0, "run_local did not generate any local prototypes.")
+        self.assertGreater(
+            len(files), 0, "run_local did not generate any local prototypes."
+        )
 
     def test_run_MPDD(self) -> None:
         """Test the run_MPDD top-level function."""
@@ -93,7 +103,9 @@ class TestTopLevelFunctions(unittest.TestCase):
         result = crystall.run_MPDD(
             target_formula, self.db, collections, "native", filter_prototypes, limit
         )
-        self.assertTrue(os.path.exists(result), "The directory for MPDD prototypes was not created.")
+        self.assertTrue(
+            os.path.exists(result), "The directory for MPDD prototypes was not created."
+        )
 
     def test_run_MPDD_devs(self) -> None:
         """Test the run_MPDD_devs / compositional MPDD top-level function."""
@@ -103,10 +115,17 @@ class TestTopLevelFunctions(unittest.TestCase):
         filter_prototypes = "material.structID"
         limit = 100
         result = crystall.run_MPDD_devs(
-            target_composition, devs, self.db, collections, "native", filter_prototypes, limit
+            target_composition,
+            devs,
+            self.db,
+            collections,
+            "native",
+            filter_prototypes,
+            limit,
         )
         self.assertTrue(
-            os.path.exists(result), "The directory for compositional MPDD prototypes was not created."
+            os.path.exists(result),
+            "The directory for compositional MPDD prototypes was not created.",
         )
 
     def test_sorted_elements_list(self) -> None:
@@ -252,7 +271,9 @@ class TestCrystALLSearch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """Set up MPDD, create CrystALLSearch and generate both MPDD and local prototypes."""
-        cls.client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=100)
+        cls.client = MongoClient(
+            "mongodb://localhost:27017/", serverSelectionTimeoutMS=100
+        )
         cls.db = cls.client["MPDD"]
         cls.collection = cls.db["curated"]
 
@@ -286,10 +307,16 @@ class TestCrystALLSearch(unittest.TestCase):
         # initializer asks to run download_pysipfenn. We create a separate
         # instance under patched Calculator behavior and patch
         # CrystALLSearch.download_pysipfenn to ensure it's invoked.
-        with patch.object(crystall.core.Calculator, "findCompatibleModels", return_value=[]), \
-             patch("crystall.core.Calculator.network_list_available", new=[], create=True), \
-             patch("builtins.input", return_value=""), \
-             patch.object(crystall.CrystALLSearch, "download_pysipfenn") as dl_mock:
+        with (
+            patch.object(
+                crystall.core.Calculator, "findCompatibleModels", return_value=[]
+            ),
+            patch(
+                "crystall.core.Calculator.network_list_available", new=[], create=True
+            ),
+            patch("builtins.input", return_value=""),
+            patch.object(crystall.CrystALLSearch, "download_pysipfenn") as dl_mock,
+        ):
             # instantiate a temporary instance to trigger the no-models branch
             _tmp = crystall.CrystALLSearch(cls.target_formula)
             cls.init_download_called = dl_mock.called
@@ -301,9 +328,19 @@ class TestCrystALLSearch(unittest.TestCase):
     def test_download_pysipfenn(self) -> None:
         """Test downloading models from the MPDD database via download_pysipfenn."""
         # Patch out the expensive network/model download so test stays fast
-        with patch.object(self.cas.Calculator, "downloadModels") as mocked_dl, \
-             patch.object(self.cas.Calculator, "findCompatibleModels", return_value=["SIPFENN_Krajewski2022_NN30"]), \
-             patch.object(self.cas.Calculator, "network_list_available", new=["SIPFENN_Krajewski2022_NN30"]):
+        with (
+            patch.object(self.cas.Calculator, "downloadModels") as mocked_dl,
+            patch.object(
+                self.cas.Calculator,
+                "findCompatibleModels",
+                return_value=["SIPFENN_Krajewski2022_NN30"],
+            ),
+            patch.object(
+                self.cas.Calculator,
+                "network_list_available",
+                new=["SIPFENN_Krajewski2022_NN30"],
+            ),
+        ):
             self.cas.download_pysipfenn(mode="serial")
             mocked_dl.assert_called_once_with("SIPFENN_Krajewski2022_NN30")
 
@@ -318,9 +355,21 @@ class TestCrystALLSearch(unittest.TestCase):
         # Retry behavior: simulate downloadModels failing twice (HTTPError), then succeeding
         err1 = HTTPError(url=None, code=500, msg="err1", hdrs=None, fp=None)
         err2 = HTTPError(url=None, code=500, msg="err2", hdrs=None, fp=None)
-        with patch.object(self.cas.Calculator, "downloadModels", side_effect=[err1, err2, None]) as mocked_retry_dl, \
-             patch.object(self.cas.Calculator, "findCompatibleModels", return_value=["SIPFENN_Krajewski2022_NN30"]), \
-             patch.object(self.cas.Calculator, "network_list_available", new=["SIPFENN_Krajewski2022_NN30"]):
+        with (
+            patch.object(
+                self.cas.Calculator, "downloadModels", side_effect=[err1, err2, None]
+            ) as mocked_retry_dl,
+            patch.object(
+                self.cas.Calculator,
+                "findCompatibleModels",
+                return_value=["SIPFENN_Krajewski2022_NN30"],
+            ),
+            patch.object(
+                self.cas.Calculator,
+                "network_list_available",
+                new=["SIPFENN_Krajewski2022_NN30"],
+            ),
+        ):
             # use small retries and zero delay to keep test fast
             self.cas.download_pysipfenn(mode="serial", retries=3, delay=0)
             self.assertEqual(mocked_retry_dl.call_count, 3)
@@ -411,7 +460,10 @@ class TestCrystALLSearch(unittest.TestCase):
     def test_generate_local(self) -> None:
         """Test local prototype generation using MPDD prototypes as input prototypes."""
         # Ensure MPDD prototypes exist
-        if not (isinstance(self.cas.prototype_path, str) and os.path.isdir(self.cas.prototype_path)):
+        if not (
+            isinstance(self.cas.prototype_path, str)
+            and os.path.isdir(self.cas.prototype_path)
+        ):
             self.cas.generate_MPDD(limit=10)
 
         mpdd_path_after = self.cas.prototype_path
@@ -426,11 +478,16 @@ class TestCrystALLSearch(unittest.TestCase):
         # run_local asserts that output dir must differ from prototype_path.
 
     @pytest.mark.order(4)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_run_pysipfenn(self) -> None:
         """Test running pySIPFENN models end-to-end."""
         self.cas.run_pysipfenn(mode="serial")
         self.assertIsNotNone(self.cas.ks2022)
-        self.assertGreater(len(self.cas.ks2022), 0, "pySIPFENN did not generate any features.")
+        self.assertGreater(
+            len(self.cas.ks2022), 0, "pySIPFENN did not generate any features."
+        )
 
         # Note: unhappy path (missing prototypes folder) is handled via
         # assertion in run_pysipfenn, but constructing a fresh CrystALLSearch
@@ -446,7 +503,9 @@ class TestCrystALLSearch(unittest.TestCase):
         class DummyAdapter:
             objectives = ["ext_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None):
+            def run_on_directory(
+                self, path, mode="serial", max_workers=None, objectives=None
+            ):
                 return [
                     {"name": p["name"], "properties": {"ext_prop": 2.5}}
                     for p in self_test.cas.prototypes
@@ -468,7 +527,9 @@ class TestCrystALLSearch(unittest.TestCase):
         # Exercise objectives subset intersection branch
         self.cas.supported_calculators["dummy2"] = DummyAdapter
         self.cas.available_calculators["dummy2"] = ["ext_prop", "other_prop"]
-        self.cas.get_calculator_properties("dummy2", mode="serial", objectives=["ext_prop"])
+        self.cas.get_calculator_properties(
+            "dummy2", mode="serial", objectives=["ext_prop"]
+        )
         self.assertIn("ext_prop", self.cas.predicted_objectives)
         self.assertNotIn("other_prop", self.cas.predicted_objectives)
 
@@ -488,8 +549,12 @@ class TestCrystALLSearch(unittest.TestCase):
         class NoMatchAdapter:
             objectives = ["mismatch_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None):
-                return [{"name": "nonexistent.POSCAR", "properties": {"mismatch_prop": 1.0}}]
+            def run_on_directory(
+                self, path, mode="serial", max_workers=None, objectives=None
+            ):
+                return [
+                    {"name": "nonexistent.POSCAR", "properties": {"mismatch_prop": 1.0}}
+                ]
 
         self.cas.supported_calculators["nomatch"] = NoMatchAdapter
         self.cas.available_calculators["nomatch"] = ["mismatch_prop"]
@@ -500,10 +565,17 @@ class TestCrystALLSearch(unittest.TestCase):
         class PartialAdapter:
             objectives = ["ext_prop"]
 
-            def run_on_directory(self, path, mode="serial", max_workers=None, objectives=None):
+            def run_on_directory(
+                self, path, mode="serial", max_workers=None, objectives=None
+            ):
                 # return only a single matching result to trigger the warning path
                 if len(self_test.cas.prototypes) > 0:
-                    return [{"name": self_test.cas.prototypes[0]["name"], "properties": {"ext_prop": 4.2}}]
+                    return [
+                        {
+                            "name": self_test.cas.prototypes[0]["name"],
+                            "properties": {"ext_prop": 4.2},
+                        }
+                    ]
                 return []
 
         self.cas.supported_calculators["partial"] = PartialAdapter
@@ -512,9 +584,14 @@ class TestCrystALLSearch(unittest.TestCase):
             warnings.simplefilter("always")
             self.cas.get_calculator_properties("partial")
             # Should have emitted at least one warnings.warn about returned N results
-            self.assertTrue(any("returned" in str(x.message) or "returned" in str(x) for x in w))
+            self.assertTrue(
+                any("returned" in str(x.message) or "returned" in str(x) for x in w)
+            )
 
     @pytest.mark.order(6)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_get_mpdd_convexhull(self) -> None:
         """Test getting MPDD convex hull stability."""
         self.cas.get_mpdd_convexhull()
@@ -536,6 +613,9 @@ class TestCrystALLSearch(unittest.TestCase):
             cas3.get_mpdd_convexhull()
 
     @pytest.mark.order(7)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_filter_prototypes(self) -> None:
         """Test filtering prototypes with default and custom objectives."""
         # Ensure features are available and at least one objective exists
@@ -545,8 +625,8 @@ class TestCrystALLSearch(unittest.TestCase):
         base_obj = self.cas.predicted_objectives[0]
         new_name = f"scaled_{base_obj}"
 
-        # Define a simple scaled objective [0] * 2
-        self.cas.define_objective(new_name, [base_obj], "[0] * 2")
+        # Define a simple scaled objective #0 * 2
+        self.cas.define_objective(new_name, [base_obj], "#0 * 2")
         self.assertIn(new_name, self.cas.predicted_objectives)
 
         # Filter using the newly defined objective
@@ -568,19 +648,25 @@ class TestCrystALLSearch(unittest.TestCase):
             self.cas.define_objective("bad_syntax", [base_obj], "bad$expr")
         with self.assertRaises(AssertionError):
             # index 1 is out-of-range when only one base objective is provided
-            self.cas.define_objective("out_of_range", [base_obj], "[1]")
+            self.cas.define_objective("out_of_range", [base_obj], "#1")
 
         # Unhappy path: invalid objective name should raise
         with self.assertRaises(AssertionError):
-            self.cas.filter_prototypes(max_prototypes=1, objective="nonexistent_objective")
+            self.cas.filter_prototypes(
+                max_prototypes=1, objective="nonexistent_objective"
+            )
 
     @pytest.mark.order(8)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_cluster_prototypes_DBSCAN(self) -> None:
         """Test clustering prototypes using DBSCAN."""
         # Trim the working set to keep clustering light while retaining enough samples
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
+
         # Patch embed to avoid TSNE cost during tests
         def cheap_embed(self, same_composition: bool) -> None:
             feats = np.asarray(self.ks2022)
@@ -595,7 +681,9 @@ class TestCrystALLSearch(unittest.TestCase):
             pad3 = np.zeros((feats.shape[0], max(0, 3 - emb2.shape[1])))
             self.embeddedks2022_3d = np.hstack([emb2, pad3])[:, :3]
 
-        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed):
+        with patch.object(
+            crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed
+        ):
             self.cas.cluster_prototypes_DBSCAN()
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
@@ -606,7 +694,9 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        with patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed):
+        with patch.object(
+            crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed
+        ):
             self.cas.cluster_prototypes_DBSCAN(same_composition=True)
         self.assertTrue(
             len(self.cas.top_candidates) > 0,
@@ -626,13 +716,16 @@ class TestCrystALLSearch(unittest.TestCase):
             cas2.cluster_prototypes_DBSCAN(eps=0.3, min_samples=1.5)
 
     @pytest.mark.order(9)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_cluster_prototypes_KMeans(self) -> None:
         """Test clustering prototypes using KMeans."""
         # Trim the working set to keep clustering light while retaining enough samples
         self.cas.ks2022 = self.cas.ks2022[:5]
         self.cas.prototypes = self.cas.prototypes[:5]
         self.cas.top_candidates = []
-        
+
         def cheap_embed(self, same_composition: bool) -> None:
             # Use scaled features with minimal projection to avoid TSNE cost
             feats = np.asarray(self.ks2022)
@@ -650,9 +743,13 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Patch KMeans, __embed_features, and the k-range to keep silhouette search light
         light_kmeans = partial(KMeans, n_init=5, max_iter=100, random_state=580)
-        with patch("crystall.core.KMeans", light_kmeans), \
-             patch.object(crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed), \
-             patch("crystall.core.np.geomspace", return_value=np.array([2, 3])):
+        with (
+            patch("crystall.core.KMeans", light_kmeans),
+            patch.object(
+                crystall.CrystALLSearch, "_CrystALLSearch__embed_features", cheap_embed
+            ),
+            patch("crystall.core.np.geomspace", return_value=np.array([2, 3])),
+        ):
             # Explicitly exercise silhouette-search path with fixed small cluster count
             self.cas.cluster_prototypes_KMeans(n_clusters=2)
             self.assertTrue(
@@ -670,23 +767,33 @@ class TestCrystALLSearch(unittest.TestCase):
         self.assertEqual(len(cas2.top_candidates), 0)
 
     @pytest.mark.order(10)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_export_table(self) -> None:
         """Test exporting prototype data to CSV."""
         # First, call export_table when no top_candidates are available to
         # exercise the fallback from 'top-candidates' to 'all-prototypes'.
         saved_top = self.cas.top_candidates
         self.cas.top_candidates = []
-        self.cas.export_table(content=['top-candidates'])
+        self.cas.export_table(content=["top-candidates"])
         self.cas.top_candidates = saved_top
 
         # Standard behavior: export both all-prototypes and top-candidates
         self.cas.export_table()
-        self.assertTrue(os.path.exists("all-prototypes.csv"), "Exported CSV file not found.")
-        self.assertTrue(os.path.exists("top-candidates.csv"), "Exported CSV file not found.")
+        self.assertTrue(
+            os.path.exists("all-prototypes.csv"), "Exported CSV file not found."
+        )
+        self.assertTrue(
+            os.path.exists("top-candidates.csv"), "Exported CSV file not found."
+        )
         os.remove("all-prototypes.csv")
         os.remove("top-candidates.csv")
 
     @pytest.mark.order(11)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_plot_barchart(self) -> None:
         """Test plotting bar charts."""
         # First, ensure early-return path when no top_candidates exist
@@ -697,10 +804,16 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Then generate and save the HTML file with clustered candidates
         self.cas.plot_barchart(save=True)
-        self.assertTrue(os.path.exists("barchart_clusterPrototypes.html"), "Bar chart HTML file not found.")
+        self.assertTrue(
+            os.path.exists("barchart_clusterPrototypes.html"),
+            "Bar chart HTML file not found.",
+        )
         os.remove("barchart_clusterPrototypes.html")
 
     @pytest.mark.order(12)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_plot_2D(self) -> None:
         """Test plotting 2D scatter plots."""
         # Non-save branch: patch the module-level `iplot` used by `crystall.core`
@@ -712,10 +825,16 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Save branch: write and then remove file
         self.cas.plot_2D(save=True)
-        self.assertTrue(os.path.exists("2D_clusterPrototypes.html"), "2D scatter plot HTML file not found.")
+        self.assertTrue(
+            os.path.exists("2D_clusterPrototypes.html"),
+            "2D scatter plot HTML file not found.",
+        )
         os.remove("2D_clusterPrototypes.html")
 
     @pytest.mark.order(13)
+    @pytest.mark.skipif(
+        IN_GITHUB_ACTIONS, reason="Test depends on the ONNX network files"
+    )
     def test_plot_3D(self) -> None:
         """Test plotting 3D scatter plots."""
         # Non-save branch: patch the module-level `iplot` used by `crystall.core`
@@ -727,7 +846,10 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Save branch: write and then remove file
         self.cas.plot_3D(save=True)
-        self.assertTrue(os.path.exists("3D_clusterPrototypes.html"), "3D scatter plot HTML file not found.")
+        self.assertTrue(
+            os.path.exists("3D_clusterPrototypes.html"),
+            "3D scatter plot HTML file not found.",
+        )
         os.remove("3D_clusterPrototypes.html")
 
 
@@ -752,7 +874,9 @@ class TestBaseCalculator(unittest.TestCase):
         data_1d = [3.0, 4.0]
         rms = crystall.BaseCalculator.vector_to_scalar("rms", data_1d)
         total = crystall.BaseCalculator.vector_to_scalar("sum", data_1d)
-        self.assertAlmostEqual(rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5)  # or 3.5355339...
+        self.assertAlmostEqual(
+            rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5
+        )  # or 3.5355339...
         self.assertAlmostEqual(total, 7.0)
 
         # norm and mean on small arrays
@@ -771,5 +895,6 @@ class TestBaseCalculator(unittest.TestCase):
         # Invalid type should return None gracefully
         self.assertIsNone(crystall.BaseCalculator.vector_to_scalar("unknown", tensor_6))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -2,9 +2,17 @@ name: Linux
 
 on: 
   push:
+    branches: [main]
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_LinuxUbuntu.yaml'
+  
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_LinuxUbuntu.yaml'
+  
   workflow_dispatch:
 
 jobs:
@@ -46,10 +54,6 @@ jobs:
           python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.3.0+cpu" "torchvision==0.18.0+cpu" "torchdata==0.9.0"
           python -m pip install --no-deps 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
           python -m pip install -e .
-
-      - name: Download pysipfenn models
-        run: |
-          python -c "from pysipfenn import Calculator; Calculator().downloadModels('SIPFENN_Krajewski2022_NN30')"
 
       - name: Test with pytest
         env:

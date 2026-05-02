@@ -2,9 +2,17 @@ name: Mac M1
 
 on: 
   push:
+    branches: [main]
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_Mac.yaml'
+  
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_Mac.yaml'
+
   workflow_dispatch:
 
 jobs:
@@ -38,10 +46,6 @@ jobs:
           python -m pip install wheel flask pytest pytest-order pytest-cov
           python -m pip install 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
           python -m pip install -e .
-
-      - name: Download pysipfenn models
-        run: |
-          python -c "from pysipfenn import Calculator; Calculator().downloadModels('SIPFENN_Krajewski2022_NN30')"
 
       - name: Test with pytest
         env:

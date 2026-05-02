@@ -1,0 +1,135 @@
+name: Full Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    paths:
+      - '.github/workflows/fullTests.yaml'
+  workflow_dispatch:
+
+jobs:
+  testPython311:
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.11.0
+        with:
+          mongodb-version: '6.0'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
+
+      - name: Free up disk space before dependency install
+        run: |
+          sudo apt-get clean
+          sudo rm -rf /usr/local/lib/android
+          docker rmi $(docker images -q) || true
+          sudo rm -rf /opt/ghc
+          df -h
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools
+          python -m pip install wheel flask pytest pytest-order pytest-cov
+          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.3.0+cpu" "torchvision==0.18.0+cpu" "torchdata==0.9.0"
+          python -m pip install --no-deps 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
+          python -m pip install -e .
+
+      - name: Download pySIPFENN models
+        id: DownloadModelsAttempt1
+        run: |
+          python -c "from pysipfenn import Calculator; c = Calculator(); c.downloadModels('SIPFENN_Krajewski2022_NN30'); c.loadModels()"
+        continue-on-error: true
+
+      - name: Download pySIPFENN models retry if failed the first time
+        if: steps.DownloadModelsAttempt1.outcome == 'failure'
+        run: |
+          python -c "import time; time.sleep(120); from pysipfenn import Calculator; c = Calculator(autoLoad=False); c.downloadModels('SIPFENN_Krajewski2022_NN30'); c.loadModels()"
+
+      - name: Test with pytest
+        env:
+          MODELS_FETCHED: true
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          PYTORCH_NUM_THREADS: 1
+          CHGNET_DEVICE: cpu
+        run: |
+          pytest -s --durations=0 --cov=crystall --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml-${{ github.run_id }}-3.11
+          path: coverage.xml
+
+      - name: Delay next job
+        run: sleep 15
+
+  testPython312:
+    needs: testPython311
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.11.0
+        with:
+          mongodb-version: '6.0'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
+
+      - name: Free up disk space before dependency install
+        run: |
+          sudo apt-get clean
+          sudo rm -rf /usr/local/lib/android
+          docker rmi $(docker images -q) || true
+          sudo rm -rf /opt/ghc
+          df -h
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools
+          python -m pip install wheel flask pytest pytest-order
+          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.3.0+cpu" "torchvision==0.18.0+cpu" "torchdata==0.9.0"
+          python -m pip install --no-deps 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
+          python -m pip install -e .
+
+      - name: Download pySIPFENN models
+        id: DownloadModelsAttempt1
+        run: |
+          python -c "from pysipfenn import Calculator; c = Calculator(); c.downloadModels('SIPFENN_Krajewski2022_NN30'); c.loadModels()"
+        continue-on-error: true
+
+      - name: Download pySIPFENN models retry if failed the first time
+        if: steps.DownloadModelsAttempt1.outcome == 'failure'
+        run: |
+          python -c "import time; time.sleep(120); from pysipfenn import Calculator; c = Calculator(autoLoad=False); c.downloadModels('SIPFENN_Krajewski2022_NN30'); c.loadModels()"
+
+      - name: Test with pytest
+        env:
+          MODELS_FETCHED: true
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          PYTORCH_NUM_THREADS: 1
+          CHGNET_DEVICE: cpu
+        run: |
+          pytest -s --durations=0
