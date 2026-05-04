@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import json
 import shutil
@@ -374,6 +375,68 @@ class TestCrystALLSearch(unittest.TestCase):
             self.cas.download_pysipfenn(mode="serial", retries=3, delay=0)
             self.assertEqual(mocked_retry_dl.call_count, 3)
 
+    def _assert_prototypes_satisfy_filter(self, mongo_filter, target_prototypes) -> None:
+        """Verify every prototype in self.cas.prototypes traces back to an MPDD doc that satisfies mongo_filter.
+
+        Prototypes are written to disk only — the in-memory dicts carry just
+        {index, name}, so to check the filter we re-derive the source MPDD doc
+        from the parentDatabaseID embedded in each POSCAR filename.
+
+        Empty prototype list is tolerated (vacuously true). Only literal scalar
+        filter values are supported (no $gte/$in/etc).
+        """
+        # 1. Nothing to verify if no prototypes were generated.
+        if not self.cas.prototypes:
+            return
+
+        # 2. Pick the sanitization rule core.py uses when embedding the
+        #    parentDatabaseID into a POSCAR filename. The native and non-native
+        #    branches of run_MPDD / run_MPDD_devs use different rules, so we
+        #    must mirror whichever one produced these prototypes.
+        if target_prototypes == "native":
+            # native: re.sub(r'[?:*|><\\/]', '-', name) -- core.py:407, core.py:694
+            sanitize = lambda pdb: re.sub(r"[?:*|><\\/]", "-", pdb)
+        else:
+            # non-native: replace '/' and ':' with '-', then strip every '-'
+            # -- core.py:520, core.py:830
+            sanitize = lambda pdb: pdb.replace("/", "-").replace(":", "-").replace("-", "")
+
+        # 3. Build a reverse map sanitized-pdbID -> source MPDD doc, so we can
+        #    trace any filename back to the doc that produced it.
+        pdb_form_to_doc = {}
+        for d in self.collection.find({}, {"metadata.parentDatabaseID": 1, "material": 1}):
+            pdb = d.get("metadata", {}).get("parentDatabaseID")
+            if pdb:
+                pdb_form_to_doc[sanitize(pdb)] = d
+
+        # 4. For each prototype, find the unique source doc and check the filter.
+        for proto in self.cas.prototypes:
+            name = proto["name"]
+            # Anchor the regex at the end of the filename so 'JVASP-2081' does
+            # not falsely match a name ending in 'JVASP-20813.POSCAR'. The
+            # optional '-pN' tail is the permutation suffix used in non-native.
+            matches = [
+                form for form in pdb_form_to_doc
+                if re.search(re.escape(form) + r"(?:-p\d+)?\.POSCAR$", name)
+            ]
+            # 5. Exactly one match expected. Zero = our parsing assumption is
+            #    wrong; many = two pdbIDs collide after sanitization.
+            self.assertEqual(
+                len(matches), 1,
+                f"Could not uniquely identify source MPDD doc for prototype {name!r}; matched: {matches}",
+            )
+            doc = pdb_form_to_doc[matches[0]]
+            # 6. Walk the dotted filter key into the doc and compare to the
+            #    expected literal value (e.g. material.dimensionality == 2).
+            for key, expected in mongo_filter.items():
+                actual = doc
+                for part in key.split("."):
+                    actual = actual[part]
+                self.assertEqual(
+                    actual, expected,
+                    f"Prototype {name!r} (sanitized pdbID {matches[0]!r}) has {key}={actual!r}, expected {expected!r}",
+                )
+
     @pytest.mark.order(2)
     def test_generate_MPDD(self) -> None:
         """Test MPDD prototype generation for multiple target/filter combinations."""
@@ -436,6 +499,14 @@ class TestCrystALLSearch(unittest.TestCase):
                                 self.assertGreater(len(self.cas.prototypes), 0)
                             else:
                                 self.assertIsInstance(self.cas.prototypes, list)
+
+                            # When an other_targets filter is set, every
+                            # generated prototype must trace back to an MPDD
+                            # doc that satisfies it.
+                            if other_targets is not None:
+                                self._assert_prototypes_satisfy_filter(
+                                    other_targets, target_prototypes
+                                )
 
         # Unhappy path: invalid devs type should raise
         with self.assertRaises(AssertionError):
