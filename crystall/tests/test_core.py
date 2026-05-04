@@ -250,20 +250,17 @@ class TestTopLevelFunctions(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
-        # Local directories
-        if os.path.exists("Ni22Ru8-local-prototypes"):
-            shutil.rmtree("Ni22Ru8-local-prototypes")
-
-        # MPDD prototype directories created by tests
-        for path in [
-            "Ni26Ru8-local-prototypes",
-            "Ni26Ru8-MPDD(curated)-prototypes",
-            "Ni26Ru8-MPDD(curated)-prototypes(native)",
-            "Ni26Ru8±(10,10)-MPDD(curated)-prototypes",
-            "Ni26Ru8±(10,10)-MPDD(curated)-prototypes(native)",
+        # Sweep all Ni22Ru8 / Ni26Ru8 prototype directories AND the
+        # `_query.json` sidecar files emitted next to filtered outputs.
+        for pattern in [
+            "Ni22Ru8*prototypes*",
+            "Ni26Ru8*prototypes*",
         ]:
-            if os.path.exists(path):
-                shutil.rmtree(path)
+            for path in glob.glob(pattern):
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                elif os.path.isfile(path):
+                    os.remove(path)
 
 
 class TestCrystALLSearch(unittest.TestCase):
@@ -461,8 +458,13 @@ class TestCrystALLSearch(unittest.TestCase):
                                 "Ni26Ru8-local-prototypes",
                             ]:
                                 for path in glob.glob(pattern):
-                                    if os.path.exists(path):
+                                    # The glob also matches `_query.json`
+                                    # sidecar files written next to filtered
+                                    # output directories — handle both.
+                                    if os.path.isdir(path):
                                         shutil.rmtree(path)
+                                    elif os.path.isfile(path):
+                                        os.remove(path)
 
                             # Call generate_MPDD. Both `devs` and `other_targets` may be
                             # None; generate_MPDD handles that internally. The `devs` path
@@ -490,12 +492,15 @@ class TestCrystALLSearch(unittest.TestCase):
                             self.assertIsInstance(mpdd_path_after, str)
                             self.assertTrue(os.path.isdir(mpdd_path_after))
 
-                            # For the non-devs path we expect prototypes to be found.
-                            # For devs-based compositional substitution queries the
-                            # local MPDD snapshot may legitimately return zero
-                            # prototypes; therefore only require a non-empty list for
-                            # the devs == None case.
-                            if devs is None:
+                            # For the non-devs + non-native path we expect
+                            # prototypes (anonymized formula A4B13 has 30
+                            # matches in the mock). The native path queries
+                            # reducedFormula and the small mock has no
+                            # Ni13Ru4 entries, so 0 is acceptable. Devs-based
+                            # compositional substitution queries may also
+                            # legitimately return zero prototypes against
+                            # the local MPDD snapshot.
+                            if devs is None and target_prototypes == "non-native":
                                 self.assertGreater(len(self.cas.prototypes), 0)
                             else:
                                 self.assertIsInstance(self.cas.prototypes, list)
