@@ -330,15 +330,16 @@ def run_MPDD(
         except FileExistsError:
             print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
 
-        _write_query_sidecar(
-            out_dir,
-            target_formula=formula_str,
-            target_prototypes='native',
-            filter_prototypes=filter_prototypes,
-            collections=collections,
-            limit=limit,
-            other_targets=other_targets,
-        )
+        if other_targets:
+            _write_query_sidecar(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                other_targets=other_targets,
+            )
 
         for col in collections:
             print('Looking through: ' + col)
@@ -443,15 +444,16 @@ def run_MPDD(
         except FileExistsError:
             print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
-        _write_query_sidecar(
-            out_dir,
-            target_formula=formula_str,
-            target_prototypes='non-native',
-            filter_prototypes=filter_prototypes,
-            collections=collections,
-            limit=limit,
-            other_targets=other_targets,
-        )
+        if other_targets:
+            _write_query_sidecar(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='non-native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                other_targets=other_targets,
+            )
 
         # Substitute over all prototypes over all of their permutations
         allS = 0
@@ -613,16 +615,17 @@ def run_MPDD_devs(
         except FileExistsError:
             print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
 
-        _write_query_sidecar(
-            out_dir,
-            target_formula=formula_str,
-            target_prototypes='native',
-            filter_prototypes=filter_prototypes,
-            collections=collections,
-            limit=limit,
-            devs=devs,
-            other_targets=other_targets,
-        )
+        if other_targets:
+            _write_query_sidecar(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                devs=devs,
+                other_targets=other_targets,
+            )
 
         targetPresent = 0
         for col in collections:
@@ -728,16 +731,17 @@ def run_MPDD_devs(
         except FileExistsError:
             print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
 
-        _write_query_sidecar(
-            out_dir,
-            target_formula=formula_str,
-            target_prototypes='non-native',
-            filter_prototypes=filter_prototypes,
-            collections=collections,
-            limit=limit,
-            devs=devs,
-            other_targets=other_targets,
-        )
+        if other_targets:
+            _write_query_sidecar(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='non-native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                devs=devs,
+                other_targets=other_targets,
+            )
 
         # All generated prototypes
         allS = 0
