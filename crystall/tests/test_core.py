@@ -441,7 +441,7 @@ class TestCrystALLSearch(unittest.TestCase):
         target_options = ["native", "non-native"]
         filter_options = ["material.structID", "material.volNormStructID"]
         devs_options = [None, {"Ni": 10, "Ru": 10}]
-        other_target_options = [None, {"material.dimensionality": 2}]
+        other_target_options = [None, {"material.crystalSystem": "monoclinic"}]
 
         for other_targets in other_target_options:
             for devs in devs_options:
@@ -525,9 +525,10 @@ class TestCrystALLSearch(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.cas.generate_MPDD(other_targets={"material.reducedFormula": "Ni26Ru8"})
 
-        # Unhappy path: other_targets cannot collide with composition-query keys in run_MPDD_devs
+        # Unhappy path: other_targets cannot collide with composition-query
         with self.assertRaises(ValueError):
             self.cas.generate_MPDD(
+                target_prototypes="native",
                 devs={"Ni": 10, "Ru": 10},
                 other_targets={"material.system": "Ni-Ru"},
             )
