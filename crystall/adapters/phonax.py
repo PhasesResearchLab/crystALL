@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Sequence
 
-from crystall.calculators import BaseCalculator
+from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
 if TYPE_CHECKING:
     from pymatgen.core import Structure
@@ -36,8 +36,8 @@ class PhonaxAdapter(BaseCalculator):
         adapter = PhonaxAdapter("/path/to/weights.pt")
         adapter.setup_env()
         result = adapter.run_on_structure("POSCAR")
-        band_structure = result["properties"]["Phonax Phonon Band Structure"]
-        dos = result["properties"]["Phonax Phonon DOS"]
+        band_structure = result["properties"]["PHONAX_BS"]
+        dos = result["properties"]["PHONAX_DOS"]
 
     Args:
         weights_path: Path to the Phonax model weights file.
@@ -53,10 +53,10 @@ class PhonaxAdapter(BaseCalculator):
 
     name = "phonax"
     calculator_type: Literal["inference"] = "inference"
-    objectives_map = {
-        "PHONAX_BS: Phonax Phonon Band Structure": "phonon_band_structure",
-        "PHONAX_DOS: Phonax Phonon DOS": "phonon_dos",
-    }
+    objectives: ObjectiveRegistry = ObjectiveRegistry([
+        Objective("PHONAX_BS",  "Phonax Phonon Band Structure", "phonon_band_structure", "Phonax"),
+        Objective("PHONAX_DOS", "Phonax Phonon DOS",            "phonon_dos",            "Phonax"),
+    ])
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu", "cuda"]  # JAX supports CPU; CUDA via jax[cuda] if available
 
@@ -183,12 +183,9 @@ class PhonaxAdapter(BaseCalculator):
         structure = Structure.from_dict(struct_dict) if struct_dict else None
 
         for key, value in props.items():
-            # NOTE: The string literals below MUST stay in sync with the
-            # corresponding keys in objectives_map.  If a description is
-            # ever edited in objectives_map, update these strings too.
             if key == "phonon_band_structure" and isinstance(value, dict):
                 try:
-                    updated_props["PHONAX_BS: Phonax Phonon Band Structure"] = (
+                    updated_props["PHONAX_BS"] = (
                         cls._band_structure_from_payload(value, structure)
                     )
                 except Exception:
@@ -196,7 +193,7 @@ class PhonaxAdapter(BaseCalculator):
 
             elif key == "phonon_dos" and isinstance(value, dict):
                 try:
-                    updated_props["PHONAX_DOS: Phonax Phonon DOS"] = (
+                    updated_props["PHONAX_DOS"] = (
                         cls._dos_from_payload(value, structure)
                     )
                 except Exception:
@@ -221,7 +218,7 @@ class PhonaxAdapter(BaseCalculator):
 
         The structure is written to a temporary POSCAR before dispatch.
         """
-        internal_objectives = self._resolve_objectives_to_dispatch(objectives)
+        internal_objectives = self.objectives.resolve_dispatch_keys(objectives)
 
         file_path_abs = os.path.abspath(file_path)
 
