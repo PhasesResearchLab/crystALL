@@ -32,6 +32,9 @@ class MatGLAdapter(BaseCalculator):
     name = "MatGL"
     calculator_type: Literal["mlip", "inference"] = "inference"
 
+    def __init__(self, **kwargs):
+        """Initialize MatGL adapter."""
+        super().__init__(**kwargs)
 
     objectives: ObjectiveRegistry = ObjectiveRegistry([
         Objective("MATGL_EF_MEGNET",          "Formation Energy MEGNet [eV/atom]",       "MEGNet-MP-2018.6.1-Eform",               "MatGL"),

@@ -125,7 +125,6 @@ class MLIPAdapter(BaseCalculator):
         self._config = config[model_name]
         self._device_override = device.lower() if isinstance(device, str) else None
         self._resolved_device: Optional[str] = None
-
         self._inference_adapters: List[BaseCalculator] = []
 
         self.name = model_name
@@ -137,9 +136,6 @@ class MLIPAdapter(BaseCalculator):
             Objective(f"{self._model_code}_RELAX_VOL",    f"{model_name} Relaxed Volume [Å³/atom]",          "ase_relax", model_name),
             Objective(f"{self._model_code}_RELAX_STRUCT", f"{model_name} Relaxed Structure",                 "ase_relax", model_name),
         ])
-
-        if register_citations:
-            self._register_citations()
 
         if inference:
             self._resolve_inference(inference)
@@ -216,22 +212,6 @@ class MLIPAdapter(BaseCalculator):
 
         self._resolved_device = candidate
         return candidate
-
-    def _register_citations(self) -> None:
-        if self._citations_registered:
-            return
-        if self._model_name in _MLIP_CITATIONS:
-            from duecredit import BibTeX, Doi, due
-
-            doi, desc = _MLIP_CITATIONS[self._model_name]
-            due.cite(
-                BibTeX(doi) if doi.strip().startswith("@") else Doi(doi),
-                description=desc,
-                path=f"crystall.adapters.mlips.{self._model_code}",
-                tags=["reference-implementation"],
-                cite_module=False,
-            )
-        self._citations_registered = True
 
     def _cuda_available_in_micro_env(self) -> bool:
         import subprocess as sp
@@ -323,7 +303,6 @@ class MLIPAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        self._register_citations()
         self._assert_os_supported()
         self._resolve_device()
 
@@ -449,7 +428,6 @@ class MLIPAdapter(BaseCalculator):
                 Defaults to ``{parent_of_path}/{model_name}_{input_dir_basename}``.
             **kwargs: Additional kwargs forwarded to the worker request.
         """
-        self._register_citations()
         self._assert_os_supported()
         self._resolve_device()
 

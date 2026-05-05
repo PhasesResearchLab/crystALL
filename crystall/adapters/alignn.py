@@ -27,20 +27,8 @@ class AlignnAdapter(BaseCalculator):
     calculator_type: Literal["mlip", "inference"] = "inference"
 
     def __init__(self, **kwargs):
-        """Initialize ALIGNN adapter and register citation."""
-        from crystall.duecredit_utils import configure_duecredit_defaults
-
-        configure_duecredit_defaults()
+        """Initialize ALIGNN adapter."""
         super().__init__(**kwargs)
-        from duecredit import Doi, due
-
-        due.cite(
-            Doi("10.1038/s41524-021-00650-1"),
-            description="ALIGNN: Atomistic line graph neural network for improved materials property predictions",
-            path="crystall.adapters.alignn",
-            tags=["reference-implementation"],
-            cite_module=False,
-        )
 
     objectives: ObjectiveRegistry = ObjectiveRegistry([
         Objective("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",          "mp_e_form",             "ALIGNN"),
