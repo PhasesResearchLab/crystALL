@@ -8,6 +8,7 @@ import json
 import csv
 import time
 import hashlib
+from ruamel.yaml import YAML
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
@@ -119,14 +120,14 @@ def _other_targets_tag(other_targets: Optional[Dict[str, Any]]) -> str:
     return f'-q{digest}'
 
 def _write_query_sidecar(out_dir: str, **fields: Any) -> None:
-    """Write a `<out_dir>_query.json` sidecar (metadata file) next to the output directory recording the run's parameters.
+    """Write a `<out_dir>_query.yaml` sidecar (metadata file) next to the output directory recording the run's parameters.
 
     Lets a human (or future code) recover the exact inputs that produced a folder, even
     when the directory name only encodes them via a short hash.
     """
-    sidecar = f'{out_dir}_query.json'
+    sidecar = f'{out_dir}_query.yaml'
     with open(sidecar, 'w') as f:
-        json.dump(fields, f, indent=2, sort_keys=True, default=str)
+        YAML(typ='safe', pure=True).dump(dict(sorted(fields.items())), f)
 
 def run_local(
         target_formula: Union[str, Composition],

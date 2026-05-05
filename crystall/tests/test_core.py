@@ -3,12 +3,15 @@ import re
 import glob
 import json
 import shutil
+import tempfile
 import pytest
 import crystall
 import unittest
 import warnings
 import numpy as np
 from functools import partial
+from ruamel.yaml import YAML
+
 
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -219,8 +222,7 @@ class TestTopLevelFunctions(unittest.TestCase):
         self.assertNotEqual(t1, _other_targets_tag({"material.dimensionality": 3}))
 
     def test_write_query_sidecar(self) -> None:
-        """_write_query_sidecar writes a JSON sidecar next to (not inside) the output directory."""
-        import tempfile
+        """_write_query_sidecar writes a YAML sidecar next to (not inside) the output directory."""
         from crystall.core import _write_query_sidecar
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -235,13 +237,13 @@ class TestTopLevelFunctions(unittest.TestCase):
             )
 
             # Sidecar lives as a sibling of the output directory, NOT inside it
-            sidecar = out_dir + "_query.json"
+            sidecar = out_dir + "_query.yaml"
             self.assertTrue(os.path.isfile(sidecar))
-            self.assertFalse(os.path.exists(os.path.join(out_dir, "_query.json")))
+            self.assertFalse(os.path.exists(os.path.join(out_dir, "_query.yaml")))
 
-            # Contents are valid JSON and include the passed fields
+            # Contents are valid YAML and include the passed fields
             with open(sidecar) as f:
-                data = json.load(f)
+                data = YAML(typ='safe', pure=True).load(f)
             self.assertEqual(data["target_formula"], "Ni26Ru8")
             self.assertEqual(data["target_prototypes"], "native")
             self.assertEqual(data["limit"], 10)
@@ -250,7 +252,7 @@ class TestTopLevelFunctions(unittest.TestCase):
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
         # Sweep all Ni22Ru8 / Ni26Ru8 prototype directories AND the
-        # `_query.json` sidecar files emitted next to filtered outputs.
+        # `_query.yaml` sidecar files emitted next to filtered outputs.
         for pattern in [
             "Ni22Ru8*prototypes*",
             "Ni26Ru8*prototypes*",
@@ -457,7 +459,7 @@ class TestCrystALLSearch(unittest.TestCase):
                                 "Ni26Ru8-local-prototypes",
                             ]:
                                 for path in glob.glob(pattern):
-                                    # The glob also matches `_query.json`
+                                    # The glob also matches `_query.yaml`
                                     # sidecar files written next to filtered
                                     # output directories — handle both.
                                     if os.path.isdir(path):
