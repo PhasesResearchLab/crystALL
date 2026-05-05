@@ -37,14 +37,14 @@ class MatGLAdapter(BaseCalculator):
         super().__init__(**kwargs)
 
     objectives: ObjectiveRegistry = ObjectiveRegistry([
-        Objective("MATGL_EF_MEGNET",          "Formation Energy MEGNet [eV/atom]",       "MEGNet-MP-2018.6.1-Eform",               "MatGL"),
-        Objective("MATGL_BG_MEGNET",          "Band Gap MEGNet [eV]",                    "MEGNet-MP-2019.4.1-BandGap-mfi",         "MatGL"),
-        Objective("MATGL_EF_M3GNET",         "Formation Energy M3GNet [eV/atom]",       "M3GNet-MP-2018.6.1-Eform",               "MatGL"),
-        Objective("MATGL_EWALD_QET",         "Electrostatic (Ewald) Energy [eV/cell]",  "QET-MatQ-PES",                           "MatGL"),
-        Objective("MATGL_DIPOLE_QET",        "Dipole Magnitude [e·Å]",                  "QET-MatQ-PES",                           "MatGL"),
-        Objective("MATGL_STRUCT_CHARGES_QET","Structure with Charges",                  "QET-MatQ-PES",                           "MatGL"),
-        Objective("MATGL_E_STATIC_CHGNET",   "Static Energy CHGNet [eV/atom]",          "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",   "MatGL"),
-        Objective("MATGL_STRUCT_MAGMOMS_CHGNET", "Structure with Magmoms",              "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",   "MatGL"),
+        Objective("MATGL_EF_MEGNET",          "Formation Energy MEGNet [eV/atom]",       "MEGNet-MP-2018.6.1-Eform",               "MEGNet"),
+        Objective("MATGL_BG_MEGNET",          "Band Gap MEGNet [eV]",                    "MEGNet-MP-2019.4.1-BandGap-mfi",         "MEGNet"),
+        Objective("MATGL_EF_M3GNET",         "Formation Energy M3GNet [eV/atom]",       "M3GNet-MP-2018.6.1-Eform",               "M3GNet"),
+        Objective("MATGL_EWALD_QET",         "Electrostatic (Ewald) Energy [eV/cell]",  "QET-MatQ-PES",                           "QET"),
+        Objective("MATGL_DIPOLE_QET",        "Dipole Magnitude [e·Å]",                  "QET-MatQ-PES",                           "QET"),
+        Objective("MATGL_STRUCT_CHARGES_QET","Structure with Charges",                  "QET-MatQ-PES",                           "QET"),
+        Objective("MATGL_E_STATIC_CHGNET",   "Static Energy CHGNet [eV/atom]",          "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",   "CHGNet"),
+        Objective("MATGL_STRUCT_MAGMOMS_CHGNET", "Structure with Magmoms",              "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",   "CHGNet"),
     ])
 
     supported_os: List[str] = ["windows", "macos", "linux"]
