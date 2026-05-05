@@ -25,7 +25,7 @@ import warnings
 from pathlib import Path
 from typing import Dict, List, Sequence, Optional, Any, Literal, Tuple
 
-from crystall.calculators import BaseCalculator
+from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
@@ -130,13 +130,16 @@ class MLIPAdapter(BaseCalculator):
 
         self.name = model_name
         self._model_code = _sanitize_model_code(model_name)
-        self._own_objectives_map = {
-            f"{self._model_code}_RELAX_E: {model_name} Relaxed Energy [eV/atom]": "ase_relax",
-            f"{self._model_code}_RELAX_F: {model_name} Relaxed RMS Force [eV/A]": "ase_relax",
-            f"{self._model_code}_RELAX_STRESS: {model_name} Relaxed Von Mises Stress [GPa]": "ase_relax",
-            f"{self._model_code}_RELAX_VOL: {model_name} Relaxed Volume [A^3/atom]": "ase_relax",
-            f"{self._model_code}_RELAX_STRUCT: {model_name} Relaxed Structure": "ase_relax",
-        }
+        self._own_objectives = ObjectiveRegistry([
+            Objective(f"{self._model_code}_RELAX_E",      f"{model_name} Relaxed Energy [eV/atom]",          "ase_relax", model_name),
+            Objective(f"{self._model_code}_RELAX_F",      f"{model_name} Relaxed RMS Force [eV/Å]",          "ase_relax", model_name),
+            Objective(f"{self._model_code}_RELAX_STRESS", f"{model_name} Relaxed Von Mises Stress [GPa]",    "ase_relax", model_name),
+            Objective(f"{self._model_code}_RELAX_VOL",    f"{model_name} Relaxed Volume [Å³/atom]",          "ase_relax", model_name),
+            Objective(f"{self._model_code}_RELAX_STRUCT", f"{model_name} Relaxed Structure",                 "ase_relax", model_name),
+        ])
+
+        if register_citations:
+            self._register_citations()
 
         if inference:
             self._resolve_inference(inference)
@@ -162,29 +165,24 @@ class MLIPAdapter(BaseCalculator):
             self._inference_adapters.append(adapter)
 
     @property
-    def objectives_map(self) -> Dict[str, str]:
+    def objectives(self) -> ObjectiveRegistry:
         """Combined MLIP + piped inference objectives.
 
-        Piped objective codes are constructed as ``{mlip_code}_{inference_code}``,
-        e.g. 'ORB_V2_ALIGNN_EF_MP: ALIGNN-MP Formation Energy [eV/atom] (via ALIGNN)'.
-        """
-        combined = dict(self._own_objectives_map)
-        for adapter in self._inference_adapters:
-            for full_key in adapter.objectives_map:
-                inf_code, description = BaseCalculator._parse_objective_key(full_key)
-                ns_code = f"{self._model_code}_{inf_code}"
-                ns_desc = (
-                    f"{description} (via {adapter.name})"
-                    if description
-                    else f"(via {adapter.name})"
-                )
-                combined[f"{ns_code}: {ns_desc}"] = f"pipe::{adapter.name}"
-        return combined
+        Own RELAX objectives come first; then each piped inference adapter's
+        objectives are namespaced as ``{mlip_code}_{inf_code}`` with a
+        ``(via <AdapterName>)`` suffix on the description, e.g.::
 
-    @objectives_map.setter
-    def objectives_map(self, value: Dict[str, str]) -> None:
-        """Allow direct assignment (used internally for _own_objectives_map)."""
-        self._own_objectives_map = value
+            ORB_V2_ALIGNN_EF_MP  — ALIGNN-MP Formation Energy [eV/atom] (via ALIGNN)
+        """
+        all_objectives: List[Objective] = list(self._own_objectives.values())
+        for adapter in self._inference_adapters:
+            for obj in adapter.objectives.values():
+                ns_code = f"{self._model_code}_{obj.code}"
+                ns_desc = f"{obj.description} (via {adapter.name})"
+                all_objectives.append(
+                    Objective(ns_code, ns_desc, f"pipe::{adapter.name}", obj.backend)
+                )
+        return ObjectiveRegistry(all_objectives)
 
     # ── Micro-env path ──────────────────────────────────────────────────────
 
@@ -218,6 +216,22 @@ class MLIPAdapter(BaseCalculator):
 
         self._resolved_device = candidate
         return candidate
+
+    def _register_citations(self) -> None:
+        if self._citations_registered:
+            return
+        if self._model_name in _MLIP_CITATIONS:
+            from duecredit import BibTeX, Doi, due
+
+            doi, desc = _MLIP_CITATIONS[self._model_name]
+            due.cite(
+                BibTeX(doi) if doi.strip().startswith("@") else Doi(doi),
+                description=desc,
+                path=f"crystall.adapters.mlips.{self._model_code}",
+                tags=["reference-implementation"],
+                cite_module=False,
+            )
+        self._citations_registered = True
 
     def _cuda_available_in_micro_env(self) -> bool:
         import subprocess as sp
@@ -309,6 +323,7 @@ class MLIPAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
+        self._register_citations()
         self._assert_os_supported()
         self._resolve_device()
 
@@ -434,6 +449,7 @@ class MLIPAdapter(BaseCalculator):
                 Defaults to ``{parent_of_path}/{model_name}_{input_dir_basename}``.
             **kwargs: Additional kwargs forwarded to the worker request.
         """
+        self._register_citations()
         self._assert_os_supported()
         self._resolve_device()
 
@@ -509,16 +525,9 @@ class MLIPAdapter(BaseCalculator):
                 continue
 
             for obj_key, obj_val in inferred.get("properties", {}).items():
-                inf_code, inf_desc = BaseCalculator._parse_objective_key(obj_key)
+                inf_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
                 ns_code = f"{self._model_code}_{inf_code}"
-                ns_desc = (
-                    f"{inf_desc} (via {adapter.name})"
-                    if inf_desc
-                    else f"(via {adapter.name})"
-                )
-                mlip_result.setdefault("properties", {})[f"{ns_code}: {ns_desc}"] = (
-                    obj_val
-                )
+                mlip_result.setdefault("properties", {})[ns_code] = obj_val
 
         return mlip_result
 
@@ -560,14 +569,9 @@ class MLIPAdapter(BaseCalculator):
                 if name not in by_name:
                     continue
                 for obj_key, obj_val in inf_result.get("properties", {}).items():
-                    inf_code, inf_desc = BaseCalculator._parse_objective_key(obj_key)
+                    inf_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
                     ns_code = f"{self._model_code}_{inf_code}"
-                    ns_desc = (
-                        f"{inf_desc} (via {adapter.name})"
-                        if inf_desc
-                        else f"(via {adapter.name})"
-                    )
-                    by_name[name]["properties"][f"{ns_code}: {ns_desc}"] = obj_val
+                    by_name[name]["properties"][ns_code] = obj_val
 
         return list(by_name.values())
 
@@ -622,7 +626,7 @@ def main():
     file_paths = req["file_paths"]
     model_name = req["model_name"]
     model_code = req.get("model_code", "")  # sanitized code prefix, e.g. 'ORB_V2'
-    # Helper: build a full objectives_map-compatible key
+    # Helper: build a dispatch-key-compatible result label
     def _mk(code_suffix, description):
         if model_code:
             return f"{model_code}_{code_suffix}: {model_name} {description}"
