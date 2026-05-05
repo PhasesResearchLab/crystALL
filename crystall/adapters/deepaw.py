@@ -13,7 +13,7 @@ import subprocess as sp
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Any
 
-from crystall.calculators import BaseCalculator
+from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
 _CHGCAR_MARKER_KEY = "__crystall_pymatgen_chgcar__"
 
@@ -35,9 +35,13 @@ class DeePAWAdapter(BaseCalculator):
 
     name = "DeePAW"
     calculator_type: Literal["mlip", "inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "DEEPAW_RHO: DeePAW Charge Density": "deepaw_charge_density",
-    }
+    objectives: ObjectiveRegistry = ObjectiveRegistry(
+        [
+            Objective(
+                "DEEPAW_RHO", "DeePAW Charge Density", "deepaw_charge_density", "DeePAW"
+            ),
+        ]
+    )
     supported_os: List[str] = ["linux"]
     supported_devices: List[str] = ["cuda"]
 
