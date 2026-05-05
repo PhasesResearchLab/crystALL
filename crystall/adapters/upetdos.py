@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Sequence, Literal
 import logging
 from pymatgen.electronic_structure.dos import CompleteDos
 
-from crystall.calculators import BaseCalculator
+from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,11 @@ class UPETDosAdapter(BaseCalculator):
 
     name = "UPET-DOS"
     calculator_type: Literal["inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "UPETDOS_DOS: UPET-MAD DOS": "complete_dos",
-        "UPETDOS_BG: UPET-MAD Bandgap [eV]": "bandgap",
-        "UPETDOS_EF: UPET-MAD Fermi Level [eV]": "fermi_level",
-    }
+    objectives: ObjectiveRegistry = ObjectiveRegistry([
+        Objective("UPETDOS_DOS", "UPET-MAD DOS",            "complete_dos", "UPET-DOS"),
+        Objective("UPETDOS_BG",  "UPET-MAD Bandgap [eV]",  "bandgap",     "UPET-DOS"),
+        Objective("UPETDOS_EF",  "UPET-MAD Fermi Level [eV]", "fermi_level", "UPET-DOS"),
+    ])
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu", "cuda"]  # worker auto-selects via torch.cuda.is_available()
 
