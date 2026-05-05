@@ -31,7 +31,7 @@ from typing import Any, Sequence, List, Dict, Union, Literal, Optional, Tuple
 from crystall.calculators import (
     load_adapters,
     BaseCalculator,
-    _build_objective_registry,
+    ObjectiveRegistry,
 )
 
 # ML / Data
@@ -193,8 +193,8 @@ class CrystALLSearch:
                     warnings.warn(f"Could not instantiate adapter '{_name}': {e}")
                     self.supported_calculators.pop(_name)
 
-        # Build the objective registry from all instantiated adapters (code -> ObjectiveEntry).
-        self._objective_registry = _build_objective_registry(
+        # Build the objective registry from all instantiated adapters.
+        self._objective_registry = ObjectiveRegistry.from_adapters(
             {
                 name: adp
                 for name, adp in self.supported_calculators.items()
@@ -209,13 +209,10 @@ class CrystALLSearch:
                 continue
 
             if hasattr(adapter, "is_env_ready") and adapter.is_env_ready():
-                # Store only the short code for each objective (not the full "CODE: description" key)
-                # so that available_calculators, predicted_objectives, and prototype keys
+                # Store objective codes for available_calculators so that
+                # define_objective, predicted_objectives, and prototype keys
                 # all share the same code-based namespace.
-                self.available_calculators[calc_name] = [
-                    BaseCalculator._parse_objective_key(k)[0]
-                    for k in adapter.objectives_map.keys()
-                ]
+                self.available_calculators[calc_name] = adapter.objectives.codes()
 
         # Print the status of calculators (found if present in available_calculators)
         for calc_name in self.supported_calculators.keys():
@@ -269,11 +266,11 @@ class CrystALLSearch:
                         (
                             (
                                 f"{Fore.GREEN}{Style.BRIGHT}"
-                                f"{code}: {self._objective_registry[code]['description']}"
+                                f"{code}: {self._objective_registry[code].description}"
                                 f"{Style.RESET_ALL}"
                             )
                             if code in self._objective_registry
-                            and self._objective_registry[code].get("description")
+                            and self._objective_registry[code].description
                             else f"{Fore.GREEN}{Style.BRIGHT}{code}{Style.RESET_ALL}"
                         )
                         for code in sorted(obj_list)
@@ -283,9 +280,9 @@ class CrystALLSearch:
                     # Fallback without colors if terminal cannot render them
                     labels = [
                         (
-                            f"{code}: {self._objective_registry[code]['description']}"
+                            f"{code}: {self._objective_registry[code].description}"
                             if code in self._objective_registry
-                            and self._objective_registry[code].get("description")
+                            and self._objective_registry[code].description
                             else code
                         )
                         for code in sorted(obj_list)
@@ -303,19 +300,20 @@ class CrystALLSearch:
             "Objective must be a non-empty string"
         )
 
-        code, _ = BaseCalculator._parse_objective_key(objective)
+        # Objectives are always bare codes; accept a legacy "CODE: description"
+        # key for backward compatibility by stripping anything after the colon.
+        code = objective.split(":")[0].strip()
+        if code in self._objective_registry:
+            return code
+        if code in self.predicted_objectives:
+            return code
         flat_available = sorted(
             {c for codes in self.available_calculators.values() for c in codes}
         )
-        known_codes = sorted(
-            set(self._objective_registry.keys())
-            .union(self.predicted_objectives)
-            .union(flat_available)
-        )
-        if code in known_codes:
+        if code in flat_available:
             return code
-
-        close = [c for c in known_codes if code[:4] and c.startswith(code[:4])]
+        known = list(self._objective_registry.codes()) + self.predicted_objectives
+        close = [c for c in known if code[:4] and c.startswith(code[:4])]
         hint = f" Did you mean one of: {close}?" if close else ""
         raise ValueError(
             f"Objective code '{code}' not found in available objectives.{hint}"
@@ -345,9 +343,8 @@ class CrystALLSearch:
                 "\nSome objectives do not have predictions calculated and will not be considered for classification."
             )
             for obj in flat_available:
-                description = self._objective_registry.get(obj, {}).get(
-                    "description", ""
-                )
+                entry = self._objective_registry.get(obj)
+                description = entry.description if entry else ""
                 label = f"{obj}: {description}" if description else obj
                 if obj not in self.predicted_objectives:
                     try:
@@ -952,6 +949,11 @@ class CrystALLSearch:
                 f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names."
             )
 
+        # Resolve the adapter's ObjectiveRegistry once for the whole merge.
+        adapter_reg = getattr(adapter, "objectives", None)
+        if not isinstance(adapter_reg, ObjectiveRegistry):
+            adapter_reg = None
+
         # Build index for fast merge
         name_to_index = {p.get("name"): i for i, p in enumerate(self.prototypes)}
         matched = 0
@@ -959,13 +961,17 @@ class CrystALLSearch:
             name = r.get("name") if isinstance(r, dict) else None
             props = r.get("properties", {}) if isinstance(r, dict) else {}
             if name in name_to_index:
-                # Bug 3 fix: recode full "CODE: description" keys to bare codes before
-                # merging into prototypes, so that define_objective / filter_prototypes
-                # can look up values with the same short code used in predicted_objectives.
-                recoded = {
-                    BaseCalculator._parse_objective_key(k)[0]: v
-                    for k, v in props.items()
-                }
+                # Recode dispatch keys → objective codes using the adapter registry so
+                # that define_objective / filter_prototypes can look up values with the
+                # same code-based namespace used in predicted_objectives.
+                recoded = {}
+                for dispatch_key, val in props.items():
+                    code = (
+                        adapter_reg.code_for_dispatch_key(dispatch_key)
+                        if adapter_reg is not None else None
+                    )
+                    if code is not None:
+                        recoded[code] = val
                 self.prototypes[name_to_index[name]].update(recoded)
                 matched += 1
 
@@ -981,9 +987,13 @@ class CrystALLSearch:
         produced_objectives = set()
         for r in results:
             props = r.get("properties", {}) if isinstance(r, dict) else {}
-            for key in props:
-                code, _ = BaseCalculator._parse_objective_key(key)
-                produced_objectives.add(code)
+            for dispatch_key in props:
+                code = (
+                    adapter_reg.code_for_dispatch_key(dispatch_key)
+                    if adapter_reg is not None else None
+                )
+                if code is not None:
+                    produced_objectives.add(code)
         # If user passed a subset, intersect
         if objectives is not None:
             produced_objectives = produced_objectives.intersection(set(objectives))
