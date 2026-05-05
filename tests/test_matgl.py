@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from pymatgen.core import Lattice, Structure
 
-from crystall.calculators import MatGLAdapter
+from crystall.calculators import MatGLAdapter, ObjectiveRegistry
 
 STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
@@ -23,24 +23,41 @@ class TestMatGLAdapterContract(unittest.TestCase):
     def setUp(self):
         self.adapter = MatGLAdapter()
 
-    def test_objectives_map_keys(self):
-        expected = {
-            "MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom]",
-            "MATGL_BG_MEGNET: Band Gap MEGNet [eV]",
-            "MATGL_EF_M3GNET: Formation Energy M3GNet [eV/atom]",
-            "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]",
-            "MATGL_DIPOLE_QET: Dipole Magnitude [e\u00b7\u00c5]",
-            "MATGL_STRUCT_CHARGES_QET: Structure with Charges",
-            "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]",
-            "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms",
-        }
-        self.assertEqual(set(self.adapter.objectives_map.keys()), expected)
+    def test_objectives_registry(self):
+        """adapter.objectives must be a fully-populated ObjectiveRegistry."""
+        objectives = self.adapter.objectives
+        self.assertIsInstance(objectives, ObjectiveRegistry)
 
-    def test_objectives_property_matches_map(self):
-        self.assertEqual(
-            sorted(self.adapter.objectives),
-            sorted(self.adapter.objectives_map.keys()),
-        )
+        expected_codes = [
+            "MATGL_EF_MEGNET",
+            "MATGL_BG_MEGNET",
+            "MATGL_EF_M3GNET",
+            "MATGL_EWALD_QET",
+            "MATGL_DIPOLE_QET",
+            "MATGL_STRUCT_CHARGES_QET",
+            "MATGL_E_STATIC_CHGNET",
+            "MATGL_STRUCT_MAGMOMS_CHGNET",
+        ]
+        self.assertEqual(objectives.codes(), expected_codes)
+
+        cases = [
+            ("MATGL_EF_MEGNET",          "Formation Energy MEGNet [eV/atom]",       "MEGNet-MP-2018.6.1-Eform"),
+            ("MATGL_BG_MEGNET",          "Band Gap MEGNet [eV]",                    "MEGNet-MP-2019.4.1-BandGap-mfi"),
+            ("MATGL_EF_M3GNET",         "Formation Energy M3GNet [eV/atom]",       "M3GNet-MP-2018.6.1-Eform"),
+            ("MATGL_EWALD_QET",         "Electrostatic (Ewald) Energy [eV/cell]",  "QET-MatQ-PES"),
+            ("MATGL_DIPOLE_QET",        "Dipole Magnitude [e\u00b7\u00c5]",                 "QET-MatQ-PES"),
+            ("MATGL_STRUCT_CHARGES_QET","Structure with Charges",                  "QET-MatQ-PES"),
+            ("MATGL_E_STATIC_CHGNET",   "Static Energy CHGNet [eV/atom]",          "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES"),
+            ("MATGL_STRUCT_MAGMOMS_CHGNET", "Structure with Magmoms",              "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES"),
+        ]
+        for code, description, dispatch_key in cases:
+            with self.subTest(code=code):
+                obj = objectives[code]
+                self.assertEqual(obj.description,  description)
+                self.assertEqual(obj.dispatch_key, dispatch_key)
+                self.assertEqual(obj.backend,      "MatGL")
+
+    
 
     def test_name(self):
         self.assertEqual(self.adapter.name, "MatGL")

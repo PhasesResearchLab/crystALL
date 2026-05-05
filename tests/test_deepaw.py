@@ -1,7 +1,7 @@
 """Tests for the DeePAW inference adapter.
 
 Covers:
-  - Adapter metadata (name, calculator_type, objectives_map)
+  - Adapter metadata (name, calculator_type, objectives)
   - Linux OS guard raises on macOS / Windows
   - GPU runtime guard raises when nvidia-smi is absent
   - Singularity binary resolution (mocked PATH)
@@ -21,6 +21,8 @@ from unittest.mock import MagicMock, patch
 from crystall.adapters.deepaw import DeePAWAdapter, _CHGCAR_MARKER_KEY
 
 
+from crystall.calculators import ObjectiveRegistry
+
 class TestDeePAWAdapterMetadata(unittest.TestCase):
     """Adapter contract: name, type, objectives."""
 
@@ -33,17 +35,18 @@ class TestDeePAWAdapterMetadata(unittest.TestCase):
     def test_calculator_type_is_inference(self):
         self.assertEqual(self.adapter.calculator_type, "inference")
 
-    def test_objectives_map_keys(self):
+    def test_objectives_registry(self):
+        objectives = self.adapter.objectives
+        self.assertIsInstance(objectives, ObjectiveRegistry)
+        self.assertEqual(objectives.codes(), ["DEEPAW_RHO"])
+        self.assertEqual(objectives["DEEPAW_RHO"].description, "DeePAW Charge Density")
         self.assertEqual(
-            set(self.adapter.objectives_map.keys()),
-            {"DEEPAW_RHO: DeePAW Charge Density"},
+            objectives["DEEPAW_RHO"].dispatch_key,
+            "deepaw_charge_density",
         )
+        self.assertEqual(objectives["DEEPAW_RHO"].backend, "DeePAW")
 
-    def test_objectives_property_matches_map(self):
-        self.assertEqual(
-            sorted(self.adapter.objectives),
-            sorted(self.adapter.objectives_map.keys()),
-        )
+    
 
     def test_default_grid_dimensions(self):
         self.assertEqual(self.adapter._nx, 40)

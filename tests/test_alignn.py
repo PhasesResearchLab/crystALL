@@ -1,7 +1,7 @@
 """Tests for ALIGNN static inference adapter.
 
 Covers the micro-environment adapter contract:
-  - objectives_map / objectives property
+  - objectives: ObjectiveRegistry
   - _run_code() returns a non-empty worker script
   - run_on_directory() dispatches the worker correctly (mocked subprocess)
 """
@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from crystall.calculators import AlignnAdapter
+from crystall.calculators import AlignnAdapter, ObjectiveRegistry
 
 
 class TestAlignnAdapterContract(unittest.TestCase):
@@ -22,28 +22,45 @@ class TestAlignnAdapterContract(unittest.TestCase):
 
     # -- Objectives ----------------------------------------------------------
 
-    def test_objectives_map_keys(self):
-        """objectives_map must contain the expected ALIGNN objectives."""
-        expected = {
-            "ALIGNN_EF_MP: ALIGNN-MP Formation Energy [eV/atom]",
-            "ALIGNN_BG_MP: ALIGNN-MP PBE Bandgap [eV]",
-            "ALIGNN_EF_JV: ALIGNN-JARVIS Formation Energy [eV/atom]",
-            "ALIGNN_BG_JV_MBJ: ALIGNN-JARVIS MBJ Bandgap [eV]",
-            "ALIGNN_SHEAR_JV: ALIGNN-JARVIS Shear Modulus [GPa]",
-            "ALIGNN_BULK_JV: ALIGNN-JARVIS Bulk Modulus [GPa]",
-            "ALIGNN_EXFOL_JV: ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
-            "ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV]",
-            "ALIGNN_EF_ALEX: ALIGNN-Alexandria Formation Energy [eV/atom]",
-            "ALIGNN_VOL_ALEX: ALIGNN-Alexandria Volume Per Atom [A^3]",
-        }
-        self.assertEqual(set(self.adapter.objectives_map.keys()), expected)
+    def test_objectives_registry(self):
+        """adapter.objectives must be a fully-populated ObjectiveRegistry."""
+        objectives = self.adapter.objectives
+        self.assertIsInstance(objectives, ObjectiveRegistry)
 
-    def test_objectives_property_matches_map(self):
-        """objectives property must equal objectives_map keys."""
-        self.assertEqual(
-            sorted(self.adapter.objectives),
-            sorted(self.adapter.objectives_map.keys()),
-        )
+        expected_codes = [
+            "ALIGNN_EF_MP",
+            "ALIGNN_BG_MP",
+            "ALIGNN_EF_JV",
+            "ALIGNN_BG_JV_MBJ",
+            "ALIGNN_SHEAR_JV",
+            "ALIGNN_BULK_JV",
+            "ALIGNN_EXFOL_JV",
+            "ALIGNN_BG_ALEX",
+            "ALIGNN_EF_ALEX",
+            "ALIGNN_VOL_ALEX",
+        ]
+        self.assertEqual(objectives.codes(), expected_codes)
+
+        cases = [
+            ("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",         "mp_e_form"),
+            ("ALIGNN_BG_MP",     "ALIGNN-MP PBE Bandgap [eV]",                   "mp_bandgap"),
+            ("ALIGNN_EF_JV",     "ALIGNN-JARVIS Formation Energy [eV/atom]",      "jv_e_form"),
+            ("ALIGNN_BG_JV_MBJ", "ALIGNN-JARVIS MBJ Bandgap [eV]",              "jv_mbj_bandgap"),
+            ("ALIGNN_SHEAR_JV",  "ALIGNN-JARVIS Shear Modulus [GPa]",            "jv_mepscnn_kv"),
+            ("ALIGNN_BULK_JV",   "ALIGNN-JARVIS Bulk Modulus [GPa]",             "jv_mepscnn_gv"),
+            ("ALIGNN_EXFOL_JV",  "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",  "jv_exfoliation_energy"),
+            ("ALIGNN_BG_ALEX",   "ALIGNN-Alexandria Bandgap [eV]",               "alex_bandgap"),
+            ("ALIGNN_EF_ALEX",   "ALIGNN-Alexandria Formation Energy [eV/atom]", "alex_e_form"),
+            ("ALIGNN_VOL_ALEX",  "ALIGNN-Alexandria Volume Per Atom [\u00c5\u00b3]",       "alex_volume_per_atom"),
+        ]
+        for code, description, dispatch_key in cases:
+            with self.subTest(code=code):
+                obj = objectives[code]
+                self.assertEqual(obj.description,  description)
+                self.assertEqual(obj.dispatch_key, dispatch_key)
+                self.assertEqual(obj.backend,      "ALIGNN")
+
+    
 
     def test_name(self):
         self.assertEqual(self.adapter.name, "ALIGNN")

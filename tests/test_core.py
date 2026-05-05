@@ -6,7 +6,7 @@ import tempfile
 import pytest
 import crystall
 import unittest
-from crystall.calculators import BaseCalculator
+from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 import warnings
 import numpy as np
 from functools import partial
@@ -836,7 +836,7 @@ class TestBaseCalculator(unittest.TestCase):
         """Small test adapter used for micro-environment lifecycle tests."""
 
         name = "dummy-env"
-        objectives_map = {}
+        objectives = ObjectiveRegistry([])
 
         def __init__(self, env_path: Path, fail_layer2: bool = False) -> None:
             self._test_env_path = Path(env_path)
@@ -857,7 +857,7 @@ class TestBaseCalculator(unittest.TestCase):
 
     class DummyInferenceCalculator(crystall.BaseCalculator):
         name = "dummy-inference"
-        objectives_map = {"Dummy Inference": "dummy"}
+        objectives = ObjectiveRegistry([Objective("DUMMY_INF", "Dummy Inference", "dummy", "DummyInf")])
 
         def _run_code(self) -> str:
             return "print('noop')"
@@ -879,7 +879,7 @@ class TestBaseCalculator(unittest.TestCase):
 
         class DummyBase(crystall.BaseCalculator):
             name = "dummy"
-            objectives_map = {}
+            objectives = ObjectiveRegistry([])
 
             def is_env_ready(self) -> bool:
                 return True
@@ -1018,7 +1018,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
     # ── Minimal concrete subclass for hook / device tests ───────────────
     class _GuardAdapter(BaseCalculator):
         name = "_Guard"
-        objectives_map = {"GUARD_X: Guard test output": "guard"}
+        objectives = ObjectiveRegistry([Objective("GUARD_X", "Guard test output", "guard", "Guard")])
         supported_os = ["linux", "macos", "windows"]
         supported_devices = ["cpu", "cuda"]
 
@@ -1195,87 +1195,57 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
 class TestObjectiveRegistry(unittest.TestCase):
     """Tests for objective code registry helpers (TODO_260429_Objective_Code_Registry, tests 1-4)."""
 
-    # ── Test 1: _parse_objective_key ──────────────────────────────────────
+    # ── Test 1: Objective dataclass fields ───────────────────────────────
 
-    def test_parse_objective_key(self) -> None:
-        """_parse_objective_key splits on the first ':' only and strips whitespace."""
-        parse = crystall.BaseCalculator._parse_objective_key
+    def test_objective_fields(self) -> None:
+        """Objective dataclass exposes code, description, dispatch_key, backend."""
+        obj = Objective(
+            code="ALIGNN_EF_MP",
+            description="Formation Energy [eV/atom]",
+            dispatch_key="mp_e_form",
+            backend="ALIGNN",
+        )
+        self.assertEqual(obj.code, "ALIGNN_EF_MP")
+        self.assertEqual(obj.description, "Formation Energy [eV/atom]")
+        self.assertEqual(obj.dispatch_key, "mp_e_form")
+        self.assertEqual(obj.backend, "ALIGNN")
 
-        cases = [
-            # (input_key,                                    expected_code,     expected_description)
-            ("ALIGNN_EF_MP: Formation energy", "ALIGNN_EF_MP", "Formation energy"),
-            ("EF_SIPFENN_NN30", "EF_SIPFENN_NN30", ""),  # pySIPFENN — no colon
-            (
-                "MATGL_EF_MP: Formation Energy (eV/atom)",
-                "MATGL_EF_MP",
-                "Formation Energy (eV/atom)",
-            ),
-            (
-                "  UPET_DOS : Density of states  ",
-                "UPET_DOS",
-                "Density of states",
-            ),  # extra whitespace
-            (
-                "CODE: desc: extra colon",
-                "CODE",
-                "desc: extra colon",
-            ),  # only first ':' is split
-        ]
-
-        for key, expected_code, expected_desc in cases:
-            with self.subTest(key=key):
-                code, desc = parse(key)
-                self.assertEqual(code, expected_code)
-                self.assertEqual(desc, expected_desc)
+        # Objective is frozen — mutation must raise
+        with self.assertRaises((AttributeError, TypeError)):
+            obj.code = "OTHER"  # type: ignore[misc]
 
     # ── Test 2: __init_subclass__ warning on non-conformant keys ─────────
 
-    def test_init_subclass_warning(self) -> None:
-        """A subclass with objectives_map keys violating CODE format must emit UserWarning."""
+    
 
-        with self.assertWarns(UserWarning) as ctx:
-            # Defining the class triggers __init_subclass__ validation immediately
-            class _BadAdapter(crystall.BaseCalculator):
-                name = "bad-adapter"
-                # lowercase 'bad_key' violates the all-uppercase requirement
-                objectives_map = {"bad_key: some description": "bad_key"}
-
-        warning_messages = [str(w.message) for w in ctx.warnings]
-        self.assertTrue(
-            any("bad_key: some description" in msg for msg in warning_messages),
-            "Warning should identify the offending objectives_map key",
-        )
-        self.assertTrue(
-            any("_BadAdapter" in msg for msg in warning_messages),
-            "Warning should identify the class that carries the bad key",
-        )
-
-    # ── Test 3: _build_objective_registry duplicate code handling ─────────
+    # ── Test 2: ObjectiveRegistry.from_adapters() duplicate code handling ──
 
     def test_build_objective_registry_deduplication(self) -> None:
         """Duplicate codes across adapters: first entry wins and a UserWarning is emitted."""
-        from crystall.calculators import _build_objective_registry
 
-        class _Dup1(crystall.BaseCalculator):
+        class _Dup1(BaseCalculator):
             name = "dup-1"
-            objectives_map = {"DUPCODE: Formation Energy from adapter 1": "ef_dup1"}
+            objectives = ObjectiveRegistry([
+                Objective("DUPCODE", "Formation Energy from adapter 1", "ef_dup1", "Dup1"),
+            ])
 
-        class _Dup2(crystall.BaseCalculator):
+        class _Dup2(BaseCalculator):
             name = "dup-2"
-            objectives_map = {"DUPCODE: Formation Energy from adapter 2": "ef_dup2"}
+            objectives = ObjectiveRegistry([
+                Objective("DUPCODE", "Formation Energy from adapter 2", "ef_dup2", "Dup2"),
+            ])
 
         adapters = {"dup-1": _Dup1(), "dup-2": _Dup2()}
 
         with self.assertWarns(UserWarning) as ctx:
-            registry = _build_objective_registry(adapters)
+            registry = ObjectiveRegistry.from_adapters(adapters)
 
         # First entry must be preserved
         self.assertIn("DUPCODE", registry)
-        self.assertEqual(registry["DUPCODE"]["adapter"], "dup-1")
-        self.assertEqual(
-            registry["DUPCODE"]["description"], "Formation Energy from adapter 1"
-        )
-        self.assertEqual(registry["DUPCODE"]["dispatch_key"], "ef_dup1")
+        obj = registry["DUPCODE"]
+        self.assertEqual(obj.description, "Formation Energy from adapter 1")
+        self.assertEqual(obj.dispatch_key, "ef_dup1")
+        self.assertEqual(obj.backend, "Dup1")
 
         # Warning must name both the duplicate code and the offending adapter
         warning_texts = [str(w.message) for w in ctx.warnings]
@@ -1306,8 +1276,9 @@ class TestObjectiveRegistry(unittest.TestCase):
 
     @staticmethod
     def _make_minimal_search(registry, predicted, available=None):
-        """Build a CrystALLSearch instance with only the state _resolve_to_code needs.
+        """Build a CrystALLSearch instance with only the state define_objective needs.
 
+        ``registry`` must be an ``ObjectiveRegistry`` instance.
         Uses ``object.__new__`` to bypass ``__init__`` so no MongoDB connection
         or pySIPFENN models are required.
         """
@@ -1320,7 +1291,7 @@ class TestObjectiveRegistry(unittest.TestCase):
     # ── Test 5: MLIPAdapter piped objective code format ─────────────────
 
     def test_mlip_piped_code_format(self) -> None:
-        """Piped MLIP objective keys use '_' as the namespace separator (no '::' in keys)."""
+        """Piped MLIP objective codes use '_' as the namespace separator (no '::')."""
         from crystall.calculators import MLIPAdapter
 
         fake_config = {
@@ -1332,66 +1303,63 @@ class TestObjectiveRegistry(unittest.TestCase):
             }
         }
 
-        class _DummyInfAdapter(crystall.BaseCalculator):
+        class _DummyInfAdapter(BaseCalculator):
             name = "dummy-inf"
-            objectives_map = {"DUMMY_EF: Dummy formation energy (eV/atom)": "dummy_ef"}
+            objectives = ObjectiveRegistry([
+                Objective("DUMMY_EF", "Dummy formation energy (eV/atom)", "dummy_ef", "Dummy"),
+            ])
 
         with patch(
             "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
         ):
             adapter = MLIPAdapter("FAKE-ML", inference=[_DummyInfAdapter()])
 
-        om = adapter.objectives_map
+        objectives = adapter.objectives
+        self.assertIsInstance(objectives, ObjectiveRegistry)
 
-        # No '::' may appear in any objectives_map key
-        for key in om:
+        # No '::' may appear in any objective code
+        for code in objectives.codes():
             self.assertNotIn(
-                "::", key, f"Key {key!r} must not use '::' as a code separator"
+                "::", code, f"Code {code!r} must not use '::' as a separator"
             )
 
-        # The piped key must follow FAKE_ML_DUMMY_EF: <desc> (via dummy-inf)
-        piped = [k for k in om if "DUMMY_EF" in k and "via" in k]
-        self.assertEqual(len(piped), 1, "Expected exactly one piped key for DUMMY_EF")
+        # The piped objective must follow the FAKE_ML_DUMMY_EF naming convention
+        piped = [obj for obj in objectives.values() if "DUMMY_EF" in obj.code and "via" in obj.description]
+        self.assertEqual(len(piped), 1, "Expected exactly one piped objective for DUMMY_EF")
         self.assertTrue(
-            piped[0].startswith("FAKE_ML_DUMMY_EF: "),
-            f"Piped key has unexpected prefix: {piped[0]!r}",
+            piped[0].code.startswith("FAKE_ML_DUMMY_EF"),
+            f"Piped code has unexpected prefix: {piped[0].code!r}",
         )
-        self.assertIn("(via dummy-inf)", piped[0])
+        self.assertIn("(via dummy-inf)", piped[0].description)
 
-    # ── Test 6: _resolve_to_code accepts a bare code ──────────────────
+    # ── Test 4: define_objective accepts a bare code ─────────────────────
 
     def test_resolve_to_code_accepts_code(self) -> None:
-        """_resolve_to_code passes a bare registered code through unchanged."""
-        cas = self._make_minimal_search(
-            registry={"ALIGNN_EF_MP": {"description": "Formation energy"}},
-            predicted=["ALIGNN_EF_MP"],
-        )
-        self.assertEqual(cas._resolve_to_code("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
+        """define_objective passes a bare registered code through unchanged."""
+        reg = ObjectiveRegistry([Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")])
+        cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
+        self.assertEqual(cas.define_objective("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
 
-    # ── Test 7: _resolve_to_code accepts a full 'CODE: description' key ──
+    # ── Test 5: define_objective accepts a legacy 'CODE: description' key ─
 
     def test_resolve_to_code_accepts_full_key(self) -> None:
-        """_resolve_to_code extracts the bare code from a full 'CODE: description' key."""
-        cas = self._make_minimal_search(
-            registry={"ALIGNN_EF_MP": {"description": "Formation energy"}},
-            predicted=["ALIGNN_EF_MP"],
-        )
+        """define_objective extracts the bare code from a legacy 'CODE: description' key."""
+        reg = ObjectiveRegistry([Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")])
+        cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         self.assertEqual(
-            cas._resolve_to_code("ALIGNN_EF_MP: Formation energy (eV/atom)"),
+            cas.define_objective("ALIGNN_EF_MP: Formation energy (eV/atom)"),
             "ALIGNN_EF_MP",
         )
 
-    # ── Test 8: _resolve_to_code raises ValueError with a hint ───────────
+    # ── Test 6: define_objective raises ValueError with a hint ────────────
 
     def test_resolve_to_code_raises_on_unknown(self) -> None:
-        """_resolve_to_code raises ValueError naming the bad code and a prefix-matched hint."""
-        cas = self._make_minimal_search(
-            registry={"ALIGNN_EF_MP": {"description": "Formation energy"}},
-            predicted=["ALIGNN_EF_MP"],
-        )
+        """define_objective raises ValueError naming the bad code and a prefix-matched hint."""
+        reg = ObjectiveRegistry([Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")])
+        cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         # 'ALIGNN_BG_MP' shares the 'ALIG' prefix with the only known code
         with self.assertRaises(ValueError) as ctx:
-            cas._resolve_to_code("ALIGNN_BG_MP")
+            cas.define_objective("ALIGNN_BG_MP")
         msg = str(ctx.exception)
         self.assertIn("ALIGNN_BG_MP", msg, "Error must name the unrecognised code")
         self.assertIn(

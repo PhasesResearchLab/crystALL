@@ -10,6 +10,8 @@ from pymatgen.core import Lattice, Structure
 from crystall.adapters.phonax import PhonaxAdapter
 
 
+from crystall.calculators import ObjectiveRegistry
+
 def _sample_structure() -> Structure:
     return Structure(
         Lattice.cubic(5.5),
@@ -30,18 +32,27 @@ class TestPhonaxAdapterContract(unittest.TestCase):
     def test_calculator_type(self):
         self.assertEqual(self.adapter.calculator_type, "inference")
 
-    def test_objectives_map_keys(self):
-        expected = {
-            "PHONAX_BS: Phonax Phonon Band Structure": "phonon_band_structure",
-            "PHONAX_DOS: Phonax Phonon DOS": "phonon_dos",
-        }
-        self.assertEqual(self.adapter.objectives_map, expected)
-
-    def test_objectives_property_matches_map(self):
+    def test_objectives_registry(self):
+        objectives = self.adapter.objectives
+        self.assertIsInstance(objectives, ObjectiveRegistry)
+        self.assertEqual(objectives.codes(), ["PHONAX_BS", "PHONAX_DOS"])
         self.assertEqual(
-            sorted(self.adapter.objectives),
-            sorted(self.adapter.objectives_map.keys()),
+            objectives["PHONAX_BS"].description,
+            "Phonax Phonon Band Structure",
         )
+        self.assertEqual(
+            objectives["PHONAX_BS"].dispatch_key,
+            "phonon_band_structure",
+        )
+        self.assertEqual(objectives["PHONAX_BS"].backend, "Phonax")
+        self.assertEqual(
+            objectives["PHONAX_DOS"].description,
+            "Phonax Phonon DOS",
+        )
+        self.assertEqual(objectives["PHONAX_DOS"].dispatch_key, "phonon_dos")
+        self.assertEqual(objectives["PHONAX_DOS"].backend, "Phonax")
+
+    
 
     def test_unknown_model_name_raises(self):
         with self.assertRaises(ValueError) as ctx:

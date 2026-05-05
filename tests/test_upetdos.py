@@ -8,13 +8,29 @@ from unittest.mock import patch, MagicMock
 from crystall.adapters.upetdos import UPETDosAdapter
 
 
+from crystall.calculators import ObjectiveRegistry
+
 def test_upetdos_adapter_setup():
     """Test the basic configuration of the adapter."""
     adapter = UPETDosAdapter()
     assert adapter.name == "UPET-DOS"
     assert adapter.calculator_type == "inference"
-    assert "UPETDOS_DOS: UPET-MAD DOS" in adapter.objectives_map
-    assert adapter.objectives_map["UPETDOS_DOS: UPET-MAD DOS"] == "complete_dos"
+
+    objectives = adapter.objectives
+    assert isinstance(objectives, ObjectiveRegistry)
+    assert objectives.codes() == ["UPETDOS_DOS", "UPETDOS_BG", "UPETDOS_EF"]
+
+    assert objectives["UPETDOS_DOS"].description == "UPET-MAD DOS"
+    assert objectives["UPETDOS_DOS"].dispatch_key == "complete_dos"
+    assert objectives["UPETDOS_DOS"].backend == "UPET-DOS"
+
+    assert objectives["UPETDOS_BG"].description == "UPET-MAD Bandgap [eV]"
+    assert objectives["UPETDOS_BG"].dispatch_key == "bandgap"
+    assert objectives["UPETDOS_BG"].backend == "UPET-DOS"
+
+    assert objectives["UPETDOS_EF"].description == "UPET-MAD Fermi Level [eV]"
+    assert objectives["UPETDOS_EF"].dispatch_key == "fermi_level"
+    assert objectives["UPETDOS_EF"].backend == "UPET-DOS"
 
     cmds = adapter.setup_commands()
     assert any("upet" in cmd for cmd in cmds)
