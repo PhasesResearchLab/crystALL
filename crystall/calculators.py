@@ -291,9 +291,7 @@ class ObjectiveRegistry:
         """Return all codes in declaration order."""
         return [o.code for o in self._objectives]
 
-    def resolve_dispatch_keys(
-        self, codes: Optional[List[str]] = None
-    ) -> List[str]:
+    def resolve_dispatch_keys(self, codes: Optional[List[str]] = None) -> List[str]:
         """Return dispatch keys for the requested codes, or all if ``None``.
 
         Preserves declaration order and deduplicates dispatch keys that appear
@@ -312,9 +310,7 @@ class ObjectiveRegistry:
                 result.append(obj.dispatch_key)
         return result
 
-    def resolve_backends(
-        self, codes: Optional[List[str]] = None
-    ) -> set:
+    def resolve_backends(self, codes: Optional[List[str]] = None) -> set:
         """Return the set of backend names for the requested codes, or all."""
         src = (
             self._objectives
@@ -494,6 +490,36 @@ class BaseCalculator:
     supported_devices: List[str] = ["cpu", "cuda"]
 
     # ── Micro-env path helpers ──────────────────────────────────────────────
+
+    def __init_subclass__(cls, **kwargs: object) -> None:  # noqa: D105
+        """Warn at class-creation time if a run_on_* override omits super().
+
+        This is a lightweight static check: it inspects the source text of the
+        overriding method and warns when the string ``super()`` is absent.
+        The check fires once per class definition (not per call), so there is
+        no runtime overhead on the hot path.
+        """
+        super().__init_subclass__(**kwargs)
+        _GUARDED = ("run_on_structure", "run_on_directory")
+        for method_name in _GUARDED:
+            override = cls.__dict__.get(method_name)  # only direct overrides
+            if override is None:
+                continue
+            try:
+                src = inspect.getsource(override)
+            except (OSError, TypeError):
+                continue
+            if "super()" not in src:
+                warnings.warn(
+                    f"{cls.__name__}.{method_name} overrides BaseCalculator."
+                    f"{method_name} without calling super(). "
+                    "Citations and shared base logic will not fire. "
+                    "Add `super().{method_name}(...)` or call "
+                    "`self._cite_at_runtime(objectives)` explicitly.".format(
+                        method_name=method_name
+                    ),
+                    stacklevel=2,
+                )
 
     @staticmethod
     def _env_root() -> "Path":
