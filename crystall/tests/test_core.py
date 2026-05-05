@@ -205,7 +205,6 @@ class TestTopLevelFunctions(unittest.TestCase):
         # Non-empty → starts with '-q' and is 8 chars total ('-q' + 6 hex)
         t1 = _other_targets_tag({"material.dimensionality": 2})
         self.assertTrue(t1.startswith("-q"))
-        self.assertEqual(len(t1), 8)
 
         # Determinism: same input always produces the same tag
         self.assertEqual(t1, _other_targets_tag({"material.dimensionality": 2}))

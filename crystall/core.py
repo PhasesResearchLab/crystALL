@@ -115,7 +115,7 @@ def _other_targets_tag(other_targets: Optional[Dict[str, Any]]) -> str:
     if not other_targets:
         return ''
     payload = json.dumps(other_targets, sort_keys=True, default=str)
-    digest = hashlib.md5(payload.encode()).hexdigest()[:6]
+    digest = hashlib.md5(payload.encode()).hexdigest()[:8]
     return f'-q{digest}'
 
 def _write_query_sidecar(out_dir: str, **fields: Any) -> None:
