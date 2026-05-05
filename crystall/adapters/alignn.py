@@ -10,7 +10,7 @@ import subprocess as sp
 from pathlib import Path
 from typing import Sequence, Optional, Dict, Any, List, Literal
 
-from crystall.calculators import BaseCalculator
+from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
 
 class AlignnAdapter(BaseCalculator):
@@ -25,18 +25,35 @@ class AlignnAdapter(BaseCalculator):
 
     name = "ALIGNN"
     calculator_type: Literal["mlip", "inference"] = "inference"
-    objectives_map: Dict[str, str] = {
-        "ALIGNN_EF_MP: ALIGNN-MP Formation Energy [eV/atom]": "mp_e_form",
-        "ALIGNN_BG_MP: ALIGNN-MP PBE Bandgap [eV]": "mp_bandgap",
-        "ALIGNN_EF_JV: ALIGNN-JARVIS Formation Energy [eV/atom]": "jv_e_form",
-        "ALIGNN_BG_JV_MBJ: ALIGNN-JARVIS MBJ Bandgap [eV]": "jv_mbj_bandgap",
-        "ALIGNN_SHEAR_JV: ALIGNN-JARVIS Shear Modulus [GPa]": "jv_mepscnn_kv",
-        "ALIGNN_BULK_JV: ALIGNN-JARVIS Bulk Modulus [GPa]": "jv_mepscnn_gv",
-        "ALIGNN_EXFOL_JV: ALIGNN-JARVIS Exfoliation Energy [meV/atom]": "jv_exfoliation_energy",
-        "ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV]": "alex_bandgap",
-        "ALIGNN_EF_ALEX: ALIGNN-Alexandria Formation Energy [eV/atom]": "alex_e_form",
-        "ALIGNN_VOL_ALEX: ALIGNN-Alexandria Volume Per Atom [A^3]": "alex_volume_per_atom",
-    }
+
+    def __init__(self, **kwargs):
+        """Initialize ALIGNN adapter and register citation."""
+        from crystall.duecredit_utils import configure_duecredit_defaults
+
+        configure_duecredit_defaults()
+        super().__init__(**kwargs)
+        from duecredit import Doi, due
+
+        due.cite(
+            Doi("10.1038/s41524-021-00650-1"),
+            description="ALIGNN: Atomistic line graph neural network for improved materials property predictions",
+            path="crystall.adapters.alignn",
+            tags=["reference-implementation"],
+            cite_module=False,
+        )
+
+    objectives: ObjectiveRegistry = ObjectiveRegistry([
+        Objective("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",          "mp_e_form",             "ALIGNN"),
+        Objective("ALIGNN_BG_MP",     "ALIGNN-MP PBE Bandgap [eV]",                    "mp_bandgap",            "ALIGNN"),
+        Objective("ALIGNN_EF_JV",     "ALIGNN-JARVIS Formation Energy [eV/atom]",       "jv_e_form",             "ALIGNN"),
+        Objective("ALIGNN_BG_JV_MBJ", "ALIGNN-JARVIS MBJ Bandgap [eV]",               "jv_mbj_bandgap",        "ALIGNN"),
+        Objective("ALIGNN_SHEAR_JV",  "ALIGNN-JARVIS Shear Modulus [GPa]",             "jv_mepscnn_kv",         "ALIGNN"),
+        Objective("ALIGNN_BULK_JV",   "ALIGNN-JARVIS Bulk Modulus [GPa]",              "jv_mepscnn_gv",         "ALIGNN"),
+        Objective("ALIGNN_EXFOL_JV",  "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",   "jv_exfoliation_energy", "ALIGNN"),
+        Objective("ALIGNN_BG_ALEX",   "ALIGNN-Alexandria Bandgap [eV]",                "alex_bandgap",          "ALIGNN"),
+        Objective("ALIGNN_EF_ALEX",   "ALIGNN-Alexandria Formation Energy [eV/atom]",  "alex_e_form",           "ALIGNN"),
+        Objective("ALIGNN_VOL_ALEX",  "ALIGNN-Alexandria Volume Per Atom [Å³]",        "alex_volume_per_atom",  "ALIGNN"),
+    ])
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu"]  # torch installed without CUDA index
 
