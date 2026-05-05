@@ -13,142 +13,164 @@ import os
 import sys
 import warnings
 
+from dataclasses import dataclass
+
 import numpy as np
 from typing import Any, Sequence, List, Dict, Tuple, Union, Literal, Optional
 
 
-from duecredit import BibTeX, Doi, due
+@dataclass(frozen=True)
+class Objective:
+    """A single computable objective exposed by a calculator adapter.
 
-# ── Citation registration ─────────────────────────────────────────────────────
-
-
-def _register_citations() -> None:
-    """Register duecredit citations for all external scientific tools exposed by crystALL calculators.
-
-    All citation metadata lives here rather than in individual adapter modules.
-    New contributors should add one due.cite() block here when introducing a new calculator.
+    Attributes:
+        code:         Stable uppercase identifier (e.g. ``'MATGL_EF_MEGNET'``).
+        description:  Human-readable label with units (e.g. ``'Formation Energy [eV/atom]'``).
+        dispatch_key: Internal adapter-defined token used to request and/or recover
+                      this objective from the backend. It is intentionally kept as
+                      a single opaque string for now, even though different adapters
+                      may attach different semantics to it. If future adapter
+                      reviews show that some objectives require multiple backend
+                      keys, this field may be promoted to a structured dispatch
+                      specification.
+        backend:      Citable model/library name (e.g. ``'MEGNet'``, ``'ALIGNN'``).
+                      Consumed by the DueCredit citation layer to resolve which
+                      references to emit at runtime.
     """
-    due.cite(
-        Doi("10.1038/s41524-021-00650-1"),
-        description="ALIGNN: Atomistic line graph neural network for improved materials property predictions",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1038/s42256-023-00716-3"),
-        description="CHGNet: A pretrained universal neural network potential for charge-informed atomistic modelling",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1021/acs.chemmater.9b01294"),
-        description="MEGNet: Graph networks as a universal machine learning framework for molecules and crystals",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1038/s43588-022-00349-3"),
-        description="M3GNet: A universal graph deep learning interatomic potential for the periodic table",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2511.07249"),
-        description="QET: A fast, accurate, and reactive equivariant foundation potential",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1039/D5DD00557D"),
-        description="UPET-DOS: universal pretrained electronic transformer for density of states",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2603.18650"),
-        description="DeePAW: machine-learning potential adapter exposed through crystALL",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        BibTeX("""@inproceedings{fang2023phonon,
-  title={Phonon predictions with E(3)-equivariant graph neural networks},
-  author={Shiang Fang and Mario Geiger and Joseph Checkelsky and Tess Smidt},
-  booktitle={AI for Accelerated Materials Design - NeurIPS 2023 Workshop},
-  year={2023},
-  url={https://openreview.net/forum?id=xxyHjer00Y}
-}"""),
-        description="Phonax: machine-learning model for phonon-related predictions exposed through crystALL",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2506.23971"),
-        description="UMA: A family of universal models for atoms",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1103/PhysRevX.14.021036"),
-        description="GRACE: Graph atomic cluster expansion for semilocal interactions beyond equivariant message passing",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2205.06643"),
-        description="MACE: Fast and accurate machine learning interatomic potentials with higher order equivariant message passing",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2405.04967"),
-        description="MatterSim: A deep learning atomistic model across elements, temperatures and pressures",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1038/s41467-022-29939-5"),
-        description="NequIP: E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2504.06231"),
-        description="ORB: A fast, scalable neural network potential",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.1021/acs.jctc.4c00190"),
-        description="SevenNet: A graph neural network interatomic potential package supporting efficient multi-GPU parallel molecular dynamics simulations",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
-    due.cite(
-        Doi("10.48550/arXiv.2601.16195"),
-        description="UPET: Universal interatomic potentials for advanced materials modeling",
-        path="crystall.calculators",
-        tags=["reference-implementation"],
-        cite_module=True,
-    )
+
+    code: str
+    description: str
+    dispatch_key: str
+    backend: str
 
 
-_register_citations()
+class ObjectiveRegistry:
+    """Typed, indexed collection of :class:`Objective` entries for a calculator adapter.
+
+    Adapter authors declare a class-level ``objectives`` attribute as an
+    ``ObjectiveRegistry`` instance. The registry is the single source of truth
+    for objective codes, descriptions, dispatch keys, and citation backends.
+
+    Supports dict-like access by code (``reg[code]``, ``code in reg``,
+    ``iter(reg)``) for backward-compatible consumption patterns.
+    """
+
+    def __init__(self, objectives: List[Objective]) -> None:
+        self._objectives: List[Objective] = []
+        self._by_code: Dict[str, Objective] = {}
+        self._by_dispatch: Dict[str, List[Objective]] = {}
+        for obj in objectives:
+            if obj.code in self._by_code:
+                warnings.warn(
+                    f"Duplicate objective code '{obj.code}' in ObjectiveRegistry "
+                    f"— second entry ignored.",
+                    stacklevel=2,
+                )
+                continue
+            self._objectives.append(obj)
+            self._by_code[obj.code] = obj
+            self._by_dispatch.setdefault(obj.dispatch_key, []).append(obj)
+
+    # ── dict-like interface ──────────────────────────────────────────────────
+
+    def __getitem__(self, code: str) -> Objective:
+        return self._by_code[code]
+
+    def __contains__(self, code: object) -> bool:
+        return code in self._by_code
+
+    def __iter__(self):
+        return iter(self._by_code)
+
+    def __len__(self) -> int:
+        return len(self._by_code)
+
+    def get(self, code: str, default: Any = None) -> Any:
+        return self._by_code.get(code, default)
+
+    def values(self) -> List[Objective]:
+        """Return all objectives in declaration order."""
+        return list(self._objectives)
+
+    def items(self) -> List[Tuple[str, Objective]]:
+        """Return ``(code, Objective)`` pairs in declaration order."""
+        return [(o.code, o) for o in self._objectives]
+
+    # ── Resolution helpers ───────────────────────────────────────────────────
+
+    def codes(self) -> List[str]:
+        """Return all codes in declaration order."""
+        return [o.code for o in self._objectives]
+
+    def resolve_dispatch_keys(
+        self, codes: Optional[List[str]] = None
+    ) -> List[str]:
+        """Return dispatch keys for the requested codes, or all if ``None``.
+
+        Preserves declaration order and deduplicates dispatch keys that appear
+        on multiple objectives.
+        """
+        src = (
+            self._objectives
+            if codes is None
+            else [self._by_code[c] for c in codes if c in self._by_code]
+        )
+        seen: set = set()
+        result: List[str] = []
+        for obj in src:
+            if obj.dispatch_key not in seen:
+                seen.add(obj.dispatch_key)
+                result.append(obj.dispatch_key)
+        return result
+
+    def resolve_backends(
+        self, codes: Optional[List[str]] = None
+    ) -> set:
+        """Return the set of backend names for the requested codes, or all."""
+        src = (
+            self._objectives
+            if codes is None
+            else [self._by_code[c] for c in codes if c in self._by_code]
+        )
+        return {o.backend for o in src}
+
+    def code_for_dispatch_key(self, dispatch_key: str) -> Optional[str]:
+        """Return the first objective code associated with a dispatch key.
+
+        Used by inference pipe workers to map raw dispatch-key results back
+        to proper objective codes.
+        """
+        entries = self._by_dispatch.get(dispatch_key)
+        return entries[0].code if entries else None
+
+    # ── Cross-adapter builder ────────────────────────────────────────────────
+
+    @staticmethod
+    def from_adapters(adapters: Dict[str, Any]) -> "ObjectiveRegistry":
+        """Build a flat registry from a mapping of adapter-name to adapter instance.
+
+        Replaces :func:`_build_objective_registry`. Duplicate codes emit a
+        warning; first adapter entry wins.
+        """
+        all_objectives: List[Objective] = []
+        seen_codes: Dict[str, str] = {}
+        for adapter_name, adapter in adapters.items():
+            reg = getattr(adapter, "objectives", None)
+            if not isinstance(reg, ObjectiveRegistry):
+                continue
+            for obj in reg.values():
+                if obj.code in seen_codes:
+                    warnings.warn(
+                        f"Objective code '{obj.code}' from adapter '{adapter_name}' "
+                        f"duplicates an entry from '{seen_codes[obj.code]}'. "
+                        f"The duplicate will be ignored.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    continue
+                seen_codes[obj.code] = adapter_name
+                all_objectives.append(obj)
+        return ObjectiveRegistry(all_objectives)
 
 
 # ── Adapter discovery ────────────────────────────────────────────────────────
@@ -247,42 +269,6 @@ def _sanitize_model_code(model_name: str) -> str:
     return re.sub(r"[^A-Z0-9]", "_", model_name.upper()).strip("_")
 
 
-def _build_objective_registry(adapters: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
-    """Build a flat objective code registry from discovered adapters.
-
-    Args:
-        adapters: Mapping of adapter name → adapter instance, as returned by
-            ``load_adapters()``.
-
-    Returns:
-        Mapping of ``code -> {description, full_key, adapter, dispatch_key}``.
-        On duplicate codes across adapters, the first entry wins and a warning
-        is emitted.
-    """
-    registry: Dict[str, Dict[str, str]] = {}
-    for adapter_name, adapter in adapters.items():
-        om = getattr(adapter, "objectives_map", None)
-        if not isinstance(om, dict):
-            continue
-        for full_key, dispatch_key in om.items():
-            code, description = BaseCalculator._parse_objective_key(full_key)
-            if code in registry:
-                warnings.warn(
-                    f"Objective code '{code}' from adapter '{adapter_name}' "
-                    f"duplicates an existing entry from adapter "
-                    f"'{registry[code]['adapter']}'. The duplicate will be ignored. "
-                    f"Rename the code in one of the adapters to resolve this."
-                )
-                continue
-            registry[code] = {
-                "description": description,
-                "full_key": full_key,
-                "adapter": adapter_name,
-                "dispatch_key": dispatch_key,
-            }
-    return registry
-
-
 # ── BaseCalculator ───────────────────────────────────────────────────────────
 
 
@@ -306,102 +292,17 @@ class BaseCalculator:
     """
 
     name: str
-    objectives_map: Dict[str, str] = {}
-    """Mapping of objective key → dispatch key.
+    objectives: ObjectiveRegistry = ObjectiveRegistry([])
+    """Registry of computable objectives for this adapter.
 
-    Keys MUST follow the format ``'CODE: description'`` where ``CODE`` is an
-    uppercase alphanumeric string with underscores (e.g. ``'ALIGNN_EF_MP'``),
-    and ``description`` is a human-readable label including units where relevant.
-
-    The code is the stable programmatic identifier used throughout CrystALLSearch.
-    The dispatch key (value) identifies which model/backend function produces
-    this result; multiple objectives may share the same dispatch key.
-
-    Deviation from the format triggers a warning at class definition time.
-    pySIPFENN model names are a known exception handled at the CrystALLSearch layer.
+    Subclasses declare this as a class-level :class:`ObjectiveRegistry` instance
+    that is the single source of truth for objective codes, descriptions,
+    dispatch keys, and citation backends.
     """
     calculator_type: Literal["mlip", "inference"] = "inference"
     save_artifacts: bool = True
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu", "cuda"]
-
-    @staticmethod
-    def _parse_objective_key(key: str) -> Tuple[str, str]:
-        """Parse an objectives_map key into (code, description).
-
-        Keys must follow 'CODE: description' format. If no ':' separator
-        is present (e.g. pySIPFENN model names used directly as codes),
-        the full string is returned as the code and description is empty.
-        """
-        code, _, description = key.partition(":")
-        return code.strip(), description.strip()
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        om = cls.__dict__.get("objectives_map")
-        if not isinstance(om, dict):
-            return  # property-based (e.g. MLIPAdapter) or not overridden — skip
-        for key in om:
-            code, _ = BaseCalculator._parse_objective_key(key)
-            if (
-                not code
-                or not code[0].isalpha()
-                or not code.replace("_", "").isalnum()
-                or code != code.upper()
-            ):
-                warnings.warn(
-                    f"{cls.__name__}.objectives_map key {key!r} does not follow "
-                    f"'CODE: description' format (CODE must be uppercase alphanumeric "
-                    f"with underscores, e.g. 'ALIGNN_EF_MP: ...'). "
-                    f"The full string will be treated as the code until this is fixed.",
-                    stacklevel=2,
-                )
-
-    def _resolve_objectives_to_dispatch(
-        self, objectives: Optional[Sequence[str]]
-    ) -> List[str]:
-        """Resolve objective codes or full keys to dispatch key values.
-
-        Accepts any mix of:
-        - Short codes (e.g. ``'PHONAX_BS'``)
-        - Full ``objectives_map`` keys (e.g. ``'PHONAX_BS: Phonax Phonon Band Structure'``)
-        - ``None`` — returns **all** dispatch keys (compute everything)
-
-        Unrecognised entries emit a :class:`UserWarning` and are skipped so
-        that partial objective subsets never silently compute nothing.
-
-        Args:
-            objectives: Sequence of codes / full keys, or ``None``.
-
-        Returns:
-            List of dispatch key strings (the *values* of :attr:`objectives_map`).
-        """
-        if objectives is None:
-            return list(self.objectives_map.values())
-        # Build code → dispatch_key lookup in one pass
-        code_to_dispatch: Dict[str, str] = {}
-        for full_key, dispatch_key in self.objectives_map.items():
-            code, _ = self._parse_objective_key(full_key)
-            code_to_dispatch[code] = dispatch_key
-        result: List[str] = []
-        for obj in objectives:
-            if obj in self.objectives_map:
-                result.append(self.objectives_map[obj])  # full-key path
-            elif obj in code_to_dispatch:
-                result.append(code_to_dispatch[obj])  # code path
-            else:
-                warnings.warn(
-                    f"Objective '{obj}' not found in {self.name!r} objectives_map "
-                    f"(neither as a code nor as a full key). Skipping.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-        return result
-
-    @property
-    def objectives(self) -> List[str]:
-        """Public objective names, derived from :attr:`objectives_map` keys."""
-        return list(self.objectives_map.keys())
 
     # ── Micro-env path helpers ──────────────────────────────────────────────
 
@@ -814,6 +715,13 @@ class BaseCalculator:
             else:
                 file_formats_map[fp] = fmt_info
 
+        # Resolve objective codes → dispatch keys and inject into the request
+        objectives = kwargs.pop("objectives", None)
+        dispatch_keys = self.objectives.resolve_dispatch_keys(
+            list(objectives) if objectives is not None else None
+        )
+        request_objectives = dispatch_keys if objectives is not None else None
+
         # Build request payload
         request = {
             "file_paths": file_paths,
@@ -828,6 +736,8 @@ class BaseCalculator:
         request.update(self._request_extras())
         # Merge any extra kwargs (e.g. results_dir)
         request.update(kwargs)
+        if request_objectives is not None:
+            request["objectives"] = request_objectives
 
         # Write request and execute
         with tempfile.NamedTemporaryFile(
