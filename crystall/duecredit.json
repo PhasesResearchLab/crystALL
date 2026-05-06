@@ -1,7 +1,7 @@
 {
     "ALIGNN": {
         "entry_type": "bibtex",
-        "entry": "@article{choudhary2021alignn,\n  title={Atomistic Line Graph Neural Network for improved materials property predictions\n        },\n  author={Choudhary, Kamal and DeCost, Brian\n        },\n  journal={npj Computational Materials\n        },\n  volume={\n            7\n        },\n  number={\n            1\n        },\n  pages={\n            185\n        },\n  year={\n            2021\n        },\n  publisher={Nature Publishing Group\n        },\n  doi={\n            10.1038/s41524-021-00650-1\n        }\n    }",
+        "entry": "@article{choudhary2021alignn, title={Atomistic Line Graph Neural Network for improved materials property predictions}, author={Choudhary, Kamal and DeCost, Brian}, journal={npj Computational Materials}, volume={7}, number={1}, pages={185}, year={2021}, publisher={Nature Publishing Group}, doi={10.1038/s41524-021-00650-1}}",
         "description": "ALIGNN: Atomistic line graph neural network for improved materials property predictions",
         "path": "crystall.backends.ALIGNN",
         "tags": [
@@ -11,7 +11,7 @@
     },
     "CHGNet": {
         "entry_type": "bibtex",
-        "entry": "@article{deng2023chgnet,\n  title={CHGNet as a pretrained universal neural network potential for charge-informed atomistic modelling\n    },\n  author={Deng, Bowen and Zhong, Peichen and Jun, KyuJung and Riebesell, Janosh and Han, Kevin and Bartel, Christopher J. and Ceder, Gerbrand\n    },\n  journal={Nature Machine Intelligence\n    },\n  volume={\n        5\n    },\n  pages={\n        1031--1041\n    },\n  year={\n        2023\n    },\n  publisher={Nature Publishing Group\n    },\n  doi={\n        10.1038/s42256-023-00716-3\n    }\n}",
+        "entry": "@article{deng2023chgnet, title={CHGNet as a pretrained universal neural network potential for charge-informed atomistic modelling}, author={Deng, Bowen and Zhong, Peichen and Jun, KyuJung and Riebesell, Janosh and Han, Kevin and Bartel, Christopher J. and Ceder, Gerbrand}, journal={Nature Machine Intelligence}, volume={5}, pages={1031--1041}, year={2023}, publisher={Nature Publishing Group}, doi={10.1038/s42256-023-00716-3}}",
         "description": "CHGNet: A pretrained universal neural network potential for charge-informed atomistic modelling",
         "path": "crystall.backends.CHGNet",
         "tags": [
@@ -21,7 +21,7 @@
     },
     "DeePAW": {
         "entry_type": "bibtex",
-        "entry": "@article{su2026deepaw,\n  title={DeePAW: A universal machine learning model for orbital-free ab initio calculations\n},\n  author={Su, Tianhao and Hu, Shunbo and Wu, Yue and Oyang, Runhai and Wang, Xitao and Li, Musen and Reimers, Jeffrey and Zhang, Tong-Yi\n},\n  journal={arXiv preprint arXiv: 2603.18650\n},\n  year={\n    2026\n},\n  doi={\n    10.48550/arXiv.2603.18650\n}\n}",
+        "entry": "@article{su2026deepaw, title={DeePAW: A universal machine learning model for orbital-free ab initio calculations}, author={Su, Tianhao and Hu, Shunbo and Wu, Yue and Oyang, Runhai and Wang, Xitao and Li, Musen and Reimers, Jeffrey and Zhang, Tong-Yi}, journal={arXiv preprint arXiv: 2603.18650}, year={2026}, doi={10.48550/arXiv.2603.18650}}",
         "description": "DeePAW: machine-learning potential adapter exposed through crystALL",
         "path": "crystall.backends.DeePAW",
         "tags": [
@@ -31,7 +31,7 @@
     },
     "FAIRChem": {
         "entry_type": "bibtex",
-        "entry": "@article{wood2025uma,\n  title={UMA: A Family of Universal Models for Atoms\n},\n  author={Wood, Brandon M. and Dzamba, Misko and Fu, Xiang and Gao, Meng and Shuaibi, Muhammed and Barroso-Luque, Luis and Abdelmaqsoud, Kareem and Gharakhanyan, Vahe and Kitchin, John R. and Levine, Daniel S. and Michel, Kyle and Sriram, Anuroop and Cohen, Taco and Das, Abhishek and Rizvi, Ammar and Sahoo, Sushree Jagriti and Ulissi, Zachary W. and Zitnick, C. Lawrence\n},\n  journal={arXiv preprint arXiv: 2506.23971\n},\n  year={\n2025\n},\n  doi={\n10.48550/arXiv.2506.23971\n}\n}",
+        "entry": "@article{wood2025uma, title={UMA: A Family of Universal Models for Atoms}, author={Wood, Brandon M. and Dzamba, Misko and Fu, Xiang and Gao, Meng and Shuaibi, Muhammed and Barroso-Luque, Luis and Abdelmaqsoud, Kareem and Gharakhanyan, Vahe and Kitchin, John R. and Levine, Daniel S. and Michel, Kyle and Sriram, Anuroop and Cohen, Taco and Das, Abhishek and Rizvi, Ammar and Sahoo, Sushree Jagriti and Ulissi, Zachary W. and Zitnick, C. Lawrence}, journal={arXiv preprint arXiv: 2506.23971}, year={2025}, doi={10.48550/arXiv.2506.23971}}",
         "description": "UMA: A family of universal models for atoms",
         "path": "crystall.backends.FAIRChem",
         "tags": [
@@ -41,7 +41,7 @@
     },
     "GRACE": {
         "entry_type": "bibtex",
-        "entry": "@article{bochkarev2024grace,\n  title={Graph Atomic Cluster Expansion for Semilocal Interactions beyond Equivariant Message Passing\n},\n  author={Bochkarev, Anton and Kov{'a\n}cs, D{'a\n}vid P{'e\n}ter and Ortner, Christoph and Cs{'a\n}nyi, G{'a\n}bor and Drautz, Ralf\n},\n  journal={Physical Review X\n},\n  volume={\n14\n},\n  number={\n2\n},\n  pages={\n021036\n},\n  year={\n2024\n},\n  publisher={American Physical Society\n},\n  doi={\n10.1103/PhysRevX.14.021036\n}\n}",
+        "entry": "@article{bochkarev2024grace, title={Graph Atomic Cluster Expansion for Semilocal Interactions beyond Equivariant Message Passing}, author={Bochkarev, Anton and Kov{'a}cs, D{'a}vid P{'e}ter and Ortner, Christoph and Cs{'a}nyi, G{'a}bor and Drautz, Ralf}, journal={Physical Review X}, volume={14}, number={2}, pages={021036}, year={2024}, publisher={American Physical Society}, doi={10.1103/PhysRevX.14.021036}}",
         "description": "GRACE: Graph atomic cluster expansion for semilocal interactions beyond equivariant message passing",
         "path": "crystall.backends.GRACE",
         "tags": [
@@ -51,7 +51,7 @@
     },
     "MACE": {
         "entry_type": "bibtex",
-        "entry": "@inproceedings{Batatia2022mace,\n  title={\n{MACE\n}: Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate Force Fields\n},\n  author={Ilyes Batatia and David Peter Kovacs and Gregor N. C. Simm and Christoph Ortner and Gabor Csanyi\n},\n  booktitle={Advances in Neural Information Processing Systems\n},\n  editor={Alice H. Oh and Alekh Agarwal and Danielle Belgrave and Kyunghyun Cho\n},\n  year={\n2022\n},\n  url={https: //openreview.net/forum?id=YPpSngE-ZU}\n}",
+        "entry": "@inproceedings{Batatia2022mace, title={{MACE}: Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate Force Fields}, author={Ilyes Batatia and David Peter Kovacs and Gregor N. C. Simm and Christoph Ortner and Gabor Csanyi}, booktitle={Advances in Neural Information Processing Systems}, editor={Alice H. Oh and Alekh Agarwal and Danielle Belgrave and Kyunghyun Cho}, year={2022}, url={https: //openreview.net/forum?id=YPpSngE-ZU}}",
         "description": "MACE: Fast and accurate machine learning interatomic potentials with higher order equivariant message passing",
         "path": "crystall.backends.MACE",
         "tags": [
@@ -61,7 +61,7 @@
     },
     "MatterSim": {
         "entry_type": "bibtex",
-        "entry": "@article{yang2024mattersim,\n  title={MatterSim: A Deep Learning Atomistic Model Across Elements, Temperatures and Pressures\n},\n  author={Yang, Han and Hu, Chenxi and Zhou, Yichi and Liu, Xixian and Shi, Yu and Li, Jielan and Li, Guanzhi and Chen, Zekun and Chen, Shuizhou and Zeni, Claudio and Horton, Matthew and Pinsler, Robert and Fowler, Andrew and Z{\"u}gner, Daniel and Xie, Tian and Smith, Jake and Sun, Lixin and Wang, Qian and Kong, Lingyu and Liu, Chang and Hao, Hongxia and Lu, Ziheng},\n  journal={arXiv preprint arXiv: 2405.04967\n},\n  year={\n2024\n},\n  doi={\n10.48550/arXiv.2405.04967\n}\n}",
+        "entry": "@article{yang2024mattersim, title={MatterSim: A Deep Learning Atomistic Model Across Elements, Temperatures and Pressures}, author={Yang, Han and Hu, Chenxi and Zhou, Yichi and Liu, Xixian and Shi, Yu and Li, Jielan and Li, Guanzhi and Chen, Zekun and Chen, Shuizhou and Zeni, Claudio and Horton, Matthew and Pinsler, Robert and Fowler, Andrew and Z{\"u}gner, Daniel and Xie, Tian and Smith, Jake and Sun, Lixin and Wang, Qian and Kong, Lingyu and Liu, Chang and Hao, Hongxia and Lu, Ziheng}, journal={arXiv preprint arXiv: 2405.04967}, year={2024}, doi={10.48550/arXiv.2405.04967}}",
         "description": "MatterSim: A deep learning atomistic model across elements, temperatures and pressures",
         "path": "crystall.backends.MatterSim",
         "tags": [
@@ -71,7 +71,7 @@
     },
     "MEGNet": {
         "entry_type": "bibtex",
-        "entry": "@article{chen2019megnet,\n  title={Graph Networks as a Universal Machine Learning Framework for Molecules and Crystals\n},\n  author={Chen, Chi and Ye, Weike and Zuo, Yunxing and Zheng, Chen and Ong, Shyue Ping\n},\n  journal={Chemistry of Materials\n},\n  volume={\n31\n},\n  number={\n9\n},\n  pages={\n3564--3572\n},\n  year={\n2019\n},\n  publisher={American Chemical Society\n},\n  doi={\n10.1021/acs.chemmater.9b01294\n}\n}",
+        "entry": "@article{chen2019megnet, title={Graph Networks as a Universal Machine Learning Framework for Molecules and Crystals}, author={Chen, Chi and Ye, Weike and Zuo, Yunxing and Zheng, Chen and Ong, Shyue Ping}, journal={Chemistry of Materials}, volume={31}, number={9}, pages={3564--3572}, year={2019}, publisher={American Chemical Society}, doi={10.1021/acs.chemmater.9b01294}}",
         "description": "MEGNet: Graph networks as a universal machine learning framework for molecules and crystals",
         "path": "crystall.backends.MEGNet",
         "tags": [
@@ -81,7 +81,7 @@
     },
     "M3GNet": {
         "entry_type": "bibtex",
-        "entry": "@article{chen2022m3gnet,\n  title={A universal graph deep learning interatomic potential for the periodic table\n},\n  author={Chen, Chi and Ong, Shyue Ping\n},\n  journal={Nature Computational Science\n},\n  volume={\n2\n},\n  pages={\n718--728\n},\n  year={\n2022\n},\n  publisher={Nature Publishing Group\n},\n  doi={\n10.1038/s43588-022-00349-3\n}\n}",
+        "entry": "@article{chen2022m3gnet, title={A universal graph deep learning interatomic potential for the periodic table}, author={Chen, Chi and Ong, Shyue Ping}, journal={Nature Computational Science}, volume={2}, pages={718--728}, year={2022}, publisher={Nature Publishing Group}, doi={10.1038/s43588-022-00349-3}}",
         "description": "M3GNet: A universal graph deep learning interatomic potential for the periodic table",
         "path": "crystall.backends.M3GNet",
         "tags": [
@@ -91,7 +91,7 @@
     },
     "NequIP": {
         "entry_type": "bibtex",
-        "entry": "@article{batzner2022nequip,\n  title={E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials\n},\n  author={Batzner, Simon and Musaelian, Albert and Sun, Lixin and Geiger, Mario and Mailoa, Jonathan P. and Kornbluth, Mordechai and Molinari, Nicola and Smidt, Tess E. and Kozinsky, Boris\n},\n  journal={Nature Communications\n},\n  volume={\n13\n},\n  number={\n1\n},\n  pages={\n2453\n},\n  year={\n2022\n},\n  publisher={Nature Publishing Group\n},\n  doi={\n10.1038/s41467-022-29939-5\n}\n}",
+        "entry": "@article{batzner2022nequip, title={E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials}, author={Batzner, Simon and Musaelian, Albert and Sun, Lixin and Geiger, Mario and Mailoa, Jonathan P. and Kornbluth, Mordechai and Molinari, Nicola and Smidt, Tess E. and Kozinsky, Boris}, journal={Nature Communications}, volume={13}, number={1}, pages={2453}, year={2022}, publisher={Nature Publishing Group}, doi={10.1038/s41467-022-29939-5}}",
         "description": "NequIP: E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials",
         "path": "crystall.backends.NequIP",
         "tags": [
@@ -101,7 +101,7 @@
     },
     "ORB": {
         "entry_type": "bibtex",
-        "entry": "@article{rhodes2025orbv3,\n  title={Orb-v3: atomistic simulation at scale\n},\n  author={Rhodes, Benjamin and Vandenhaute, Sander and {\u000b{S\n}\n}imkus, Vaidotas and Gin, James and Godwin, Jonathan and Duignan, Tim and Neumann, Mark\n},\n  journal={arXiv preprint arXiv: 2504.06231\n},\n  year={\n2025\n},\n  doi={\n10.48550/arXiv.2504.06231\n}\n}",
+        "entry": "@article{rhodes2025orbv3, title={Orb-v3: atomistic simulation at scale}, author={Rhodes, Benjamin and Vandenhaute, Sander and {\u000b{S}}imkus, Vaidotas and Gin, James and Godwin, Jonathan and Duignan, Tim and Neumann, Mark}, journal={arXiv preprint arXiv: 2504.06231}, year={2025}, doi={10.48550/arXiv.2504.06231}}",
         "description": "ORB: A fast, scalable neural network potential",
         "path": "crystall.backends.ORB",
         "tags": [
@@ -111,7 +111,7 @@
     },
     "ORB-D3": {
         "entry_type": "bibtex",
-        "entry": "@article{rhodes2025orbv3,\n  title={Orb-v3: atomistic simulation at scale\n},\n  author={Rhodes, Benjamin and Vandenhaute, Sander and {\u000b{S\n}\n}imkus, Vaidotas and Gin, James and Godwin, Jonathan and Duignan, Tim and Neumann, Mark\n},\n  journal={arXiv preprint arXiv: 2504.06231\n},\n  year={\n2025\n},\n  doi={\n10.48550/arXiv.2504.06231\n}\n}",
+        "entry": "@article{rhodes2025orbv3, title={Orb-v3: atomistic simulation at scale}, author={Rhodes, Benjamin and Vandenhaute, Sander and {\u000b{S}}imkus, Vaidotas and Gin, James and Godwin, Jonathan and Duignan, Tim and Neumann, Mark}, journal={arXiv preprint arXiv: 2504.06231}, year={2025}, doi={10.48550/arXiv.2504.06231}}",
         "description": "ORB: A fast, scalable neural network potential (D3 version)",
         "path": "crystall.backends.ORB_D3",
         "tags": [
@@ -121,7 +121,7 @@
     },
     "Phonax": {
         "entry_type": "bibtex",
-        "entry": "@inproceedings{fang2023phonon,\n  title={Phonon predictions with E(3)-equivariant graph neural networks\n},\n  author={Shiang Fang and Mario Geiger and Joseph Checkelsky and Tess Smidt\n},\n  booktitle={AI for Accelerated Materials Design - NeurIPS 2023 Workshop\n},\n  year={\n2023\n},\n  url={https: //openreview.net/forum?id=xxyHjer00Y}\n}",
+        "entry": "@inproceedings{fang2023phonon, title={Phonon predictions with E(3)-equivariant graph neural networks}, author={Shiang Fang and Mario Geiger and Joseph Checkelsky and Tess Smidt}, booktitle={AI for Accelerated Materials Design - NeurIPS 2023 Workshop}, year={2023}, url={https: //openreview.net/forum?id=xxyHjer00Y}}",
         "description": "Phonax: machine-learning model for phonon-related predictions exposed through crystALL",
         "path": "crystall.backends.Phonax",
         "tags": [
@@ -131,7 +131,7 @@
     },
     "QET": {
         "entry_type": "bibtex",
-        "entry": "@article{ko2025qet,\n  title={A Fast, Accurate, and Reactive Equivariant Foundation Potential\n},\n  author={Ko, Tsz Wai and Liu, Runze and Mishra, Adesh Rohan and Yu, Zihan and Qi, Ji and Ong, Shyue Ping\n},\n  journal={arXiv preprint arXiv: 2511.07249\n},\n  year={\n2025\n},\n  doi={\n10.48550/arXiv.2511.07249\n}\n}",
+        "entry": "@article{ko2025qet, title={A Fast, Accurate, and Reactive Equivariant Foundation Potential}, author={Ko, Tsz Wai and Liu, Runze and Mishra, Adesh Rohan and Yu, Zihan and Qi, Ji and Ong, Shyue Ping}, journal={arXiv preprint arXiv: 2511.07249}, year={2025}, doi={10.48550/arXiv.2511.07249}}",
         "description": "QET: A fast, accurate, and reactive equivariant foundation potential",
         "path": "crystall.backends.QET",
         "tags": [
@@ -141,7 +141,7 @@
     },
     "SevenNet": {
         "entry_type": "bibtex",
-        "entry": "@article{park2024sevennet,\n  title={Scalable Parallel Algorithm for Graph Neural Network Interatomic Potentials in Molecular Dynamics Simulations\n},\n  author={Park, Yutack and Kim, Jaesun and Hwang, Seungwoo and Han, Seungwu\n},\n  journal={Journal of Chemical Theory and Computation\n},\n  volume={\n20\n},\n  number={\n11\n},\n  pages={\n4857--4870\n},\n  year={\n2024\n},\n  publisher={American Chemical Society\n},\n  doi={\n10.1021/acs.jctc.4c00190\n}\n}",
+        "entry": "@article{park2024sevennet, title={Scalable Parallel Algorithm for Graph Neural Network Interatomic Potentials in Molecular Dynamics Simulations}, author={Park, Yutack and Kim, Jaesun and Hwang, Seungwoo and Han, Seungwu}, journal={Journal of Chemical Theory and Computation}, volume={20}, number={11}, pages={4857--4870}, year={2024}, publisher={American Chemical Society}, doi={10.1021/acs.jctc.4c00190}}",
         "description": "SevenNet: A graph neural network interatomic potential package supporting efficient multi-GPU parallel molecular dynamics simulations",
         "path": "crystall.backends.SevenNet",
         "tags": [
@@ -151,7 +151,7 @@
     },
     "UPET": {
         "entry_type": "bibtex",
-        "entry": "@article{bigi2026upet,\n  title={Pushing the limits of unconstrained machine-learned interatomic potentials\n},\n  author={Bigi, Filippo and Pegolo, Paolo and Mazitov, Arslan and Schmidt, Jonathan and Ceriotti, Michele\n},\n  journal={arXiv preprint arXiv: 2601.16195\n},\n  year={\n2026\n},\n  doi={\n10.48550/arXiv.2601.16195\n}\n}",
+        "entry": "@article{bigi2026upet, title={Pushing the limits of unconstrained machine-learned interatomic potentials}, author={Bigi, Filippo and Pegolo, Paolo and Mazitov, Arslan and Schmidt, Jonathan and Ceriotti, Michele}, journal={arXiv preprint arXiv: 2601.16195}, year={2026}, doi={10.48550/arXiv.2601.16195}}",
         "description": "UPET: Universal interatomic potentials for advanced materials modeling",
         "path": "crystall.backends.UPET",
         "tags": [
@@ -161,7 +161,7 @@
     },
     "UPET-DOS": {
         "entry_type": "bibtex",
-        "entry": "@article{how2026upetdos,\n  title={A universal machine learning model for the electronic density of states\n},\n  author={How, Wei Bin and Febrer, Pol and Chong, Sanggyu and Mazitov, Arslan and Bigi, Filippo and Kellner, Matthias and Pozdnyakov, Sergey and Ceriotti, Michele\n},\n  journal={Digital Discovery\n},\n  volume={\n5\n},\n  number={\n4\n},\n  year={\n2026\n},\n  publisher={Royal Society of Chemistry\n},\n  doi={\n10.1039/D5DD00557D\n}\n}",
+        "entry": "@article{how2026upetdos, title={A universal machine learning model for the electronic density of states}, author={How, Wei Bin and Febrer, Pol and Chong, Sanggyu and Mazitov, Arslan and Bigi, Filippo and Kellner, Matthias and Pozdnyakov, Sergey and Ceriotti, Michele}, journal={Digital Discovery}, volume={5}, number={4}, year={2026}, publisher={Royal Society of Chemistry}, doi={10.1039/D5DD00557D}}",
         "description": "UPET-DOS: universal pretrained electronic transformer for density of states",
         "path": "crystall.backends.UPET-DOS",
         "tags": [

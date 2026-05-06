@@ -2135,25 +2135,10 @@ class CrystALLSearch:
 
 
 # Package Metadata **************************************************************************
-try:
-    with (
-        importlib.resources.files("crystall").joinpath("pyproject.toml").open("rb") as f
-    ):
-        _toml = tomllib.load(f)
-    _project = _toml.get("project", {})
-    _urls = _project.get("urls", {})
-    __name__ = _project.get("name")
-    __version__ = _project.get("version")
-    __release__ = _project.get("release")
-    __authors__ = ", ".join([a.get("name", "") for a in _project.get("authors", [])])
-    __doc__ = _urls.get("Documentation")
-    __rep__ = _urls.get("Repository")
-    __doi__ = _urls.get("DOI")
-except (FileNotFoundError, ModuleNotFoundError):
-    __name__ = "crystall"
-    __version__ = "X.X.X"
-    __release__ = "YYYY-MM"
-    __authors__ = "Adam Krajewski, Ricardo Amaral"
-    __doc__ = "crystALL.mpdd.org"
-    __rep__ = "github.com/PhasesResearchLab/crystALL"
-    __doi__ = "doi.org/10.xxxx/xxxxx"
+__name__ = "crystall"
+__version__ = "X.X.X"
+__release__ = "YYYY-MM"
+__authors__ = "Amaral, Ricardo and Krajewski, Adam"
+__doc__ = "crystALL.mpdd.org"
+__rep__ = "github.com/PhasesResearchLab/crystALL"
+__bibtex__ = "@software{amaral-krajewski2026crystall, title={crystALL: A data-driven materials discovery platform}, author={{Amaral, R.} and {Krajewski, A. M.}}, journal={npj Computational Materials}, volume={X}, number={1}, pages={1-10}, year={2026}, publisher={Nature Publishing Group}, doi={doi.org/10.xxxx.xxxxx-xxxx}}"

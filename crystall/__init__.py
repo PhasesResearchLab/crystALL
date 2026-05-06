@@ -1,6 +1,6 @@
 from crystall.core import *
 from collections import defaultdict
-from duecredit import Doi, due
+from duecredit import BibTeX, due
 from duecredit.io import TextOutput, get_text_rendering
 from duecredit.collector import CollectorSummary
 import os
@@ -21,31 +21,48 @@ _DUECREDIT_PREFIX = (
 class DuecreditTextOutput(TextOutput):
     """TextOutput variant that emits only the References section."""
 
-    def dump(self, tags=None) -> None:
+    def dump(self, tags=None, path_prefix: str | None = None) -> None:
         packages, modules, objects = self._get_collated_citations(tags)
         pmo = {**packages, **modules, **objects}
+        if path_prefix is not None:
+            pmo = {
+                path: citations
+                for path, citations in pmo.items()
+                if path == path_prefix or path.startswith(path_prefix + ".")
+            }
         if not pmo:
             return
 
-        paths = sorted(pmo)
-        entry_keys = [c.entry.key for p in paths for c in pmo[p]]
-        citation_nr = defaultdict(int)
-        refnr = 1
-        for ek in entry_keys:
-            if ek not in citation_nr:
-                citation_nr[ek] = refnr
-                refnr += 1
-
         self.fd.write(_DUECREDIT_PREFIX)
         printed_keys = []
-        for path in paths:
+        for path in sorted(pmo):
             for cit in pmo[path]:
                 ek = cit.entry.key
-                if ek not in printed_keys:
-                    self.fd.write(f"\n[{citation_nr[ek]}] ")
-                    self.fd.write(get_text_rendering(cit.entry, style=self.style))
-                    printed_keys.append(ek)
+                if ek in printed_keys:
+                    continue
+                if path == "crystall":
+                    label = "crystALL"
+                else:
+                    label = (
+                        path.split(".")[-1] if path.startswith("crystall.") else path
+                    )
+                rendered = get_text_rendering(cit.entry, style=self.style).strip()
+                doi = self._extract_doi(cit)
+                doi_text = f". DOI: {doi}" if doi else ""
+                self.fd.write(f"\n[{label}] {rendered}{doi_text}")
+                printed_keys.append(ek)
         self.fd.write("\n")
+
+    def _extract_doi(self, cit) -> str | None:
+        entry = cit.entry
+        if hasattr(entry, "_rawentry") and isinstance(entry._rawentry, str):
+            raw = entry._rawentry
+            import re
+
+            doi_match = re.search(r"doi=\{([^}]+)\}", raw, re.IGNORECASE | re.DOTALL)
+            if doi_match:
+                return doi_match.group(1).strip()
+        return None
 
 
 # ── DueCredit output configuration ───────────────────────────────────────────
@@ -61,9 +78,7 @@ def _configure_duecredit_output() -> None:
     def _patched_dump(self, **kwargs):
         collector = self._DueSwitch__collectors[True]
         output = DuecreditTextOutput(fd=sys.stdout, collector=collector)
-        summary = CollectorSummary.__new__(CollectorSummary)
-        summary._outputs = [output]
-        summary.dump()
+        output.dump(path_prefix="crystall")
 
     due.__class__.dump = _patched_dump
     due.activate(True)
@@ -77,10 +92,13 @@ def _cite_crystall_package() -> None:
     by ``crystall.core``.  Called once at package import so the citation
     is registered regardless of which sub-module the user accesses.
     """
-    from crystall.core import __doi__
+    from crystall.core import __bibtex__
+
+    # duecredit does not support @software yet, so we patch it to @misc
+    patched_bibtex = __bibtex__.replace("@software", "@misc", 1)
 
     due.cite(
-        Doi(__doi__),
+        BibTeX(patched_bibtex),
         description=(
             "crystALL: Data-driven candidate structure ensemble generation "
             "beyond the convex hull"
