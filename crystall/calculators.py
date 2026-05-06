@@ -980,26 +980,61 @@ class BaseCalculator:
 
             env_vars = os.environ.copy()
             env_vars["UV_CACHE_DIR"] = str(self._env_root() / "uv_cache")
+            env_vars["DUECREDIT_ENABLE"] = "no"
 
-            result = sp.run(
+            import threading
+            import sys
+
+            proc = sp.Popen(
                 [str(self._micro_python()), code_path, req_path, res_path],
                 env=env_vars,
                 text=True,
-                stderr=sp.PIPE,  # capture stderr; stdout streams live
+                stdout=sp.PIPE,
+                stderr=sp.PIPE,
+                bufsize=1,
             )
 
-            if verbose and result.stderr:
-                import sys
+            stderr_chunks: list[str] = []
 
-                print(result.stderr, end="", file=sys.stderr)
+            def _drain_stdout(stream) -> None:
+                try:
+                    assert stream is not None
+                    for line in stream:
+                        print(line, end="")
+                finally:
+                    if stream is not None:
+                        stream.close()
 
-            if result.returncode != 0:
-                detail = (
-                    result.stderr.strip() if result.stderr else "(no stderr captured)"
-                )
+            def _drain_stderr(stream) -> None:
+                try:
+                    assert stream is not None
+                    for line in stream:
+                        stderr_chunks.append(line)
+                        if verbose:
+                            print(line, end="", file=sys.stderr)
+                finally:
+                    if stream is not None:
+                        stream.close()
+
+            stdout_thread = threading.Thread(
+                target=_drain_stdout, args=(proc.stdout,), daemon=True
+            )
+            stderr_thread = threading.Thread(
+                target=_drain_stderr, args=(proc.stderr,), daemon=True
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+
+            returncode = proc.wait()
+            stdout_thread.join()
+            stderr_thread.join()
+            stderr_text = "".join(stderr_chunks)
+
+            if returncode != 0:
+                detail = stderr_text.strip() if stderr_text else "(no stderr captured)"
                 raise RuntimeError(
                     f"Worker script for '{self.name}' failed with exit code "
-                    f"{result.returncode}.\n{detail}"
+                    f"{returncode}.\n{detail}"
                 )
 
             with open(res_path) as f:
