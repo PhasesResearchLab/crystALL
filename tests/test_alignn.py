@@ -1,4 +1,4 @@
-"""Tests for ALIGNN static inference adapter.
+"""Tests for ALIGNN static adapter.
 
 Covers the micro-environment adapter contract:
   - objectives: ObjectiveRegistry
@@ -65,8 +65,8 @@ class TestAlignnAdapterContract(unittest.TestCase):
     def test_name(self):
         self.assertEqual(self.adapter.name, "ALIGNN")
 
-    def test_calculator_type_is_inference(self):
-        self.assertEqual(self.adapter.calculator_type, "inference")
+    def test_calculator_type_is_static(self):
+        self.assertEqual(self.adapter.calculator_type, "static")
 
     # -- Worker script -------------------------------------------------------
 

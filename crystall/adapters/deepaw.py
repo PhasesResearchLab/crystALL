@@ -1,6 +1,6 @@
 """DeePAW calculator adapter with micro-environment and Singularity container support.
 
-Runs DeePAW inference inside an isolated micro-environment managed by
+Runs DeePAW static calculation inside an isolated micro-environment managed by
 :class:`~crystall.calculators.BaseCalculator`.  The container image is
 built from a Zenodo-sourced archive and then invoked at runtime via
 Singularity/Apptainer with GPU passthrough.
@@ -19,10 +19,10 @@ _CHGCAR_MARKER_KEY = "__crystall_pymatgen_chgcar__"
 
 
 class DeePAWAdapter(BaseCalculator):
-    """Adapter for running DeePAW inference inside a micro-environment.
+    """Adapter for running DeePAW static calculation inside a micro-environment.
 
     The adapter downloads a split archive from Zenodo, assembles it,
-    builds a Singularity container image, and then executes inference
+    builds a Singularity container image, and then executes the calculation
     inside that container with GPU passthrough.
 
     Example (standalone usage)::
@@ -30,11 +30,11 @@ class DeePAWAdapter(BaseCalculator):
         adapter = DeePAWAdapter()
         adapter.setup_env()                          # one-time install
         result = adapter.run_on_structure("POSCAR")  # single file
-        results = adapter.run_on_directory("./dir") # batch inference
+        results = adapter.run_on_directory("./dir") # batch calculation
     """
 
     name = "DeePAW"
-    calculator_type: Literal["mlip", "inference"] = "inference"
+    calculator_type: Literal["mlip", "static"] = "static"
     objectives: ObjectiveRegistry = ObjectiveRegistry(
         [
             Objective(
@@ -115,7 +115,6 @@ class DeePAWAdapter(BaseCalculator):
     def layer2_dependencies(self) -> List[str]:
         return []
 
-
     def _setup_preflight(self) -> None:
         """DeePAW-specific preflight: verify GPU runtime and singularity."""
         super()._setup_preflight()
@@ -156,7 +155,6 @@ class DeePAWAdapter(BaseCalculator):
             "rm -rf {downloads_dir} {env_path}/deepaw-cpp-v1.tar",
         ]
 
-
     def _request_extras(self) -> dict:
         """Pass grid dimensions to the worker script."""
         return {
@@ -176,7 +174,7 @@ class DeePAWAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Run DeePAW inference on a single structure file."""
+        """Run DeePAW static calculation on a single structure file."""
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
 
@@ -202,7 +200,7 @@ class DeePAWAdapter(BaseCalculator):
         fmax: float = 0.05,
         **kwargs,
     ) -> list[Dict[str, Any]]:
-        """Run DeePAW inference on all structures in a directory."""
+        """Run DeePAW static calculation on all structures in a directory."""
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
 
@@ -434,7 +432,7 @@ with open(output_file, "w") as f:
             )
 
             if result.returncode != 0:
-                print(f"[DeePAW] Inference failed for {filename}: {result.stderr}")
+                print(f"[DeePAW] Calculation failed for {filename}: {result.stderr}")
                 results.append({"name": filename, "properties": {}})
                 continue
 

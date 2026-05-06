@@ -4,12 +4,12 @@ Each model key in ``mlips.json`` maps to one :class:`MLIPAdapter` instance
 that manages its own micro-environment and runs ASE-based ISIF relaxation
 inside it via subprocess.
 
-MLIP adapters optionally support **piping** inference adapters on the
+MLIP adapters optionally support **piping** static adapters on the
 relaxed structures::
 
     matgl = MatGLAdapter()
     alignn = AlignnAdapter()
-    adapter = MLIPAdapter("MACE-mh", inference=[matgl, alignn])
+    adapter = MLIPAdapter("MACE-mh", static=[matgl, alignn])
 
 Piped objectives appear in results with code-prefixed keys::
 
@@ -91,7 +91,7 @@ class MLIPAdapter(BaseCalculator):
         results = adapter.run_on_directory("./dir")  # batch
     """
 
-    calculator_type: Literal["mlip", "inference"] = "mlip"
+    calculator_type: Literal["mlip", "static"] = "mlip"
 
     @property
     def supported_os(self) -> List[str]:
@@ -113,7 +113,7 @@ class MLIPAdapter(BaseCalculator):
         self,
         model_name: str,
         device: Optional[str] = None,
-        inference: Optional[List[BaseCalculator]] = None,
+        static: Optional[List[BaseCalculator]] = None,
     ):
         config = _load_mlips_config()
         if model_name not in config:
@@ -125,7 +125,7 @@ class MLIPAdapter(BaseCalculator):
         self._config = config[model_name]
         self._device_override = device.lower() if isinstance(device, str) else None
         self._resolved_device: Optional[str] = None
-        self._inference_adapters: List[BaseCalculator] = []
+        self._static_adapters: List[BaseCalculator] = []
 
         self.name = model_name
         self._model_code = _sanitize_model_code(model_name)
@@ -137,41 +137,41 @@ class MLIPAdapter(BaseCalculator):
             Objective(f"{self._model_code}_RELAX_STRUCT", f"{model_name} Relaxed Structure",                 "ase_relax", model_name),
         ])
 
-        if inference:
-            self._resolve_inference(inference)
+        if static:
+            self._resolve_static(static)
 
-    # ── Inference piping ───────────────────────────────────────────────────
+    # ── Static piping ──────────────────────────────────────────────────────
 
-    def _resolve_inference(self, adapters: List[BaseCalculator]) -> None:
-        """Validate and store inference adapter instances."""
+    def _resolve_static(self, adapters: List[BaseCalculator]) -> None:
+        """Validate and store static adapter instances."""
         for adapter in adapters:
             if not isinstance(adapter, BaseCalculator):
                 raise TypeError(
-                    f"inference= entries must be BaseCalculator instances, "
+                    f"static= entries must be BaseCalculator instances, "
                     f"got {type(adapter).__name__}."
                 )
-            role = getattr(adapter, "calculator_type", "inference")
-            if role != "inference":
+            role = getattr(adapter, "calculator_type", "static")
+            if role != "static":
                 raise TypeError(
-                    "MLIPAdapter(inference=...) accepts only adapters with "
-                    "calculator_type='inference'. "
+                    "MLIPAdapter(static=...) accepts only adapters with "
+                    "calculator_type='static'. "
                     f"Got '{type(adapter).__name__}' with calculator_type='{role}'. "
-                    "MLIP models cannot be chained as inference targets."
+                    "MLIP models cannot be chained as static targets."
                 )
-            self._inference_adapters.append(adapter)
+            self._static_adapters.append(adapter)
 
     @property
     def objectives(self) -> ObjectiveRegistry:
-        """Combined MLIP + piped inference objectives.
+        """Combined MLIP + piped static objectives.
 
-        Own RELAX objectives come first; then each piped inference adapter's
-        objectives are namespaced as ``{mlip_code}_{inf_code}`` with a
+        Own RELAX objectives come first; then each piped static adapter's
+        objectives are namespaced as ``{mlip_code}_{static_code}`` with a
         ``(via <AdapterName>)`` suffix on the description, e.g.::
 
             ORB_V2_ALIGNN_EF_MP  — ALIGNN-MP Formation Energy [eV/atom] (via ALIGNN)
         """
         all_objectives: List[Objective] = list(self._own_objectives.values())
-        for adapter in self._inference_adapters:
+        for adapter in self._static_adapters:
             for obj in adapter.objectives.values():
                 ns_code = f"{self._model_code}_{obj.code}"
                 ns_desc = f"{obj.description} (via {adapter.name})"
@@ -333,14 +333,14 @@ class MLIPAdapter(BaseCalculator):
         )
         parsed = self._deserialize_result(result)
 
-        if self._inference_adapters:
+        if self._static_adapters:
             saved_path = os.path.join(output_dir, f"{self._model_name}_{stem}{out_ext}")
             if os.path.isfile(saved_path):
-                parsed = self._run_inference_pipe_single(saved_path, parsed)
+                parsed = self._run_static_pipe_single(saved_path, parsed)
             else:
                 warnings.warn(
                     f"[{self._model_name}] Relaxed structure not found at "
-                    f"'{saved_path}'; skipping inference piping for this structure."
+                    f"'{saved_path}'; skipping static piping for this structure."
                 )
 
         return parsed
@@ -413,7 +413,7 @@ class MLIPAdapter(BaseCalculator):
         """Run MLIP relaxation on all structures in a directory.
 
         Relaxed structures are always saved to a sibling directory named
-        ``{model_name}_{input_dir_basename}/``.  If inference adapters are
+        ``{model_name}_{input_dir_basename}/``.  If static adapters are
         configured they run on the saved relaxed structures and results are merged.
 
         Args:
@@ -452,8 +452,8 @@ class MLIPAdapter(BaseCalculator):
             **kwargs,
         )
 
-        if self._inference_adapters and os.path.isdir(results_dir):
-            mlip_results = self._run_inference_pipe(
+        if self._static_adapters and os.path.isdir(results_dir):
+            mlip_results = self._run_static_pipe(
                 results_dir,
                 mlip_results,
                 save_artifacts=self.save_artifacts,
@@ -461,16 +461,16 @@ class MLIPAdapter(BaseCalculator):
 
         return self._deserialize_results(mlip_results)
 
-    def _run_inference_pipe_single(
+    def _run_static_pipe_single(
         self,
         relaxed_path: str,
         mlip_result: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Execute piped inference adapters on a single relaxed structure file.
+        """Execute piped static adapters on a single relaxed structure file.
 
         Results are merged into *mlip_result* with code-prefixed keys::
 
-            "{mlip_code}_{inf_code}"
+            "{mlip_code}_{static_code}"
 
         ``save_artifacts`` is forwarded to each adapter so their workers honour
         the same flag as this MLIPAdapter instance.
@@ -482,73 +482,73 @@ class MLIPAdapter(BaseCalculator):
         Returns:
             *mlip_result* updated with all piped adapter results.
         """
-        for adapter in self._inference_adapters:
+        for adapter in self._static_adapters:
             if not adapter.is_env_ready():
                 warnings.warn(
-                    f"Inference adapter '{adapter.name}' micro-env is not ready "
+                    f"Static adapter '{adapter.name}' micro-env is not ready "
                     f"— skipping. Call {type(adapter).__name__}().setup_env() first."
                 )
                 continue
 
             print(
-                f"\n--- Running piped inference: {adapter.name} on {relaxed_path} ---"
+                f"\n--- Running piped static: {adapter.name} on {relaxed_path} ---"
             )
             try:
-                inferred = adapter.run_on_structure(
+                static_res = adapter.run_on_structure(
                     relaxed_path,
                     save_artifacts=self.save_artifacts,
                 )
             except Exception as exc:
-                warnings.warn(f"Inference adapter '{adapter.name}' failed: {exc}")
+                warnings.warn(f"Static adapter '{adapter.name}' failed: {exc}")
                 continue
 
-            for obj_key, obj_val in inferred.get("properties", {}).items():
-                inf_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
-                ns_code = f"{self._model_code}_{inf_code}"
+            for obj_key, obj_val in static_res.get("properties", {}).items():
+                static_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
+                ns_code = f"{self._model_code}_{static_code}"
                 mlip_result.setdefault("properties", {})[ns_code] = obj_val
 
         return mlip_result
 
-    def _run_inference_pipe(
+    def _run_static_pipe(
         self,
         relaxed_dir: str,
         mlip_results: List[Dict[str, Any]],
         save_artifacts: bool = True,
     ) -> List[Dict[str, Any]]:
-        """Execute piped inference adapters on relaxed structures.
+        """Execute piped static adapters on relaxed structures.
 
         Each adapter runs ``run_on_directory`` on *relaxed_dir*, and its
         results are merged into *mlip_results* with code-prefixed keys::
 
-            "{mlip_code}_{inf_code}"
+            "{mlip_code}_{static_code}"
         """
         by_name: Dict[str, Dict[str, Any]] = {r["name"]: r for r in mlip_results}
 
-        for adapter in self._inference_adapters:
+        for adapter in self._static_adapters:
             if not adapter.is_env_ready():
                 warnings.warn(
-                    f"Inference adapter '{adapter.name}' micro-env is not ready "
+                    f"Static adapter '{adapter.name}' micro-env is not ready "
                     f"— skipping. Call {type(adapter).__name__}().setup_env() first."
                 )
                 continue
 
-            print(f"\n--- Running piped inference: {adapter.name} on {relaxed_dir} ---")
+            print(f"\n--- Running piped static: {adapter.name} on {relaxed_dir} ---")
             try:
-                inferred = adapter.run_on_directory(
+                static_results = adapter.run_on_directory(
                     relaxed_dir,
                     save_artifacts=save_artifacts,
                 )
             except Exception as exc:
-                warnings.warn(f"Inference adapter '{adapter.name}' failed: {exc}")
+                warnings.warn(f"Static adapter '{adapter.name}' failed: {exc}")
                 continue
 
-            for inf_result in inferred:
-                name = inf_result["name"]
+            for static_res in static_results:
+                name = static_res["name"]
                 if name not in by_name:
                     continue
-                for obj_key, obj_val in inf_result.get("properties", {}).items():
-                    inf_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
-                    ns_code = f"{self._model_code}_{inf_code}"
+                for obj_key, obj_val in static_res.get("properties", {}).items():
+                    static_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
+                    ns_code = f"{self._model_code}_{static_code}"
                     by_name[name]["properties"][ns_code] = obj_val
 
         return list(by_name.values())

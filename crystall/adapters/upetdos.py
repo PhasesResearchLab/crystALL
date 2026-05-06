@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 class UPETDosAdapter(BaseCalculator):
-    """Adapter for the UPET-MAD DOS model for inference."""
+    """Adapter for the UPET-MAD DOS model for static calculation."""
 
     name = "UPET-DOS"
-    calculator_type: Literal["inference"] = "inference"
+    calculator_type: Literal["static"] = "static"
     objectives: ObjectiveRegistry = ObjectiveRegistry([
         Objective("UPETDOS_DOS", "UPET-MAD DOS",            "complete_dos", "UPET-DOS"),
         Objective("UPETDOS_BG",  "UPET-MAD Bandgap [eV]",  "bandgap",     "UPET-DOS"),

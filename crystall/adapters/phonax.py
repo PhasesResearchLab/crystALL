@@ -1,6 +1,6 @@
-"""Phonax phonon inference adapter.
+"""Phonax phonon static adapter.
 
-This module provides :class:`PhonaxAdapter`, an inference-only adapter that
+This module provides :class:`PhonaxAdapter`, a static-only adapter that
 computes phonon band structures and densities of states using the Phonax
 package.  It follows the :class:`crystall.calculators.BaseCalculator` contract
 and dispatches a self-contained worker script into a micro-environment.
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class PhonaxAdapter(BaseCalculator):
-    """Adapter for Phonax phonon inference.
+    """Adapter for Phonax phonon static calculation.
 
     Computes phonon band structures and densities of states by dispatching a
     self-contained worker script into a micro-environment that installs Phonax
@@ -52,7 +52,7 @@ class PhonaxAdapter(BaseCalculator):
     """
 
     name = "phonax"
-    calculator_type: Literal["inference"] = "inference"
+    calculator_type: Literal["static"] = "static"
     objectives: ObjectiveRegistry = ObjectiveRegistry([
         Objective("PHONAX_BS",  "Phonax Phonon Band Structure", "phonon_band_structure", "Phonax"),
         Objective("PHONAX_DOS", "Phonax Phonon DOS",            "phonon_dos",            "Phonax"),
@@ -214,7 +214,7 @@ class PhonaxAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Run Phonax phonon inference on a single structure file.
+        """Run Phonax phonon static calculation on a single structure file.
 
         The structure is written to a temporary POSCAR before dispatch.
         """

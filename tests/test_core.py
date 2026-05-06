@@ -832,7 +832,7 @@ class TestCrystALLSearch(unittest.TestCase):
 class TestBaseCalculator(unittest.TestCase):
     """Tests for BaseCalculator helpers and abstract behavior."""
 
-    class DummyEnvCalculator(crystall.BaseCalculator):
+    class DummyEnvCalculator(BaseCalculator):
         """Small test adapter used for micro-environment lifecycle tests."""
 
         name = "dummy-env"
@@ -855,9 +855,9 @@ class TestBaseCalculator(unittest.TestCase):
         def _run_code(self) -> str:
             return "print('noop')"
 
-    class DummyInferenceCalculator(crystall.BaseCalculator):
-        name = "dummy-inference"
-        objectives = ObjectiveRegistry([Objective("DUMMY_INF", "Dummy Inference", "dummy", "DummyInf")])
+    class DummyStaticCalculator(BaseCalculator):
+        name = "dummy-static"
+        objectives = ObjectiveRegistry([Objective("DUMMY_STA", "Dummy Static", "dummy", "DummySta")])
 
         def _run_code(self) -> str:
             return "print('noop')"
@@ -877,7 +877,7 @@ class TestBaseCalculator(unittest.TestCase):
         """BaseCalculator.run_on_directory should raise NotImplementedError by default."""
         import tempfile
 
-        class DummyBase(crystall.BaseCalculator):
+        class DummyBase(BaseCalculator):
             name = "dummy"
             objectives = ObjectiveRegistry([])
 
@@ -897,8 +897,8 @@ class TestBaseCalculator(unittest.TestCase):
 
         # rms and sum on simple 1D data
         data_1d = [3.0, 4.0]
-        rms = crystall.BaseCalculator.vector_to_scalar("rms", data_1d)
-        total = crystall.BaseCalculator.vector_to_scalar("sum", data_1d)
+        rms = BaseCalculator.vector_to_scalar("rms", data_1d)
+        total = BaseCalculator.vector_to_scalar("sum", data_1d)
         self.assertAlmostEqual(
             rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5
         )  # or 3.5355339...
@@ -906,19 +906,19 @@ class TestBaseCalculator(unittest.TestCase):
 
         # norm and mean on small arrays
         data_2d = [[3.0, 4.0], [0.0, 5.0]]
-        norm = crystall.BaseCalculator.vector_to_scalar("norm", data_2d)
-        mean = crystall.BaseCalculator.vector_to_scalar("mean", [1.0, 2.0, 3.0])
+        norm = BaseCalculator.vector_to_scalar("norm", data_2d)
+        mean = BaseCalculator.vector_to_scalar("mean", [1.0, 2.0, 3.0])
         # For two 2D vectors [3,4] (norm=5) and [0,5] (norm=5), mean norm is 5
         self.assertAlmostEqual(norm, 5.0)
         self.assertAlmostEqual(mean, 2.0)
 
         # vonMises for a 6-component stress tensor [s_xx, s_yy, s_zz, s_xy, s_xz, s_yz]
         tensor_6 = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
-        vm = crystall.BaseCalculator.vector_to_scalar("vonMises", tensor_6)
+        vm = BaseCalculator.vector_to_scalar("vonMises", tensor_6)
         self.assertIsInstance(vm, float)
 
         # Invalid type should return None gracefully
-        self.assertIsNone(crystall.BaseCalculator.vector_to_scalar("unknown", tensor_6))
+        self.assertIsNone(BaseCalculator.vector_to_scalar("unknown", tensor_6))
 
     def test_setup_env_writes_sentinel_and_is_env_ready_requires_it(self) -> None:
         """setup_env should write readiness sentinel and is_env_ready should require it."""
@@ -970,9 +970,9 @@ class TestBaseCalculator(unittest.TestCase):
             self.assertFalse(env_path.exists())
             self.assertFalse((env_path / ".crystall_env_ready").exists())
 
-    def test_base_calculator_type_default_is_inference(self) -> None:
-        """BaseCalculator should default calculator_type to inference."""
-        self.assertEqual(crystall.BaseCalculator.calculator_type, "inference")
+    def test_base_calculator_type_default_is_static(self) -> None:
+        """BaseCalculator should default calculator_type to static."""
+        self.assertEqual(BaseCalculator.calculator_type, "static")
 
     def test_mlip_calculator_type_is_mlip(self) -> None:
         """MLIPAdapter should declare calculator_type as mlip."""
@@ -980,25 +980,25 @@ class TestBaseCalculator(unittest.TestCase):
 
         self.assertEqual(MLIPAdapter.calculator_type, "mlip")
 
-    def test_mlip_inference_accepts_inference_adapters(self) -> None:
-        """MLIPAdapter inference pipe should accept inference-role adapters."""
+    def test_mlip_static_accepts_static_adapters(self) -> None:
+        """MLIPAdapter static pipe should accept static-role adapters."""
         from crystall.calculators import MLIPAdapter
         from crystall.calculators import AlignnAdapter
         from crystall.calculators import MatGLAdapter
 
         self.assertIsInstance(
-            MLIPAdapter("MACE-mh", inference=[AlignnAdapter()]), MLIPAdapter
+            MLIPAdapter("MACE", static=[AlignnAdapter()]), MLIPAdapter
         )
         self.assertIsInstance(
-            MLIPAdapter("MACE-mh", inference=[MatGLAdapter()]), MLIPAdapter
+            MLIPAdapter("MACE", static=[MatGLAdapter()]), MLIPAdapter
         )
 
-    def test_mlip_inference_rejects_mlip_adapters(self) -> None:
-        """MLIPAdapter inference pipe should reject MLIP-role adapters."""
+    def test_mlip_static_rejects_mlip_adapters(self) -> None:
+        """MLIPAdapter static pipe should reject MLIP-role adapters."""
         from crystall.calculators import MLIPAdapter
 
         with self.assertRaises(TypeError) as ctx:
-            MLIPAdapter("ORB", inference=[MLIPAdapter("MACE-mh")])
+            MLIPAdapter("ORB", static=[MLIPAdapter("MACE")])
         self.assertIn("calculator_type='mlip'", str(ctx.exception))
 
 
@@ -1303,7 +1303,7 @@ class TestObjectiveRegistry(unittest.TestCase):
             }
         }
 
-        class _DummyInfAdapter(BaseCalculator):
+        class _DummyStaticAdapter(BaseCalculator):
             name = "dummy-inf"
             objectives = ObjectiveRegistry([
                 Objective("DUMMY_EF", "Dummy formation energy (eV/atom)", "dummy_ef", "Dummy"),
@@ -1312,7 +1312,7 @@ class TestObjectiveRegistry(unittest.TestCase):
         with patch(
             "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
         ):
-            adapter = MLIPAdapter("FAKE-ML", inference=[_DummyInfAdapter()])
+            adapter = MLIPAdapter("FAKE-ML", static=[_DummyStaticAdapter()])
 
         objectives = adapter.objectives
         self.assertIsInstance(objectives, ObjectiveRegistry)

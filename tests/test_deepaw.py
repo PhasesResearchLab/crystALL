@@ -1,4 +1,4 @@
-"""Tests for the DeePAW inference adapter.
+"""Tests for the DeePAW static adapter.
 
 Covers:
   - Adapter metadata (name, calculator_type, objectives)
@@ -32,8 +32,8 @@ class TestDeePAWAdapterMetadata(unittest.TestCase):
     def test_name(self):
         self.assertEqual(self.adapter.name, "DeePAW")
 
-    def test_calculator_type_is_inference(self):
-        self.assertEqual(self.adapter.calculator_type, "inference")
+    def test_calculator_type_is_static(self):
+        self.assertEqual(self.adapter.calculator_type, "static")
 
     def test_objectives_registry(self):
         objectives = self.adapter.objectives

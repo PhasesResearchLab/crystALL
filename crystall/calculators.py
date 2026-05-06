@@ -161,7 +161,7 @@ class ObjectiveRegistry:
     def code_for_dispatch_key(self, dispatch_key: str) -> Optional[str]:
         """Return the first objective code associated with a dispatch key.
 
-        Used by inference pipe workers to map raw dispatch-key results back
+        Used by static pipe workers to map raw dispatch-key results back
         to proper objective codes.
         """
         entries = self._by_dispatch.get(dispatch_key)
@@ -323,7 +323,7 @@ class BaseCalculator:
     that is the single source of truth for objective codes, descriptions,
     dispatch keys, and citation backends.
     """
-    calculator_type: Literal["mlip", "inference"] = "inference"
+    calculator_type: Literal["mlip", "static"] = "static"
     save_artifacts: bool = True
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu", "cuda"]

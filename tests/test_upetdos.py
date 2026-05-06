@@ -14,7 +14,7 @@ def test_upetdos_adapter_setup():
     """Test the basic configuration of the adapter."""
     adapter = UPETDosAdapter()
     assert adapter.name == "UPET-DOS"
-    assert adapter.calculator_type == "inference"
+    assert adapter.calculator_type == "static"
 
     objectives = adapter.objectives
     assert isinstance(objectives, ObjectiveRegistry)

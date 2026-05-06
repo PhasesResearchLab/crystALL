@@ -30,7 +30,7 @@ class MatGLAdapter(BaseCalculator):
     """
 
     name = "MatGL"
-    calculator_type: Literal["mlip", "inference"] = "inference"
+    calculator_type: Literal["mlip", "static"] = "static"
 
     def __init__(self, **kwargs):
         """Initialize MatGL adapter."""

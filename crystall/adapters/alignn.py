@@ -1,6 +1,6 @@
 """ALIGNN calculator adapter with micro-environment support.
 
-Runs MPDD-ALIGNN inference inside an isolated micro-environment managed
+Runs MPDD-ALIGNN static calculation inside an isolated micro-environment managed
 by :class:`~crystall.calculators.BaseCalculator`.  The micro-env is created under
 ``<env_root>/alignn/``.
 """
@@ -14,17 +14,17 @@ from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
 
 class AlignnAdapter(BaseCalculator):
-    """Adapter for running MPDD-ALIGNN inference inside a micro-environment.
+    """Adapter for running MPDD-ALIGNN static calculation inside a micro-environment.
 
     Example (standalone usage)::
 
         adapter = AlignnAdapter()
         adapter.setup_env()                          # one-time install
-        results = adapter.run_on_directory("./dir")  # batch inference
+        results = adapter.run_on_directory("./dir")  # batch calculation
     """
 
     name = "ALIGNN"
-    calculator_type: Literal["mlip", "inference"] = "inference"
+    calculator_type: Literal["mlip", "static"] = "static"
 
     def __init__(self, **kwargs):
         """Initialize ALIGNN adapter."""
@@ -92,10 +92,10 @@ class AlignnAdapter(BaseCalculator):
         fmax: float = 0.05,
         **kwargs,
     ) -> list[Dict[str, Any]]:
-        """Run ALIGNN inference on all structures in a directory.
+        """Run ALIGNN static calculation on all structures in a directory.
 
         ``isif``, ``optimizer``, and ``fmax`` are accepted for API
-        compatibility but **ignored** (ALIGNN is pure inference, no
+        compatibility but **ignored** (ALIGNN is pure static calculation, no
         relaxation).
         """
         return super().run_on_directory(
@@ -111,7 +111,7 @@ class AlignnAdapter(BaseCalculator):
         )
 
     def _run_code(self) -> str:
-        """Return a self-contained Python script for ALIGNN inference.
+        """Return a self-contained Python script for ALIGNN static calculation.
 
         The script:
         1. Reads a request JSON from ``sys.argv[1]``.
@@ -145,7 +145,7 @@ def main():
         req = json.load(f)
 
     file_paths = req["file_paths"]
-    # ALIGNN ignores isif/optimizer/fmax — pure inference
+    # ALIGNN ignores isif/optimizer/fmax — pure static calculation
 
     # ALIGNN's run_models_from_directory needs a directory, not individual files.
     # Determine the common directory from file_paths.
@@ -289,7 +289,7 @@ def main():
         else:
             print("[AlignnAdapter] ALIGNN model archives already valid")
 
-        # Run inference
+        # Run calculation
         raw_results = pretrained.run_models_from_directory(target_dir, mode="serial")
 
         # Filter to only requested files

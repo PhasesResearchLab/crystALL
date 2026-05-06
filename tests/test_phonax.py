@@ -30,7 +30,7 @@ class TestPhonaxAdapterContract(unittest.TestCase):
         self.assertEqual(self.adapter.name, "phonax")
 
     def test_calculator_type(self):
-        self.assertEqual(self.adapter.calculator_type, "inference")
+        self.assertEqual(self.adapter.calculator_type, "static")
 
     def test_objectives_registry(self):
         objectives = self.adapter.objectives
