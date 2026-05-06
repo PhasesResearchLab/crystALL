@@ -5,11 +5,16 @@ from duecredit.io import TextOutput, get_text_rendering
 from duecredit.collector import CollectorSummary
 import os
 import sys
+from colorama import Style
 
 # ── DueCredit output formatter ───────────────────────────────────────────────
 _DUECREDIT_PREFIX = (
-    "\nIf you use crystALL in your research, please kindly consider "
-    "citing the following references:\n"
+    "\nDueCredit Report:\n" + "-" * 17 + "\n\n"
+    f"{Style.BRIGHT}"
+    "If you use crystALL or any associated community models in your research, "
+    "please cite the references listed below. The DueCredit report reflects "
+    "the specific components and models used in your workflow.\n"
+    f"{Style.RESET_ALL}"
 )
 
 
@@ -33,7 +38,6 @@ class DuecreditTextOutput(TextOutput):
 
         self.fd.write(_DUECREDIT_PREFIX)
         printed_keys = []
-        self.fd.write("References\n" + "-" * 10 + "\n")
         for path in paths:
             for cit in pmo[path]:
                 ek = cit.entry.key
@@ -73,6 +77,8 @@ def _cite_crystall_package() -> None:
     by ``crystall.core``.  Called once at package import so the citation
     is registered regardless of which sub-module the user accesses.
     """
+    from crystall.core import __doi__
+
     due.cite(
         Doi(__doi__),
         description=(
