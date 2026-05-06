@@ -9,7 +9,7 @@ relaxed structures::
 
     matgl = MatGLAdapter()
     alignn = AlignnAdapter()
-    adapter = MLIPAdapter("MACE-mh", static=[matgl, alignn])
+        adapter = MLIPAdapter("MACE", custom={"model": "mh-1"}, static=[matgl, alignn])
 
 Piped objectives appear in results with code-prefixed keys::
 
@@ -114,6 +114,7 @@ class MLIPAdapter(BaseCalculator):
         model_name: str,
         device: Optional[str] = None,
         static: Optional[List[BaseCalculator]] = None,
+        custom: Optional[Dict[str, Any]] = None,
     ):
         config = _load_mlips_config()
         if model_name not in config:
@@ -126,6 +127,7 @@ class MLIPAdapter(BaseCalculator):
         self._device_override = device.lower() if isinstance(device, str) else None
         self._resolved_device: Optional[str] = None
         self._static_adapters: List[BaseCalculator] = []
+        self._custom_overrides: Dict[str, Any] = custom or {}
 
         self.name = model_name
         self._model_code = _sanitize_model_code(model_name)
@@ -274,12 +276,17 @@ class MLIPAdapter(BaseCalculator):
         return self._config.get("setup", [])
 
     def format_vars(self) -> Dict[str, str]:
+        merged_custom = {
+            **self._config.get("custom", {}),
+            **self._custom_overrides,
+        }
         fmt = {
-            "model": self._config.get("model", ""),
             "device": self._resolve_device(),
             "SFY_PATH": str(self._env_path()),
         }
-        for k, v in self._config.get("custom", {}).items():
+        for k, v in merged_custom.items():
+            if k in {"device", "SFY_PATH"}:
+                continue
             fmt[k] = self._resolve_env_value(k, str(v), self.name)
         return fmt
 

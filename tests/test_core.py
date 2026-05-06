@@ -1332,6 +1332,133 @@ class TestObjectiveRegistry(unittest.TestCase):
         )
         self.assertIn("(via dummy-inf)", piped[0].description)
 
+    def test_mlip_format_vars_uses_custom_defaults(self) -> None:
+        """MLIPAdapter format_vars should source model and backend vars from custom."""
+        from crystall.calculators import MLIPAdapter
+
+        fake_config = {
+            "FAKE-ML": {
+                "custom": {
+                    "model": "fake-default",
+                    "head": "default-head",
+                }
+            }
+        }
+
+        with patch(
+            "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
+        ):
+            adapter = MLIPAdapter("FAKE-ML")
+            with (
+                patch.object(adapter, "_resolve_device", return_value="cpu"),
+                patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
+            ):
+                fv = adapter.format_vars()
+
+        self.assertEqual(
+            fv,
+            {
+                "device": "cpu",
+                "SFY_PATH": "/envs/fake",
+                "model": "fake-default",
+                "head": "default-head",
+            },
+        )
+
+    def test_mlip_format_vars_custom_overrides_replace_defaults(self) -> None:
+        """MLIPAdapter custom= should shallow-overwrite mlips.json custom defaults."""
+        from crystall.calculators import MLIPAdapter
+
+        fake_config = {
+            "FAKE-ML": {
+                "custom": {
+                    "model": "fake-default",
+                    "head": "default-head",
+                    "precision": "float32",
+                }
+            }
+        }
+
+        with patch(
+            "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
+        ):
+            adapter = MLIPAdapter(
+                "FAKE-ML",
+                custom={"model": "fake-override", "head": "override-head"},
+            )
+            with (
+                patch.object(adapter, "_resolve_device", return_value="cpu"),
+                patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
+            ):
+                fv = adapter.format_vars()
+
+        self.assertEqual(fv["model"], "fake-override")
+        self.assertEqual(fv["head"], "override-head")
+        self.assertEqual(fv["precision"], "float32")
+        self.assertEqual(fv["device"], "cpu")
+        self.assertEqual(fv["SFY_PATH"], "/envs/fake")
+
+    def test_mlip_format_vars_resolves_overridden_env_placeholders(self) -> None:
+        """MLIPAdapter format_vars should resolve env placeholders from overrides too."""
+        from crystall.calculators import MLIPAdapter
+
+        fake_config = {
+            "FAKE-ML": {
+                "custom": {
+                    "model": "fake-default",
+                }
+            }
+        }
+
+        with patch(
+            "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
+        ):
+            adapter = MLIPAdapter(
+                "FAKE-ML",
+                custom={"token": "${FAKE_TOKEN} test token guidance"},
+            )
+            with (
+                patch.object(adapter, "_resolve_device", return_value="cpu"),
+                patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
+                patch.dict("os.environ", {"FAKE_TOKEN": "secret-token"}, clear=False),
+            ):
+                fv = adapter.format_vars()
+
+        self.assertEqual(fv["token"], "secret-token")
+        self.assertEqual(fv["model"], "fake-default")
+
+    def test_mlip_format_vars_ignores_device_and_sfy_path_overrides(self) -> None:
+        """MLIPAdapter format_vars must not allow custom overrides for device or SFY_PATH."""
+        from crystall.calculators import MLIPAdapter
+
+        fake_config = {
+            "FAKE-ML": {
+                "custom": {
+                    "model": "fake-default",
+                }
+            }
+        }
+
+        with patch(
+            "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
+        ):
+            adapter = MLIPAdapter(
+                "FAKE-ML",
+                custom={
+                    "device": "cuda",
+                    "SFY_PATH": "/tmp/custom",
+                },
+            )
+            with (
+                patch.object(adapter, "_resolve_device", return_value="cpu"),
+                patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
+            ):
+                fv = adapter.format_vars()
+
+        self.assertEqual(fv["device"], "cpu")
+        self.assertEqual(fv["SFY_PATH"], "/envs/fake")
+        self.assertEqual(fv["model"], "fake-default")
+
     # ── Test 4: define_objective accepts a bare code ─────────────────────
 
     def test_resolve_to_code_accepts_code(self) -> None:

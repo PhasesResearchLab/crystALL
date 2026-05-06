@@ -9,7 +9,6 @@
             "chgnet_model = CHGNet.load(model_name='{model}')",
             "calc = CHGNetCalculator(model=chgnet_model, use_device='{device}')"
         ],
-        "model": "0.3.0",
         "device": [
             "cpu",
             "cuda"
@@ -18,7 +17,10 @@
             "windows",
             "macos",
             "linux"
-        ]
+        ],
+        "custom": {
+            "model": "0.3.0"
+        }
     },
     "FAIRChem": {
         "setup": [
@@ -33,7 +35,6 @@
             "predictor = pretrained_mlip.get_predict_unit('{model}', device='{device}')",
             "calc = FAIRChemCalculator(predictor, task_name='{task_name}')"
         ],
-        "model": "uma-s-1p2",
         "device": [
             "cpu",
             "cuda"
@@ -43,6 +44,7 @@
             "linux"
         ],
         "custom": {
+            "model": "uma-s-1p2",
             "task_name": "omat",
             "hf_token": "${HF_TOKEN} Request access at https://huggingface.co/facebook/UMA"
         }
@@ -58,7 +60,6 @@
             "from tensorpotential.calculator import grace_fm",
             "calc = grace_fm(model='{model}', device='{device}')"
         ],
-        "model": "GRACE-2L-SMAX-OMAT-large",
         "device": [
             "cpu",
             "cuda"
@@ -66,7 +67,10 @@
         "os": [
             "macos",
             "linux"
-        ]
+        ],
+        "custom": {
+            "model": "GRACE-2L-SMAX-OMAT-large"
+        }
     },
     "MACE": {
         "setup": [
@@ -77,7 +81,6 @@
             "from mace.calculators import mace_mp",
             "calc = mace_mp(model='{model}', head='{head}', device='{device}', default_dtype='float64')"
         ],
-        "model": "mh-1",
         "device": [
             "cpu",
             "cuda"
@@ -88,6 +91,7 @@
             "linux"
         ],
         "custom": {
+            "model": "mh-1",
             "head": "omat_pbe"
         }
     },
@@ -100,7 +104,6 @@
             "from mattersim.forcefield import MatterSimCalculator",
             "calc = MatterSimCalculator(load_path='{SFY_PATH}/{model}.pth', device='{device}')"
         ],
-        "model": "mattersim-v1.0.0-5M",
         "device": [
             "cpu",
             "cuda"
@@ -108,7 +111,10 @@
         "os": [
             "macos",
             "linux"
-        ]
+        ],
+        "custom": {
+            "model": "mattersim-v1.0.0-5M"
+        }
     },
     "NequIP": {
         "setup": [
@@ -121,7 +127,6 @@
             "from nequip.integrations.ase import NequIPCalculator",
             "calc = NequIPCalculator.from_compiled_model(compile_path='{SFY_PATH}/{model}:{version}.{device}.nequip.pth', device='{device}', chemical_species_to_atom_type_map=True)"
         ],
-        "model": "NequIP-OAM-XL",
         "device": [
             "cuda"
         ],
@@ -129,6 +134,7 @@
             "linux"
         ],
         "custom": {
+            "model": "NequIP-OAM-XL",
             "version": "0.1"
         }
     },
@@ -144,7 +150,6 @@
             "orbff, atoms_adapter = pretrained.{model}(device='{device}', precision='{precision}')",
             "calc = ORBCalculator(orbff, atoms_adapter=atoms_adapter, device='{device}')"
         ],
-        "model": "orb_v3_conservative_inf_omat",
         "device": [
             "cpu",
             "cuda"
@@ -154,6 +159,7 @@
             "linux"
         ],
         "custom": {
+            "model": "orb_v3_conservative_inf_omat",
             "precision": "float32-high"
         }
     },
@@ -171,7 +177,6 @@
             "orbff_d3 = D3SumModel(orbff, AlchemiDFTD3(functional='{functional}', damping='{damping}', compile=True))",
             "calc = ORBCalculator(orbff_d3, atoms_adapter=atoms_adapter, device='{device}')"
         ],
-        "model": "orb_v3_conservative_inf_omat",
         "device": [
             "cpu",
             "cuda"
@@ -181,6 +186,7 @@
             "linux"
         ],
         "custom": {
+            "model": "orb_v3_conservative_inf_omat",
             "precision": "float32-high",
             "functional": "PBE",
             "damping": "BJ"
@@ -194,7 +200,6 @@
             "from sevenn.calculator import SevenNetCalculator",
             "calc = SevenNetCalculator(model='{model}', device='{device}', modal='{modal}')"
         ],
-        "model": "sevennet-omni-i12",
         "device": [
             "cpu",
             "cuda"
@@ -205,6 +210,7 @@
             "linux"
         ],
         "custom": {
+            "model": "sevennet-omni-i12",
             "modal": "omat24"
         }
     },
@@ -217,7 +223,6 @@
             "from upet.calculator import UPETCalculator",
             "calc = UPETCalculator(model='{model}', device='{device}')"
         ],
-        "model": "pet-oam-xl",
         "device": [
             "cpu",
             "cuda"
@@ -226,6 +231,9 @@
             "windows",
             "macos",
             "linux"
-        ]
+        ],
+        "custom": {
+            "model": "pet-oam-xl"
+        }
     }
 }
