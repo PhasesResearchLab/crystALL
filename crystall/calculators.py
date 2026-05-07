@@ -913,6 +913,9 @@ class BaseCalculator:
             _spinner.start()
             _spinner_stopped = False
 
+            sys.stdout.flush()
+            sys.stderr.flush()
+
             proc = sp.Popen(
                 [str(self._micro_python()), code_path, req_path, res_path],
                 env=env_vars,
