@@ -396,7 +396,7 @@ class MLIPAdapter(BaseCalculator):
                     f"'{saved_path}'; skipping static piping for this structure."
                 )
 
-        self._print_results_section()
+        self._print_results_section(parsed)
         return parsed
 
     def _request_extras(self) -> dict:
@@ -514,7 +514,7 @@ class MLIPAdapter(BaseCalculator):
             )
 
         final_results = self._deserialize_results(mlip_results)
-        self._print_results_section()
+        self._print_results_section(final_results)
         return final_results
 
     def _run_static_pipe_single(
