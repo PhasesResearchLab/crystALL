@@ -2,18 +2,14 @@
 import sys
 import os
 import io
-import math
-import re
-import json
 import csv
+import json
 import time
+import importlib.util
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
-import importlib.resources
-import threading
 import warnings
-import tomllib
 
 # Common tool libraries
 from tqdm import tqdm
@@ -21,18 +17,10 @@ from natsort import natsorted
 from colorama import Fore, Style
 from distinctipy import get_colors
 from plotly.offline import plot, iplot
-from yaspin import yaspin
 from urllib.error import HTTPError
 from decimal import Decimal, ROUND_DOWN
-from itertools import groupby, permutations, product, combinations
-from operator import itemgetter
-from statistics import mean
-from typing import Any, Sequence, List, Dict, Union, Literal, Optional, Tuple
-from crystall.calculators import (
-    load_adapters,
-    BaseCalculator,
-    ObjectiveRegistry,
-)
+from itertools import combinations
+from typing import Any, Sequence, List, Dict, Union, Literal, Optional
 
 # ML / Data
 from pymongo.database import Database
@@ -41,36 +29,56 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score, pairwise_distances
 from sklearn.cluster import KMeans, DBSCAN
-from pysipfenn import Calculator
-from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
-from pymatgen.core import Structure, Composition, Element
-from pymatgen.io.vasp.inputs import Poscar
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.core import Composition
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 
-# Disable undesired warnings from torch and pymatgen
+# Internal modules
+from crystall.calculators import ObjectiveRegistry, load_adapters
+from crystall.prototypes import run_local, run_MPDD, run_MPDD_devs, run_optimade
+
+
+# Disable undesired warnings from torch and pymatgen ******************************************
 warnings.filterwarnings(
     "ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*"
 )
 warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
-# Top-Level Functions *************************************************************************
 
-from crystall.prototypes import (
-    run_local,
-    run_MPDD,
-    run_MPDD_devs,
-    run_optimade,
-    sorted_elements_list,
-    element_permutations,
-    comp2acomp_q,
-    comp2comp_q,
-    ordered_allowed_substitutions,
-)
+# Default descriptor for pySIPFENN ************************************************************
+_DEFAULT_PYSIPFENN_DESCRIPTOR = "KS2022"
+
+
+# Top-Level Functions *************************************************************************
+def _pysipfenn_defaults(descriptor: str) -> tuple[str, List[str], str]:
+    spec = importlib.util.find_spec("pysipfenn")
+    if spec is None or not spec.submodule_search_locations:
+        raise FileNotFoundError(
+            "pysipfenn package not found; cannot locate models metadata."
+        )
+
+    package_root = list(spec.submodule_search_locations)[0]
+    metadata_path = os.path.join(package_root, "modelsSIPFENN", "models.json")
+    if not os.path.isfile(metadata_path):
+        metadata_path = os.path.join(package_root, "models.json")
+    if not os.path.isfile(metadata_path):
+        raise FileNotFoundError("pysipfenn models.json not found in package data.")
+
+    with open(metadata_path, "r", encoding="utf-8") as handle:
+        models = json.load(handle)
+
+    compatible_models = [
+        name
+        for name, meta in models.items()
+        if isinstance(meta, dict) and meta.get("descriptor") == descriptor
+    ]
+    if not compatible_models:
+        raise ValueError(f"No pySIPFENN models found for descriptor '{descriptor}'.")
+
+    default_model = compatible_models[0]
+    return package_root, compatible_models, default_model
+
 
 # Convenience High-Level API Classes **********************************************************
-
-
 class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` prototypes from either MPDD or a local
@@ -80,7 +88,7 @@ class CrystALLSearch:
     """
 
     def __init__(
-        self, target_formula: Union[str, Composition], calculator: Calculator = None
+        self, target_formula: Union[str, Composition], calculator: Optional[Any] = None
     ) -> None:
         """
         Initialize the CrystALLSearch class.
@@ -107,13 +115,7 @@ class CrystALLSearch:
                 "Target formula must be a string or a pymatgen Composition object"
             )
 
-        stdout, sys.stdout = sys.stdout, io.StringIO()
-        self.Calculator = (
-            calculator
-            if calculator is not None
-            else Calculator(autoLoad=False, verbose=False)
-        )
-        sys.stdout = stdout
+        self.Calculator = calculator if calculator is not None else None
 
         self.MPDD = None
         self.prototype_path: Optional[str] = None
@@ -137,44 +139,7 @@ class CrystALLSearch:
 
         print("\nChecking for available calculators on the computer..")
 
-        # Check for pySIPFENN models
-        existingCompatibleModels = set(
-            self.Calculator.findCompatibleModels("KS2022")
-        ).intersection(set(self.Calculator.network_list_available))
-        if existingCompatibleModels:
-            loadedCompatibleModels = set(
-                self.Calculator.findCompatibleModels("KS2022")
-            ).intersection(set(self.Calculator.loadedModels.keys()))
-            if not len(loadedCompatibleModels) > 0:
-                alternative_model = list(
-                    set(self.Calculator.findCompatibleModels("KS2022")).intersection(
-                        set(self.Calculator.network_list_available)
-                    )
-                )[0]
-                stdout, sys.stdout = sys.stdout, io.StringIO()
-                self.Calculator.loadModels(network=alternative_model)
-                sys.stdout = stdout
-            # Record pySIPFENN available objectives
-            self.available_calculators["pySIPFENN"] = list(
-                set(self.Calculator.findCompatibleModels("KS2022")).intersection(
-                    set(self.Calculator.loadedModels.keys())
-                )
-            )
-        else:
-            if sys.stdin.isatty():
-                _response = input(
-                    "pySIPFENN models not found. Would you like to automatically run "
-                    "`download_pysipfenn`? (Y/n): "
-                )
-                _proceed = _response.strip().lower() in ("y", "")
-            else:
-                print(
-                    "pySIPFENN models not found — running `download_pysipfenn` automatically "
-                    "(non-interactive session)."
-                )
-                _proceed = True
-            if _proceed:
-                self.download_pysipfenn()
+        self.setup_pysipfenn()
 
         # Supported calculators include builtin pySIPFENN and external adapters via entry points
         self.supported_calculators: Dict[str, Any] = {"pySIPFENN": None}
@@ -234,9 +199,10 @@ class CrystALLSearch:
                     )
 
         # Update objectives with calculators found
-        self._update_objectives(self.Calculator)
+        if self.Calculator is not None:
+            self._update_objectives(self.Calculator)
 
-    def _update_objectives(self, calculator: Calculator, verbose: bool = True) -> None:
+    def _update_objectives(self, calculator: Any, verbose: bool = True) -> None:
         """
         Update the available objectives with the calculators found.
 
@@ -247,6 +213,8 @@ class CrystALLSearch:
         Raises:
             AssertionError: If the calculator is not a pySIPFENN Calculator object.
         """
+
+        from pysipfenn import Calculator
 
         assert isinstance(calculator, Calculator), (
             "Calculator must be a Calculator object"
@@ -360,8 +328,7 @@ class CrystALLSearch:
     def download_pysipfenn(
         self, mode: Literal["serial", "parallel"] = "parallel", retries=3, delay=5
     ) -> None:
-        """
-        Download the default models required for pySIPFENN operation.
+        """Download the default models required for pySIPFENN operation.
 
         Args:
             mode: Mode to download models: ``'serial'`` or ``'parallel'``. Defaults to 'parallel'.
@@ -369,16 +336,27 @@ class CrystALLSearch:
             delay: Delay between retry attempts in seconds.
         """
 
-        print("Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
+        package_root, compatible_models, default_model = _pysipfenn_defaults(
+            _DEFAULT_PYSIPFENN_DESCRIPTOR
+        )
+        print(f"Downloading {default_model} model for pysipfenn..")
+        if self.Calculator is None:
+            from pysipfenn import Calculator
+
+            stdout, sys.stdout = sys.stdout, io.StringIO()
+            self.Calculator = Calculator(autoLoad=False, verbose=False)
+            sys.stdout = stdout
         for attempt in range(retries):
             try:
-                self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
-                # Mark pySIPFENN objectives as available
-                self.available_calculators["pySIPFENN"] = list(
-                    set(self.Calculator.findCompatibleModels("KS2022")).intersection(
-                        set(self.Calculator.network_list_available)
+                self.Calculator.downloadModels(default_model)
+                local_models = [
+                    model
+                    for model in compatible_models
+                    if os.path.isfile(
+                        os.path.join(package_root, "modelsSIPFENN", f"{model}.onnx")
                     )
-                )
+                ]
+                self.available_calculators["pySIPFENN"] = local_models
                 break  # Exit the loop if successful
             except HTTPError as e:
                 print(f"HTTPError: {e.code} - {e.reason}")
@@ -388,6 +366,49 @@ class CrystALLSearch:
                 else:
                     raise
         print("Done! Models are ready to use.")
+        self._update_objectives(self.Calculator, False)
+
+    def setup_pysipfenn(self) -> None:
+        """Set up builtin pySIPFENN models without eager imports."""
+        package_root, models, compatible_models, default_model = _pysipfenn_defaults(
+            _DEFAULT_PYSIPFENN_DESCRIPTOR
+        )
+        has_default = os.path.isfile(
+            os.path.join(package_root, "modelsSIPFENN", f"{default_model}.onnx")
+        )
+
+        if not has_default:
+            if sys.stdin.isatty():
+                _response = input(
+                    "pySIPFENN models not found. Would you like to automatically run "
+                    "`download_pysipfenn`? (Y/n): "
+                )
+                _proceed = _response.strip().lower() in ("y", "")
+            else:
+                print(
+                    "pySIPFENN models not found — running `download_pysipfenn` automatically "
+                    "(non-interactive session)."
+                )
+                _proceed = True
+            if _proceed:
+                self.download_pysipfenn()
+            return
+
+        if self.Calculator is None:
+            from pysipfenn import Calculator
+
+            stdout, sys.stdout = sys.stdout, io.StringIO()
+            self.Calculator = Calculator(autoLoad=False, verbose=False)
+            sys.stdout = stdout
+
+        local_models = [
+            model
+            for model in compatible_models
+            if os.path.isfile(
+                os.path.join(package_root, "modelsSIPFENN", f"{model}.onnx")
+            )
+        ]
+        self.available_calculators["pySIPFENN"] = local_models
         self._update_objectives(self.Calculator, False)
 
     def setup_calculator(self, calculator_name: str) -> None:
@@ -840,6 +861,8 @@ class CrystALLSearch:
         assert isinstance(self.prototype_path, str), (
             "Prototypes folder path must be a string"
         )
+        if not self.available_calculators.get("pySIPFENN"):
+            self.setup_pysipfenn()
         assert (
             "pySIPFENN" in self.available_calculators
             and len(self.available_calculators.get("pySIPFENN", [])) > 0
@@ -854,7 +877,10 @@ class CrystALLSearch:
                 self.predicted_objectives.append(model)
 
         self.Calculator.runFromDirectory(
-            self.prototype_path, "KS2022", mode=mode, max_workers=8
+            self.prototype_path,
+            _DEFAULT_PYSIPFENN_DESCRIPTOR,
+            mode=mode,
+            max_workers=8,
         )
         resultDicts, self.ks2022 = (
             self.Calculator.get_resultDictsWithNames(),
@@ -968,7 +994,8 @@ class CrystALLSearch:
                 for dispatch_key, val in props.items():
                     code = (
                         adapter_reg.code_for_dispatch_key(dispatch_key)
-                        if adapter_reg is not None else None
+                        if adapter_reg is not None
+                        else None
                     )
                     if code is not None:
                         recoded[code] = val
@@ -990,7 +1017,8 @@ class CrystALLSearch:
             for dispatch_key in props:
                 code = (
                     adapter_reg.code_for_dispatch_key(dispatch_key)
-                    if adapter_reg is not None else None
+                    if adapter_reg is not None
+                    else None
                 )
                 if code is not None:
                     produced_objectives.add(code)
@@ -1401,6 +1429,10 @@ class CrystALLSearch:
         )
 
         if same_composition:
+            descriptor_module = importlib.import_module(
+                f"pysipfenn.descriptorDefinitions.{_DEFAULT_PYSIPFENN_DESCRIPTOR}"
+            )
+            onlyStructural = descriptor_module.onlyStructural
             features2use = np.array([onlyStructural(v) for v in self.ks2022])
         else:
             features2use = self.ks2022
@@ -2134,7 +2166,7 @@ class CrystALLSearch:
             iplot(figure, filename=file_name)
 
 
-# Package Metadata **************************************************************************
+# Package Metadata ****************************************************************************
 __name__ = "crystall"
 __version__ = "X.X.X"
 __release__ = "YYYY-MM"
