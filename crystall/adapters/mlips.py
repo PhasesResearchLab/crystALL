@@ -20,10 +20,10 @@ Piped objectives appear in results with code-prefixed keys::
 import os
 import re
 import json
-import platform
 import warnings
 from pathlib import Path
 from typing import Dict, List, Sequence, Optional, Any, Literal, Tuple
+from colorama import Fore, Style
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -49,7 +49,6 @@ def _sanitize_model_code(name: str) -> str:
 # NOTE: Once crystALL is released on PyPI, worker scripts should import this
 # mapping directly from the crystALL package rather than redefining it.
 from crystall.prototypes import _STRUCTURE_FORMATS, _read_structure_format
-
 
 # ── Configuration helpers ───────────────────────────────────────────────────
 
@@ -131,13 +130,40 @@ class MLIPAdapter(BaseCalculator):
 
         self.name = model_name
         self._model_code = _sanitize_model_code(model_name)
-        self._own_objectives = ObjectiveRegistry([
-            Objective(f"{self._model_code}_RELAX_E",      f"{model_name} Relaxed Energy [eV/atom]",          "ase_relax", model_name),
-            Objective(f"{self._model_code}_RELAX_F",      f"{model_name} Relaxed RMS Force [eV/Å]",          "ase_relax", model_name),
-            Objective(f"{self._model_code}_RELAX_STRESS", f"{model_name} Relaxed Von Mises Stress [GPa]",    "ase_relax", model_name),
-            Objective(f"{self._model_code}_RELAX_VOL",    f"{model_name} Relaxed Volume [Å³/atom]",          "ase_relax", model_name),
-            Objective(f"{self._model_code}_RELAX_STRUCT", f"{model_name} Relaxed Structure",                 "ase_relax", model_name),
-        ])
+        self._own_objectives = ObjectiveRegistry(
+            [
+                Objective(
+                    f"{self._model_code}_RELAX_E",
+                    f"{model_name} Relaxed Energy [eV/atom]",
+                    "ase_relax",
+                    model_name,
+                ),
+                Objective(
+                    f"{self._model_code}_RELAX_F",
+                    f"{model_name} Relaxed RMS Force [eV/Å]",
+                    "ase_relax",
+                    model_name,
+                ),
+                Objective(
+                    f"{self._model_code}_RELAX_STRESS",
+                    f"{model_name} Relaxed Von Mises Stress [GPa]",
+                    "ase_relax",
+                    model_name,
+                ),
+                Objective(
+                    f"{self._model_code}_RELAX_VOL",
+                    f"{model_name} Relaxed Volume [Å³/atom]",
+                    "ase_relax",
+                    model_name,
+                ),
+                Objective(
+                    f"{self._model_code}_RELAX_STRUCT",
+                    f"{model_name} Relaxed Structure",
+                    "ase_relax",
+                    model_name,
+                ),
+            ]
+        )
 
         if static:
             self._resolve_static(static)
@@ -189,6 +215,26 @@ class MLIPAdapter(BaseCalculator):
         return self._env_root() / "mlip_envs" / self.name.lower()
 
     # ── Hook overrides ──────────────────────────────────────────────────────
+
+    def _init_section_content(self) -> str:
+        device = self._device_override or self._config.get("device", "cpu")
+        return (
+            f"Model: {Fore.MAGENTA}{self._model_name}{Style.RESET_ALL}\n"
+            f"Device: {Fore.MAGENTA}{device}{Style.RESET_ALL}\n\n"
+            f"Supported OS: {Fore.YELLOW}{self.supported_os}{Style.RESET_ALL}\n"
+            f"Supported Devices: {Fore.YELLOW}{self.supported_devices}{Style.RESET_ALL}"
+        )
+
+    def _run_content(self, target: str) -> str:
+        return f"Running relaxation on {Fore.BLUE}{target}{Style.RESET_ALL}\n"
+
+    def _results_note(self) -> str:
+        return (
+            f"{Fore.BLUE}"
+            "Check the original structure directory and its siblings "
+            "for the saved relaxed structure files.\n"
+            f"{Style.RESET_ALL}"
+        )
 
     def python_version(self) -> str:
         return self._config.get("python_version", "3.11")
@@ -350,6 +396,7 @@ class MLIPAdapter(BaseCalculator):
                     f"'{saved_path}'; skipping static piping for this structure."
                 )
 
+        self._print_results_section()
         return parsed
 
     def _request_extras(self) -> dict:
@@ -466,7 +513,9 @@ class MLIPAdapter(BaseCalculator):
                 save_artifacts=self.save_artifacts,
             )
 
-        return self._deserialize_results(mlip_results)
+        final_results = self._deserialize_results(mlip_results)
+        self._print_results_section()
+        return final_results
 
     def _run_static_pipe_single(
         self,
@@ -497,9 +546,7 @@ class MLIPAdapter(BaseCalculator):
                 )
                 continue
 
-            print(
-                f"\n--- Running piped static: {adapter.name} on {relaxed_path} ---"
-            )
+            print(f"\n--- Running piped static: {adapter.name} on {relaxed_path} ---")
             try:
                 static_res = adapter.run_on_structure(
                     relaxed_path,
@@ -510,7 +557,9 @@ class MLIPAdapter(BaseCalculator):
                 continue
 
             for obj_key, obj_val in static_res.get("properties", {}).items():
-                static_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
+                static_code = (
+                    adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
+                )
                 ns_code = f"{self._model_code}_{static_code}"
                 mlip_result.setdefault("properties", {})[ns_code] = obj_val
 
@@ -554,7 +603,9 @@ class MLIPAdapter(BaseCalculator):
                 if name not in by_name:
                     continue
                 for obj_key, obj_val in static_res.get("properties", {}).items():
-                    static_code = adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
+                    static_code = (
+                        adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
+                    )
                     ns_code = f"{self._model_code}_{static_code}"
                     by_name[name]["properties"][ns_code] = obj_val
 
@@ -815,7 +866,7 @@ def main():
         json.dump({"results": results}, f)
 
     print(
-        f"[MLIPAdapter] Processed {len(results)} structures with {model_name}"
+        f"\\n[MLIPAdapter] Processed {len(results)} structures with {model_name}"
     )
 
 

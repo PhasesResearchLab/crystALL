@@ -5,16 +5,11 @@ from duecredit.io import TextOutput, get_text_rendering
 from duecredit.collector import CollectorSummary
 import os
 import sys
-from colorama import Style
+from colorama import Back, Style
 
 # ── DueCredit output formatter ───────────────────────────────────────────────
 _DUECREDIT_PREFIX = (
-    "\nDueCredit Report:\n" + "-" * 17 + "\n\n"
-    f"{Style.BRIGHT}"
-    "If you use crystALL or any associated community models in your research, "
-    "please cite the references listed below. The DueCredit report reflects "
-    "the specific components and models used in your workflow.\n"
-    f"{Style.RESET_ALL}"
+    "\n[DueCredit-Report] If you use crystALL in your research, please do the due:"
 )
 
 
@@ -41,15 +36,17 @@ class DuecreditTextOutput(TextOutput):
                 if ek in printed_keys:
                     continue
                 if path == "crystall":
-                    label = "crystALL"
+                    label = "crystALL:software"
                 else:
                     label = (
-                        path.split(".")[-1] if path.startswith("crystall.") else path
+                        path.split(".")[-1] + ":method"
+                        if path.startswith("crystall.")
+                        else path
                     )
                 rendered = get_text_rendering(cit.entry, style=self.style).strip()
                 doi = self._extract_doi(cit)
-                doi_text = f". DOI: {doi}" if doi else ""
-                self.fd.write(f"\n[{label}] {rendered}{doi_text}")
+                doi_text = f" DOI: {doi}" if doi else ""
+                self.fd.write(f"\n\n • {rendered}{doi_text} [{label}]")
                 printed_keys.append(ek)
         self.fd.write("\n")
 
@@ -77,8 +74,10 @@ def _configure_duecredit_output() -> None:
 
     def _patched_dump(self, **kwargs):
         collector = self._DueSwitch__collectors[True]
+        print(f"\n{Back.WHITE}")
         output = DuecreditTextOutput(fd=sys.stdout, collector=collector)
         output.dump(path_prefix="crystall")
+        print(f"{Style.RESET_ALL}")
 
     due.__class__.dump = _patched_dump
     due.activate(True)

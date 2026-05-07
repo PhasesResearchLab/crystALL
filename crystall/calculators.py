@@ -22,7 +22,6 @@ from typing import Any, Sequence, List, Dict, Tuple, Union, Literal, Optional
 
 from duecredit import BibTeX, Doi, due
 
-
 json_path = Path(__file__).parent / "duecredit.json"
 with open(json_path, "r", encoding="utf-8") as _f:
     _BACKEND_CITATIONS = json.load(_f)
@@ -397,6 +396,95 @@ class BaseCalculator:
         backends = self.objectives.resolve_backends(codes)
         _cite_backends(backends)
 
+    # ── Section banners ──────────────────────────────────────────────────────
+
+    def _print_banner(self, title: str, body: str) -> None:
+        """Print a section banner with a fixed-width box and centred title."""
+        bar = "=" * 51
+        print(f"\n{bar}\n{f' {title} '.center(51, '=')}\n{bar}")
+        if body:
+            print(body)
+
+    def _init_section_content(self) -> str:
+        """Return the body text for the initialization section banner.
+
+        Override in subclasses to include adapter-specific info such as model
+        name, device, or custom configuration.
+        """
+        return (
+            f"Supported OS     : {self.supported_os}\n"
+            f"Supported Devices: {self.supported_devices}"
+        )
+
+    def _run_content(self, target: str) -> str:
+        """Return a description line for the running section banner.
+
+        *target* is the filename (``run_on_structure``) or directory name
+        (``run_on_directory``).  Override in subclasses to describe the
+        specific computation being dispatched.
+        """
+        return ""
+
+    def _results_note(self) -> str:
+        """Return an optional trailing note for the results section banner.
+
+        Override in subclasses to add adapter-specific output guidance,
+        e.g. where saved files can be found.
+        """
+        return ""
+
+    def _print_init_section(self) -> None:
+        """Print the initialization (Section 1) banner.
+
+        Called at the start of :meth:`setup_env`.  Displays the adapter class
+        name, the content returned by :meth:`_init_section_content`, and the
+        current micro-environment readiness status.
+        """
+        title = f"Initializing {self.__class__.__name__}"
+        content = self._init_section_content()
+        if self.is_env_ready():
+            env_line = "Micro-environment is already setup and ready."
+        else:
+            env_line = (
+                f"Setting up micro-environment for {self.name}."
+                " This may take a while..."
+            )
+        body = f"{content}\n\n{env_line}" if content else env_line
+        self._print_banner(title, body)
+
+    def _print_run_section(self, method_name: str, target: str) -> None:
+        """Print the running (Section 2) banner.
+
+        Called at the start of :meth:`run_on_structure` and
+        :meth:`run_on_directory`, before the worker is dispatched.
+        *method_name* is the calling method's name; *target* is the filename
+        or directory name being processed.
+        """
+        title = f"Running `{method_name}`"
+        body = self._run_content(target)
+        self._print_banner(title, body)
+
+    def _print_results_section(self) -> None:
+        """Print the results (Section 3) banner and trailing note.
+
+        Prints the section banner followed by the note returned by
+        :meth:`_results_note`.  The result itself is intentionally *not*
+        printed here — callers are free to print or log it as they see fit.
+
+        **Convention:** :meth:`run_on_structure` and :meth:`run_on_directory`
+        on ``BaseCalculator`` do *not* call this method automatically, because
+        subclasses typically post-process results (deserialization, static
+        piping) after the base dispatch.  Subclasses that override
+        ``run_on_structure`` or ``run_on_directory`` are expected to call
+        ``self._print_results_section()`` at the end of their override,
+        after all post-processing is complete.
+        """
+        title = "Results Completed"
+        self._print_banner(title, "")
+        note = self._results_note()
+        if note:
+            print(f"{note}")
+
     def _micro_python(self) -> "Path":
         """OS-agnostic path to the Python interpreter inside the micro-env."""
         from pathlib import Path
@@ -561,11 +649,11 @@ class BaseCalculator:
         import subprocess as sp
         from pathlib import Path
 
+        self._print_init_section()
         self._setup_preflight()
 
         target = self._env_path()
         if self.is_env_ready():
-            print(f"Using cached micro-environment for {self.name} at {target}")
             return
 
         if sys.stdin.isatty():
@@ -600,9 +688,6 @@ class BaseCalculator:
         env = os.environ.copy()
         env["UV_CACHE_DIR"] = str(uv_cache)
 
-        print(f"\n--- Initializing micro-environment for {self.name} ---")
-        print(f"Location: {target}")
-
         try:
             # Layer 1: Create venv
             sp.run(
@@ -630,7 +715,7 @@ class BaseCalculator:
 
             sentinel = target / ".crystall_env_ready"
             sentinel.write_text("ok", encoding="utf-8")
-            print(f"--- Micro-environment for {self.name} ready ---\n")
+            print(f"\nMicro-environment for {self.name} is ready.\n")
         except Exception:
             # Auto-cleanup on failure
             if target.exists():
@@ -822,6 +907,11 @@ class BaseCalculator:
 
             import threading
             import sys
+            from yaspin import yaspin
+
+            _spinner = yaspin(text=f"Starting {self.name} worker...")
+            _spinner.start()
+            _spinner_stopped = False
 
             proc = sp.Popen(
                 [str(self._micro_python()), code_path, req_path, res_path],
@@ -835,9 +925,13 @@ class BaseCalculator:
             stderr_chunks: list[str] = []
 
             def _drain_stdout(stream) -> None:
+                nonlocal _spinner_stopped
                 try:
                     assert stream is not None
                     for line in stream:
+                        if not _spinner_stopped:
+                            _spinner.stop()
+                            _spinner_stopped = True
                         print(line, end="")
                 finally:
                     if stream is not None:
@@ -866,6 +960,8 @@ class BaseCalculator:
             returncode = proc.wait()
             stdout_thread.join()
             stderr_thread.join()
+            if not _spinner_stopped:
+                _spinner.stop()
             stderr_text = "".join(stderr_chunks)
 
             if returncode != 0:
@@ -906,6 +1002,7 @@ class BaseCalculator:
         """
         self._cite_at_runtime(objectives)
         file_path = os.path.abspath(file_path)
+        self._print_run_section("run_on_structure", os.path.basename(file_path))
         results = self._dispatch_worker([file_path], **kwargs)
         if not results:
             return {"name": os.path.basename(file_path), "properties": {}}
@@ -937,6 +1034,7 @@ class BaseCalculator:
         path = os.path.abspath(path)
         if not os.path.isdir(path):
             raise FileNotFoundError(f"Directory not found: {path}")
+        self._print_run_section("run_on_directory", os.path.basename(path))
 
         # Collect all files in the directory
         file_paths = sorted(
