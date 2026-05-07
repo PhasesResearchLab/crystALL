@@ -116,8 +116,15 @@ class DeePAWAdapter(BaseCalculator):
         return []
 
     def _setup_preflight(self) -> None:
-        """DeePAW-specific preflight: verify GPU runtime and singularity."""
-        super()._setup_preflight()
+        """DeePAW-specific preflight: verify GPU runtime and singularity.
+
+        Overrides the base preflight to resolve the device as 'cuda' (the only
+        supported device) instead of the base default of 'cpu'.  Also runs the
+        more specific GPU-runtime check once, avoiding a duplicate nvidia-smi
+        invocation that would otherwise occur if the base class ran it first.
+        """
+        self._assert_os_supported()
+        self._resolve_device("cuda")
         self._assert_gpu_runtime_supported()
         self._resolve_singularity_binary()
 
@@ -137,11 +144,11 @@ class DeePAWAdapter(BaseCalculator):
             (
                 "mkdir -p {downloads_dir} && "
                 "i=0; "
-                "while [ \"$i\" -le 31 ]; do "
+                'while [ "$i" -le 31 ]; do '
                 "  part=$(printf '%03d' \"$i\"); "
                 "  curl -C - -L "
-                "    -o \"{downloads_dir}/deepaw-cpp-v1.tar.gz.part$part\" "
-                "    \"https://zenodo.org/records/18311602/files/deepaw-cpp-v1.tar.gz.part$part?download=1\"; "
+                '    -o "{downloads_dir}/deepaw-cpp-v1.tar.gz.part$part" '
+                '    "https://zenodo.org/records/18311602/files/deepaw-cpp-v1.tar.gz.part$part?download=1"; '
                 "  i=$((i + 1)); "
                 "done"
             ),
@@ -168,9 +175,6 @@ class DeePAWAdapter(BaseCalculator):
     def run_on_structure(
         self,
         file_path: str,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -180,9 +184,6 @@ class DeePAWAdapter(BaseCalculator):
 
         result = super().run_on_structure(
             file_path,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             objectives=objectives,
             **kwargs,
         )
@@ -195,9 +196,6 @@ class DeePAWAdapter(BaseCalculator):
         mode: str = "serial",
         max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         **kwargs,
     ) -> list[Dict[str, Any]]:
         """Run DeePAW static calculation on all structures in a directory."""
@@ -209,9 +207,6 @@ class DeePAWAdapter(BaseCalculator):
             mode=mode,
             max_workers=max_workers,
             objectives=objectives,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             **kwargs,
         )
 
