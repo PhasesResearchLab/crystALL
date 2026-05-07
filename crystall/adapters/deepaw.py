@@ -15,7 +15,7 @@ from typing import Dict, List, Literal, Optional, Sequence, Any
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
-_CHGCAR_MARKER_KEY = "__crystall_pymatgen_chgcar__"
+_CHGCAR_RAW_KEY = "__crystall_chgcar_raw__"
 
 
 class DeePAWAdapter(BaseCalculator):
@@ -45,7 +45,7 @@ class DeePAWAdapter(BaseCalculator):
     supported_os: List[str] = ["linux"]
     supported_devices: List[str] = ["cuda"]
 
-    def __init__(self, nx: int = 40, ny: int = 40, nz: int = 40, **kwargs):
+    def __init__(self, nx: int = 10, ny: int = 10, nz: int = 10, **kwargs):
         """Initialise the adapter.
 
         Args:
@@ -180,13 +180,23 @@ class DeePAWAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Run DeePAW static calculation on a single structure file."""
+        """Run DeePAW static calculation on a single structure file.
+
+        The predicted CHGCAR is saved alongside the input file as
+        ``DeePAW_<stem>.vasp`` (same directory as the input).
+        """
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
+
+        abs_path = os.path.abspath(file_path)
+        output_dir = os.path.dirname(abs_path)
+        output_stem_prefix = f"{self.name}_"
 
         result = super().run_on_structure(
             file_path,
             objectives=objectives,
+            output_dir=output_dir,
+            output_stem_prefix=output_stem_prefix,
             **kwargs,
         )
 
@@ -200,15 +210,29 @@ class DeePAWAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> list[Dict[str, Any]]:
-        """Run DeePAW static calculation on all structures in a directory."""
+        """Run DeePAW static calculation on all structures in a directory.
+
+        Predicted CHGCARs are saved to a sibling directory named
+        ``DeePAW_<input_dir_name>/`` with original filenames (no prefix).
+        """
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
+
+        abs_path = os.path.abspath(path)
+        input_dir_name = os.path.basename(abs_path)
+        default_output_dir = os.path.join(
+            os.path.dirname(abs_path),
+            f"{self.name}_{input_dir_name}",
+        )
+        output_dir = kwargs.pop("output_dir", default_output_dir)
 
         results = super().run_on_directory(
             path,
             mode=mode,
             max_workers=max_workers,
             objectives=objectives,
+            output_dir=output_dir,
+            output_stem_prefix="",
             **kwargs,
         )
 
@@ -222,17 +246,30 @@ class DeePAWAdapter(BaseCalculator):
 
     @staticmethod
     def _deserialize_worker_value(value: Any) -> Any:
-        """Reconstruct Chgcar from marker-wrapped dict."""
-        if isinstance(value, dict):
-            if _CHGCAR_MARKER_KEY in value:
-                payload = value.get(_CHGCAR_MARKER_KEY)
-                if isinstance(payload, dict):
-                    try:
-                        from pymatgen.io.vasp.outputs import Chgcar
+        """Reconstruct Chgcar from a raw CHGCAR string produced by the worker.
 
-                        return Chgcar.from_dict(payload)
-                    except Exception:
-                        return value
+        The worker (micro-env) writes the CHGCAR text and stores it under
+        ``_CHGCAR_RAW_KEY``.  Deserialization runs in the main crystall env
+        where pymatgen is available, so ``Chgcar.from_file`` can be used via
+        a temporary file (pymatgen does not expose a ``from_str`` API).
+        """
+        if isinstance(value, dict):
+            if _CHGCAR_RAW_KEY in value:
+                raw = value[_CHGCAR_RAW_KEY]
+                if isinstance(raw, str):
+                    import tempfile
+                    import os as _os
+                    from pymatgen.io.vasp.outputs import Chgcar
+
+                    with tempfile.NamedTemporaryFile(
+                        mode="w", suffix=".vasp", delete=False
+                    ) as tf:
+                        tf.write(raw)
+                        tmp = tf.name
+                    try:
+                        return Chgcar.from_file(tmp)
+                    finally:
+                        _os.unlink(tmp)
                 return value
             return {
                 k: DeePAWAdapter._deserialize_worker_value(v) for k, v in value.items()
@@ -265,9 +302,6 @@ import json
 import tempfile
 import shutil
 import subprocess as sp
-
-
-CHGCAR_MARKER_KEY = "__crystall_pymatgen_chgcar__"
 
 
 def main():
@@ -324,86 +358,86 @@ def main():
                 "python", "-c", f'''
 import sys
 import os
+import collections
 input_file = os.environ["DEEPAW_INPUT"]
 output_file = os.environ["DEEPAW_OUTPUT"]
 
 from ase.io import read
 import numpy as np
 import torch
-from deepaw import KdTreeGraphConstructor, Model
+from deepaw.data import KdTreeGraphConstructor, collate_list_of_dicts
+from deepaw import Model
 
 atoms = read(input_file)
-lattice = atoms.get_cell()
-positions = atoms.get_positions()
-numbers = atoms.get_atomic_numbers()
+cell = np.array(atoms.cell)
 
-a, b, c = lattice
 nx = {req.get("nx", 40)}
 ny = {req.get("ny", 40)}
 nz = {req.get("nz", 40)}
-rec = np.linalg.inv(lattice.T)
-step = np.array([1 / (nx * np.linalg.norm(a)),
-               1 / (ny * np.linalg.norm(b)),
-               1 / (nz * np.linalg.norm(c))])
 
-grid_points = []
-for i in range(nx + 1):
-    for j in range(ny + 1):
-        for k in range(nz + 1):
-            point = i * step[0] * a + j * step[1] * b + k * step[2] * c
-            grid_points.append(point)
-grid_points = np.array(grid_points)
-
-fractional = np.dot(grid_points, rec)
-cartesian_probe_positions = np.dot(fractional, lattice)
-
-constructor = KdTreeGraphConstructor(
-    cutoff=5.0,
-    max_neighbors=50,
-    graph_layer="complete",
+# Fractional grid: k(z) outer, j(y) mid, i(x) inner — matches VASP order
+frac = np.array(
+    [[i / nx, j / ny, k / nz]
+     for k in range(nz)
+     for j in range(ny)
+     for i in range(nx)],
+    dtype=np.float32
 )
-structure = [numbers, positions, lattice]
-graph = constructor(structure, cartesian_probe_positions)
+probe_pos = frac @ cell
 
+# The TorchScript model was compiled for exactly CHUNK_SIZE probe points per
+# forward pass.  Pad the last (potentially short) chunk to CHUNK_SIZE with a
+# repeated dummy point, run inference, then trim the padding before writing.
+CHUNK_SIZE = 1000
+
+gc = KdTreeGraphConstructor(cutoff=3.0, disable_pbc=False)
+device = torch.device("cuda")
 model = Model(device="cuda", auto_init=True)
-model.eval()
 
-with torch.no_grad():
-    feats = model([graph])
-    pred = feats[0]
+all_preds = []
+n_probes = len(probe_pos)
+for start in range(0, n_probes, CHUNK_SIZE):
+    chunk = probe_pos[start : start + CHUNK_SIZE]
+    real_len = len(chunk)
+    if real_len < CHUNK_SIZE:
+        # Pad with repetitions of the first point so the graph size is exact.
+        pad = np.tile(chunk[:1], (CHUNK_SIZE - real_len, 1))
+        chunk = np.concatenate([chunk, pad], axis=0)
+    graph = gc.build_inference_graph(atoms, chunk)
+    batch = collate_list_of_dicts([graph])
+    batch = {{k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}}
+    with torch.no_grad():
+        predictions, _ = model(batch)
+    # Keep only predictions for the real (non-padded) points.
+    all_preds.append(predictions[0].detach().cpu()[:real_len])
 
-shape = (nx + 1, ny + 1, nz + 1)
-data = pred.cpu().numpy().reshape(shape)
+pred = torch.cat(all_preds, dim=0).numpy()
 
-from collections import Counter
 symbols = atoms.get_chemical_symbols()
-species_order = list(dict.fromkeys(symbols))
-counts = [symbols.count(s) for s in species_order]
+species = collections.OrderedDict()
+for s in symbols:
+    species[s] = species.get(s, 0) + 1
 
-frac_coords = np.dot(positions, np.linalg.inv(lattice))
+scaled = atoms.get_scaled_positions()
 
 with open(output_file, "w") as f:
-    f.write(" Generated chargedensity from deepaw\\n")
-    f.write(" 1.0\\n")
-    for vec in lattice:
-        f.write(f" {{vec[0]:16.10f}} {{vec[1]:16.10f}} {{vec[2]:16.10f}}\\n")
-    f.write(" " + " ".join(species_order) + "\\n")
-    f.write(" " + " ".join(str(c) for c in counts) + "\\n")
-    f.write(" Direct\\n")
-    for s in species_order:
-        for idx, sym in enumerate(symbols):
-            if sym == s:
-                fc = frac_coords[idx]
-                f.write(f" {{fc[0]:10.6f}} {{fc[1]:10.6f}} {{fc[2]:10.6f}}\\n")
-    f.write("\\n")
-    f.write(" {{0:4d}} {{1:4d}} {{2:4d}}\\n".format(*shape))
-    flat = data.flatten()
-    for i, g in enumerate(flat):
-        f.write(" {{0:18.10E}}".format(g))
-        if (i + 1) % 5 == 0:
-            f.write("\\n")
-    if len(flat) % 5 != 0:
-        f.write("\\n")
+    f.write("DeePAW predicted charge density\\\\n")
+    f.write("1.0\\\\n")
+    for v in cell:
+        f.write(f" {{v[0]:16.10f}} {{v[1]:16.10f}} {{v[2]:16.10f}}\\\\n")
+    f.write(" " + " ".join(species.keys()) + "\\\\n")
+    f.write(" " + " ".join(str(c) for c in species.values()) + "\\\\n")
+    f.write("Direct\\\\n")
+    for p in scaled:
+        f.write(f" {{p[0]:16.10f}} {{p[1]:16.10f}} {{p[2]:16.10f}}\\\\n")
+    f.write("\\\\n")
+    f.write(f" {{nx}} {{ny}} {{nz}}\\\\n")
+    for i, val in enumerate(pred, 1):
+        f.write(f" {{val:16.8e}}")
+        if i % 5 == 0:
+            f.write("\\\\n")
+    if len(pred) % 5 != 0:
+        f.write("\\\\n")
 ''',
             ]
 
@@ -426,17 +460,27 @@ with open(output_file, "w") as f:
                 continue
 
             try:
-                from pymatgen.io.vasp.outputs import Chgcar
+                with open(output_chgcar, "r") as chgf:
+                    raw_chgcar = chgf.read()
 
-                chgcar = Chgcar.from_file(output_chgcar)
+                # ── Save CHGCAR to the requested output directory ──────────
+                output_dir = req.get("output_dir")
+                output_stem_prefix = req.get("output_stem_prefix", "")
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
+                    in_stem = os.path.splitext(filename)[0] or filename
+                    out_filename = f"{output_stem_prefix}{in_stem}.vasp"
+                    saved_path = os.path.join(output_dir, out_filename)
+                    shutil.copy2(output_chgcar, saved_path)
+
                 props = {
                     "DEEPAW_RHO: DeePAW Charge Density": {
-                        CHGCAR_MARKER_KEY: chgcar.as_dict()
+                        "__crystall_chgcar_raw__": raw_chgcar
                     }
                 }
                 results.append({"name": filename, "properties": props})
             except Exception as e:
-                print(f"[DeePAW] Failed to parse {output_chgcar}: {e}")
+                print(f"[DeePAW] Failed to read {output_chgcar}: {e}")
                 results.append({"name": filename, "properties": {}})
 
         finally:
