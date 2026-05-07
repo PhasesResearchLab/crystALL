@@ -251,7 +251,11 @@ class TestCrystALLSearch(unittest.TestCase):
                 cls.collection.insert_one(entry)
 
         cls.target_formula = "Ni26Ru8"
-        with patch("builtins.input", return_value="n"):
+        with (
+            patch("crystall.core._has_local_pysipfenn_model", return_value=False),
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value="n"),
+        ):
             cls.cas = crystall.CrystALLSearch(cls.target_formula)
 
         # Also exercise __init__ branch where no KS2022 models exist and the
@@ -259,12 +263,8 @@ class TestCrystALLSearch(unittest.TestCase):
         # instance under patched Calculator behavior and patch
         # CrystALLSearch.download_pysipfenn to ensure it's invoked.
         with (
-            patch.object(
-                crystall.core.Calculator, "findCompatibleModels", return_value=[]
-            ),
-            patch(
-                "crystall.core.Calculator.network_list_available", new=[], create=True
-            ),
+            patch("crystall.core._has_local_pysipfenn_model", return_value=False),
+            patch("sys.stdin.isatty", return_value=True),
             patch("builtins.input", return_value=""),
             patch.object(crystall.CrystALLSearch, "download_pysipfenn") as dl_mock,
         ):
@@ -278,19 +278,22 @@ class TestCrystALLSearch(unittest.TestCase):
     @pytest.mark.order(1)
     def test_download_pysipfenn(self) -> None:
         """Test downloading models from the MPDD database via download_pysipfenn."""
+        if self.cas.Calculator is None:
+            from pysipfenn import Calculator
+
+            self.cas.Calculator = Calculator(autoLoad=False, verbose=False)
         # Patch out the expensive network/model download so test stays fast
         with (
             patch.object(self.cas.Calculator, "downloadModels") as mocked_dl,
-            patch.object(
-                self.cas.Calculator,
-                "findCompatibleModels",
+            patch(
+                "crystall.core._compatible_pysipfenn_models",
                 return_value=["SIPFENN_Krajewski2022_NN30"],
             ),
-            patch.object(
-                self.cas.Calculator,
-                "network_list_available",
-                new=["SIPFENN_Krajewski2022_NN30"],
+            patch(
+                "crystall.core._default_pysipfenn_model",
+                return_value="SIPFENN_Krajewski2022_NN30",
             ),
+            patch("crystall.core._has_local_pysipfenn_model", return_value=True),
         ):
             self.cas.download_pysipfenn(mode="serial")
             mocked_dl.assert_called_once_with("SIPFENN_Krajewski2022_NN30")
@@ -310,16 +313,15 @@ class TestCrystALLSearch(unittest.TestCase):
             patch.object(
                 self.cas.Calculator, "downloadModels", side_effect=[err1, err2, None]
             ) as mocked_retry_dl,
-            patch.object(
-                self.cas.Calculator,
-                "findCompatibleModels",
+            patch(
+                "crystall.core._compatible_pysipfenn_models",
                 return_value=["SIPFENN_Krajewski2022_NN30"],
             ),
-            patch.object(
-                self.cas.Calculator,
-                "network_list_available",
-                new=["SIPFENN_Krajewski2022_NN30"],
+            patch(
+                "crystall.core._default_pysipfenn_model",
+                return_value="SIPFENN_Krajewski2022_NN30",
             ),
+            patch("crystall.core._has_local_pysipfenn_model", return_value=True),
         ):
             # use small retries and zero delay to keep test fast
             self.cas.download_pysipfenn(mode="serial", retries=3, delay=0)
