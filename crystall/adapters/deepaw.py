@@ -163,11 +163,13 @@ class DeePAWAdapter(BaseCalculator):
         ]
 
     def _request_extras(self) -> dict:
-        """Pass grid dimensions to the worker script."""
+        """Pass grid dimensions and container path to the worker script."""
         return {
             "nx": self._nx,
             "ny": self._ny,
             "nz": self._nz,
+            "container_path": str(self._container_path()),
+            "singularity_cmd": self._resolve_singularity_binary(),
         }
 
     # ── Execution ────────────────────────────────────────────────────────
@@ -278,14 +280,14 @@ def main():
     file_paths = req["file_paths"]
     model_name = req.get("model_name", "DeePAW")
 
-    container_path = os.environ.get("DEEPAW_CONTAINER_PATH")
+    container_path = req.get("container_path")
     if not container_path or not os.path.isfile(container_path):
         raise RuntimeError(
-            "DeePAW_CONTAINER_PATH not set or container not found. "
-            "Call setup_env() first."
+            "DeePAW container not found at '{}'. "
+            "Call setup_env() first.".format(container_path)
         )
 
-    singularity_cmd = os.environ.get("DEEPAW_SINGULARITY_CMD", "singularity")
+    singularity_cmd = req.get("singularity_cmd", "singularity")
 
     working_dir = os.path.dirname(file_paths[0]) if file_paths else os.getcwd()
     results = []
