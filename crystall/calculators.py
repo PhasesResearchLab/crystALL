@@ -13,6 +13,7 @@ import os
 import sys
 import warnings
 import inspect
+import pprint
 from pathlib import Path
 from colorama import Fore, Style
 from dataclasses import dataclass
@@ -464,19 +465,18 @@ class BaseCalculator:
         body = self._run_content(target)
         self._print_banner(title, body)
 
-    def _print_results_section(self) -> None:
+    def _print_results_section(self, result: Any) -> None:
         """Print the results (Section 3) banner and trailing note.
 
         Prints the section banner followed by the note returned by
-        :meth:`_results_note`.  The result itself is intentionally *not*
-        printed here — callers are free to print or log it as they see fit.
+        :meth:`_results_note`, and finally the result itself using :mod:`pprint`.
 
         **Convention:** :meth:`run_on_structure` and :meth:`run_on_directory`
         on ``BaseCalculator`` do *not* call this method automatically, because
         subclasses typically post-process results (deserialization, static
         piping) after the base dispatch.  Subclasses that override
         ``run_on_structure`` or ``run_on_directory`` are expected to call
-        ``self._print_results_section()`` at the end of their override,
+        ``self._print_results_section(result)`` at the end of their override,
         after all post-processing is complete.
         """
         title = "Results Completed"
@@ -484,6 +484,8 @@ class BaseCalculator:
         note = self._results_note()
         if note:
             print(f"{note}")
+
+        pprint.pprint(result)
 
     def _micro_python(self) -> "Path":
         """OS-agnostic path to the Python interpreter inside the micro-env."""
