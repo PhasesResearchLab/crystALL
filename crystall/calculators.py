@@ -14,7 +14,7 @@ import sys
 import warnings
 import inspect
 from pathlib import Path
-
+from colorama import Fore, Style
 from dataclasses import dataclass
 
 import numpy as np
@@ -658,8 +658,10 @@ class BaseCalculator:
 
         if sys.stdin.isatty():
             _response = input(
-                "Warning: installing calculator models can require significant disk space "
-                "(up to ~2 GB per model). Proceed with installation? (Y/n): "
+                f"{Fore.RED}"
+                "\nWarning: Installing calculator models can require significant disk space "
+                "(up to ~2 GB per model). Proceed with installation? (Y/n):\n"
+                f"{Style.RESET_ALL}"
             )
             if _response.strip().lower() not in ("y", ""):
                 print("Setup aborted.")
@@ -715,7 +717,7 @@ class BaseCalculator:
 
             sentinel = target / ".crystall_env_ready"
             sentinel.write_text("ok", encoding="utf-8")
-            print(f"\nMicro-environment for {self.name} is ready.\n")
+            print(f"\nMicro-environment for {self.name} is ready.")
         except Exception:
             # Auto-cleanup on failure
             if target.exists():
