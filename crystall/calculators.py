@@ -646,6 +646,14 @@ class BaseCalculator:
         If the env already exists and is usable, returns immediately.
         On any failure, the partial directory is removed and the exception
         is re-raised.
+
+        .. note::
+            **Avoid Parallel Setup:** Do not call this method concurrently for
+            the same adapter unless the micro-environment is already installed.
+            Running setup in parallel for the same target path can trigger
+            multiple installation processes, leading to race conditions and
+            possible environment corruption.
+
         """
         import shutil
         import subprocess as sp
