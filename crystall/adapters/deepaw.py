@@ -328,7 +328,6 @@ input_file = os.environ["DEEPAW_INPUT"]
 output_file = os.environ["DEEPAW_OUTPUT"]
 
 from ase.io import read
-from ase.neighborlist import primitive_neighbors
 import numpy as np
 import torch
 from deepaw import KdTreeGraphConstructor, Model
@@ -339,9 +338,9 @@ positions = atoms.get_positions()
 numbers = atoms.get_atomic_numbers()
 
 a, b, c = lattice
-nx = req.get("nx", 40)
-ny = req.get("ny", 40)
-nz = req.get("nz", 40)
+nx = {req.get("nx", 40)}
+ny = {req.get("ny", 40)}
+nz = {req.get("nz", 40)}
 rec = np.linalg.inv(lattice.T)
 step = np.array([1 / (nx * np.linalg.norm(a)),
                1 / (ny * np.linalg.norm(b)),
@@ -376,43 +375,31 @@ with torch.no_grad():
 shape = (nx + 1, ny + 1, nz + 1)
 data = pred.cpu().numpy().reshape(shape)
 
-# Build species/counts from ASE atoms for a valid POSCAR header
 from collections import Counter
 symbols = atoms.get_chemical_symbols()
-species_order = list(dict.fromkeys(symbols))  # unique, insertion-ordered
+species_order = list(dict.fromkeys(symbols))
 counts = [symbols.count(s) for s in species_order]
 
-# Fractional coordinates of atoms
 frac_coords = np.dot(positions, np.linalg.inv(lattice))
 
 with open(output_file, "w") as f:
-    # Line 1: comment
     f.write(" Generated chargedensity from deepaw\\n")
-    # Line 2: scaling factor
     f.write(" 1.0\\n")
-    # Lines 3-5: lattice vectors
     for vec in lattice:
-        f.write(f" {vec[0]:16.10f} {vec[1]:16.10f} {vec[2]:16.10f}\\n")
-    # Line 6: species symbols
+        f.write(f" {{vec[0]:16.10f}} {{vec[1]:16.10f}} {{vec[2]:16.10f}}\\n")
     f.write(" " + " ".join(species_order) + "\\n")
-    # Line 7: per-species atom counts
     f.write(" " + " ".join(str(c) for c in counts) + "\\n")
-    # Line 8: coordinate system
     f.write(" Direct\\n")
-    # Lines 9+: fractional coordinates grouped by species
     for s in species_order:
         for idx, sym in enumerate(symbols):
             if sym == s:
                 fc = frac_coords[idx]
-                f.write(f" {fc[0]:10.6f} {fc[1]:10.6f} {fc[2]:10.6f}\\n")
-    # Empty separator line between POSCAR header and volumetric data
+                f.write(f" {{fc[0]:10.6f}} {{fc[1]:10.6f}} {{fc[2]:10.6f}}\\n")
     f.write("\\n")
-    # Grid dimensions line
-    f.write(" {0:4d} {1:4d} {2:4d}\\n".format(*shape))
-    # Charge density values (5 per line, Fortran-style)
+    f.write(" {{0:4d}} {{1:4d}} {{2:4d}}\\n".format(*shape))
     flat = data.flatten()
     for i, g in enumerate(flat):
-        f.write(" {0:18.10E}".format(g))
+        f.write(" {{0:18.10E}}".format(g))
         if (i + 1) % 5 == 0:
             f.write("\\n")
     if len(flat) % 5 != 0:
