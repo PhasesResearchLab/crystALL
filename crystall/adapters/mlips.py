@@ -208,6 +208,22 @@ class MLIPAdapter(BaseCalculator):
                 )
         return ObjectiveRegistry(all_objectives)
 
+    def setup_env(self) -> None:
+        """Create and install the micro-environment (idempotent).
+
+        If static adapters are configured, their environments are also ensured
+        prior to the main MLIP environment.
+        """
+        if self._static_adapters:
+            print()
+            print("=" * 51)
+            self._print_banner("Initializing Piped Adapters", "")
+            print("=" * 51)
+            for adapter in self._static_adapters:
+                adapter.setup_env()
+
+        super().setup_env()
+
     # ── Micro-env path ──────────────────────────────────────────────────────
 
     def _env_path(self) -> Path:
@@ -356,6 +372,12 @@ class MLIPAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
+        if self._static_adapters:
+            print()
+            print("=" * 51)
+            self._print_banner("Running Piped Calculations", "")
+            print("=" * 51)
+
         self._assert_os_supported()
         self._resolve_device()
 
@@ -482,6 +504,11 @@ class MLIPAdapter(BaseCalculator):
                 Defaults to ``{parent_of_path}/{model_name}_{input_dir_basename}``.
             **kwargs: Additional kwargs forwarded to the worker request.
         """
+        if self._static_adapters:
+            print("=" * 51)
+            self._print_banner("Running Piped Calculations", "")
+            print("=" * 51)
+
         self._assert_os_supported()
         self._resolve_device()
 
@@ -546,7 +573,6 @@ class MLIPAdapter(BaseCalculator):
                 )
                 continue
 
-            print(f"\n--- Running piped static: {adapter.name} on {relaxed_path} ---")
             try:
                 static_res = adapter.run_on_structure(
                     relaxed_path,
@@ -588,7 +614,6 @@ class MLIPAdapter(BaseCalculator):
                 )
                 continue
 
-            print(f"\n--- Running piped static: {adapter.name} on {relaxed_dir} ---")
             try:
                 static_results = adapter.run_on_directory(
                     relaxed_dir,

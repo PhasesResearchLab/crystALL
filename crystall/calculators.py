@@ -401,8 +401,7 @@ class BaseCalculator:
 
     def _print_banner(self, title: str, body: str) -> None:
         """Print a section banner with a fixed-width box and centred title."""
-        bar = "=" * 51
-        print(f"\n{bar}\n{f' {title} '.center(51, '=')}\n{bar}")
+        print(f"{f' {title} '.center(51, '=')}")
         if body:
             print(body)
 
@@ -413,8 +412,8 @@ class BaseCalculator:
         name, device, or custom configuration.
         """
         return (
-            f"Supported OS     : {self.supported_os}\n"
-            f"Supported Devices: {self.supported_devices}"
+            f"Supported OS: {Fore.YELLOW}{self.supported_os}{Style.RESET_ALL}\n"
+            f"Supported Devices: {Fore.YELLOW}{self.supported_devices}{Style.RESET_ALL}"
         )
 
     def _run_content(self, target: str) -> str:
@@ -451,6 +450,7 @@ class BaseCalculator:
                 " This may take a while..."
             )
         body = f"{content}\n\n{env_line}" if content else env_line
+        print()
         self._print_banner(title, body)
 
     def _print_run_section(self, method_name: str, target: str) -> None:
@@ -461,8 +461,9 @@ class BaseCalculator:
         *method_name* is the calling method's name; *target* is the filename
         or directory name being processed.
         """
-        title = f"Running `{method_name}`"
+        title = f"Running `{self.__class__.__name__}.{method_name}`"
         body = self._run_content(target)
+        print()
         self._print_banner(title, body)
 
     def _print_results_section(self, result: Any) -> None:
@@ -480,7 +481,10 @@ class BaseCalculator:
         after all post-processing is complete.
         """
         title = "Results Completed"
+        print()
+        print("=" * 51)
         self._print_banner(title, "")
+        print("=" * 51)
         note = self._results_note()
         if note:
             print(f"{note}")
