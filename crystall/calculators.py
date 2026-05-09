@@ -19,7 +19,7 @@ from colorama import Fore, Style
 from dataclasses import dataclass
 
 import numpy as np
-from typing import Any, Sequence, List, Dict, Tuple, Union, Literal, Optional
+from typing import Any, Sequence, List, Dict, Literal, Optional
 
 from duecredit import BibTeX, Doi, due
 
@@ -79,8 +79,16 @@ class ObjectiveRegistry:
     ``ObjectiveRegistry`` instance. The registry is the single source of truth
     for objective codes, descriptions, dispatch keys, and citation backends.
 
-    Supports dict-like access by code (``reg[code]``, ``code in reg``,
-    ``iter(reg)``) for backward-compatible consumption patterns.
+    Objective *codes* (e.g. ``ALIGNN_EF_MP``) are the only identifiers that cross
+    the public API boundary. Backend model names, heads, etc., are intentionally
+    hidden as ``dispatch_key`` values, used only to request the right model from
+    the backend and to map raw backend output back to objective codes.
+
+    By design, ``CrystALLSearch.available_calculators`` exposes **all** objective
+    codes available for an adapter once its micro-environment is initialized.
+    However, new adapters should support downloading backend models lazily upon
+    their first execution, which reduces initial setup time and prevents the
+    retrieval of unused models.
     """
 
     def __init__(self, objectives: List[Objective]) -> None:
@@ -99,30 +107,11 @@ class ObjectiveRegistry:
             self._by_code[obj.code] = obj
             self._by_dispatch.setdefault(obj.dispatch_key, []).append(obj)
 
-    # ── dict-like interface ──────────────────────────────────────────────────
-
-    def __getitem__(self, code: str) -> Objective:
-        return self._by_code[code]
-
-    def __contains__(self, code: object) -> bool:
-        return code in self._by_code
-
-    def __iter__(self):
-        return iter(self._by_code)
-
-    def __len__(self) -> int:
-        return len(self._by_code)
-
-    def get(self, code: str, default: Any = None) -> Any:
-        return self._by_code.get(code, default)
+    # ── Enumeration ─────────────────────────────────────────────────────────
 
     def values(self) -> List[Objective]:
         """Return all objectives in declaration order."""
         return list(self._objectives)
-
-    def items(self) -> List[Tuple[str, Objective]]:
-        """Return ``(code, Objective)`` pairs in declaration order."""
-        return [(o.code, o) for o in self._objectives]
 
     # ── Resolution helpers ───────────────────────────────────────────────────
 
@@ -251,7 +240,12 @@ def load_adapters() -> Dict[str, Any]:
                     # Minimal adapter contract
                     if all(
                         hasattr(obj, attr)
-                        for attr in ("name", "objectives", "run_on_directory")
+                        for attr in (
+                            "name",
+                            "objectives",
+                            "run_on_structure",
+                            "run_on_directory",
+                        )
                     ):
                         try:
                             name = getattr(obj, "name")
@@ -387,7 +381,6 @@ class BaseCalculator:
         Subclasses **must** override this to control the directory layout.
         Default implementation places the env under ``<env_root>/<name>/``.
         """
-        from pathlib import Path
 
         return self._env_root() / self.name.lower()
 
@@ -493,7 +486,6 @@ class BaseCalculator:
 
     def _micro_python(self) -> "Path":
         """OS-agnostic path to the Python interpreter inside the micro-env."""
-        from pathlib import Path
 
         env = self._env_path()
         if os.name == "nt":
@@ -661,7 +653,6 @@ class BaseCalculator:
         """
         import shutil
         import subprocess as sp
-        from pathlib import Path
 
         self._print_init_section()
         self._setup_preflight()
