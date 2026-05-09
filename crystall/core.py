@@ -36,7 +36,6 @@ from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 from crystall.calculators import ObjectiveRegistry, load_adapters
 from crystall.prototypes import run_local, run_MPDD, run_MPDD_devs, run_optimade
 
-
 # Disable undesired warnings from torch and pymatgen ******************************************
 warnings.filterwarnings(
     "ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*"
@@ -723,55 +722,6 @@ class CrystALLSearch:
             {"index": i + 1, "name": file} for i, file in enumerate(inputFiles)
         ]
 
-    def generate_optimade(
-        self,
-        target_prototypes: Literal["native", "non-native"] = "non-native",
-        limit: int = 1000,
-        parallel: bool = True,
-    ) -> None:
-        """
-        Generate prototype structures from OPTIMADE-registered databases.
-
-        Fetches structures matching the target composition from the OPTIMADE
-        providers configured via setup_OPTIMADE(). If setup_OPTIMADE() has not
-        been called, defaults to the Materials Project provider (mp).
-
-        Provider selection is exclusively managed by setup_OPTIMADE() — this
-        method accepts no provider-related arguments by design.
-
-        Args:
-            target_prototypes: 'native' to fetch structures already in the target
-                composition (written as-is), or 'non-native' to fetch anonymous-
-                formula matches and apply elemental substitution (default).
-            limit: Maximum number of structures to fetch per provider. Default 1000.
-            parallel: Whether to parallelise the substitution + write stage.
-
-        Returns:
-            None. Sets self.prototype_path and populates self.prototypes.
-        """
-        assert self.formula is not None, (
-            "No target formula identified. Please run `setup_search` first."
-        )
-
-        if not getattr(self, "_optimade_active_base_urls", None):
-            print(
-                "[crystALL] OPTIMADE providers not configured — defaulting to Materials Project (mp).\n"
-                "Run CrystALLSearch.setup_OPTIMADE() to customise provider selection."
-            )
-            self.setup_OPTIMADE()  # activates 'mp' default
-
-        self.prototype_path = run_optimade(
-            target_formula=self.formula,
-            base_urls=self._optimade_active_base_urls,
-            target_prototypes=target_prototypes,
-            limit=limit,
-            parallel=parallel,
-        )
-        inputFiles = natsorted(os.listdir(self.prototype_path))
-        self.prototypes = [
-            {"index": i + 1, "name": file} for i, file in enumerate(inputFiles)
-        ]
-
     def generate_local(self, prototype_path: str = None) -> None:
         """
         Generate prototypes from a local directory containing POSCAR or CIF files.
@@ -829,8 +779,6 @@ class CrystALLSearch:
                 "Run CrystALLSearch.setup_OPTIMADE() to customise provider selection."
             )
             self.setup_OPTIMADE()
-
-        from crystall.prototypes import run_optimade
 
         self.prototype_path = run_optimade(
             target_formula=self.target_formula,
@@ -2173,4 +2121,4 @@ __release__ = "YYYY-MM"
 __authors__ = "Amaral, Ricardo and Krajewski, Adam"
 __doc__ = "crystALL.mpdd.org"
 __rep__ = "github.com/PhasesResearchLab/crystALL"
-__bibtex__ = "@software{amaral-krajewski2026crystall, title={crystALL: A data-driven materials discovery platform}, author={{Amaral, R.} and {Krajewski, A. M.}}, journal={npj Computational Materials}, volume={X}, number={1}, pages={1-10}, year={2026}, publisher={Nature Publishing Group}, doi={doi.org/10.xxxx.xxxxx-xxxx}}"
+__bibtex__ = "@software{amaral-krajewski2026crystall, title={crystALL: A data-driven materials discovery platform}, author={{Amaral, R.} and {Krajewski, A. M.}}, journal={npj Computational Materials}, volume={X}, number={1}, pages={1-10}, year={2026}, publisher={Nature Publishing Group}, doi={10.xxxx.xxxxx-xxxx}}"
