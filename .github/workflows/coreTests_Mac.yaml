@@ -55,18 +55,7 @@ jobs:
           PYTORCH_NUM_THREADS: 1
           CHGNET_DEVICE: cpu
         run: |
-          if [ "${{ matrix.python-version }}" = "3.11" ]; then
-            pytest -s --durations=0 --cov=crystall --cov-report=xml;
-          else
-            pytest -s --durations=0;
-          fi
-
-      - name: Upload coverage report
-        if: ${{ matrix.python-version == '3.11' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml-${{ github.run_id }}-${{ matrix.python-version }}
-          path: coverage.xml
+          pytest -s --durations=0
 
       - name: Delay next job
         run: sleep 15
