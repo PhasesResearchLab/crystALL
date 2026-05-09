@@ -200,7 +200,12 @@ class DeePAWAdapter(BaseCalculator):
             **kwargs,
         )
 
-        return self._deserialize_result(result)
+        parsed = self._deserialize_result(result)
+        
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed)
+            
+        return parsed
 
     def run_on_directory(
         self,
@@ -236,7 +241,12 @@ class DeePAWAdapter(BaseCalculator):
             **kwargs,
         )
 
-        return [self._deserialize_result(r) for r in results]
+        parsed_results = [self._deserialize_result(r) for r in results]
+        
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed_results)
+            
+        return parsed_results
 
     def _run_code(self) -> str:
         """Return a self-contained Python worker script."""

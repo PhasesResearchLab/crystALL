@@ -89,7 +89,12 @@ class UPETDosAdapter(BaseCalculator):
             objectives=objectives,
             **kwargs,
         )
-        return self._deserialize_result(res)
+        parsed = self._deserialize_result(res)
+        
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed)
+            
+        return parsed
 
     def run_on_directory(
         self,
@@ -107,12 +112,14 @@ class UPETDosAdapter(BaseCalculator):
             mode=mode,
             max_workers=max_workers,
             objectives=objectives,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             **kwargs,
         )
-        return self._deserialize_results(results)
+        parsed_results = self._deserialize_results(results)
+        
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed_results)
+            
+        return parsed_results
 
 
 _UPETDOS_WORKER_SCRIPT = """\

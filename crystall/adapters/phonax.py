@@ -259,7 +259,35 @@ class PhonaxAdapter(BaseCalculator):
             except OSError:
                 pass
 
-        return self._deserialize_result(result, struct_dict=struct_dict)
+        parsed = self._deserialize_result(result, struct_dict=struct_dict)
+        
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed)
+            
+        return parsed
+
+    def run_on_directory(
+        self,
+        path: str,
+        mode: str = "serial",
+        max_workers: int | None = None,
+        objectives: Sequence[str] | None = None,
+        **kwargs,
+    ) -> list[Dict[str, Any]]:
+        results = super().run_on_directory(
+            path,
+            mode=mode,
+            max_workers=max_workers,
+            objectives=objectives,
+            **kwargs,
+        )
+        
+        # Note: run_on_directory currently returns raw JSON payloads 
+        # (deserialization requires structure passing)
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(results)
+            
+        return results
 
 
 _PHONAX_WORKER_SCRIPT = """\

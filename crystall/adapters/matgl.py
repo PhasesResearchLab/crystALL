@@ -151,7 +151,12 @@ class MatGLAdapter(BaseCalculator):
             objectives=objectives,
             **kwargs,
         )
-        return self._deserialize_result(result)
+        parsed = self._deserialize_result(result)
+
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed)
+
+        return parsed
 
     def run_on_directory(
         self,

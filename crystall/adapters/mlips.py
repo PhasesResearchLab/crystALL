@@ -186,6 +186,7 @@ class MLIPAdapter(BaseCalculator):
                     f"Got '{type(adapter).__name__}' with calculator_type='{role}'. "
                     "MLIP models cannot be chained as static targets."
                 )
+            adapter._is_piped = True
             self._static_adapters.append(adapter)
 
     @property
