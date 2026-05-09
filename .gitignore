@@ -15,3 +15,8 @@ docs/_build
 # General
 .DS_Store
 .vscode
+
+# Some extras for user convenience. Uncomment as needed.
+#*.POSCAR
+#*.CIF
+#*.xyz
