@@ -12,7 +12,7 @@ Extending crystALL with new property predictors is welcome. We integrate models 
 - Adapter location: Create a module under `crystall/calculators/` (one file or a small package).
 - I/O contract: accept pymatgen `Structure`; document outputs in the module docstring.
 - API methods: adapters must expose two public methods:
-	- `run_per_structure` — run the model on a single structure and return a value or structured dict.
-	- `run_on_directory` — run the adapter over many structures and support both serial and parallel execution.
+	- `run_on_structure` — run the model on a single structure and return a value or structured dict.
+	- `run_on_directory` — run the adapter over a directory path with structures and support both serial and parallel execution.
 - Tests & examples: include unit tests with tiny fixtures.
 - Lightweight runtime: Avoid forcing heavy runtime dependencies for users who don't need them. If an adapter requires optional packages, guard imports with try/except and show a clear error message describing how to install the extras.
