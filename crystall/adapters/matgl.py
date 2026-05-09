@@ -36,19 +36,64 @@ class MatGLAdapter(BaseCalculator):
         """Initialize MatGL adapter."""
         super().__init__(**kwargs)
 
-    objectives: ObjectiveRegistry = ObjectiveRegistry([
-        Objective("MATGL_EF_MEGNET",          "Formation Energy MEGNet [eV/atom]",       "MEGNet-MP-2018.6.1-Eform",               "MEGNet"),
-        Objective("MATGL_BG_MEGNET",          "Band Gap MEGNet [eV]",                    "MEGNet-MP-2019.4.1-BandGap-mfi",         "MEGNet"),
-        Objective("MATGL_EF_M3GNET",         "Formation Energy M3GNet [eV/atom]",       "M3GNet-MP-2018.6.1-Eform",               "M3GNet"),
-        Objective("MATGL_EWALD_QET",         "Electrostatic (Ewald) Energy [eV/cell]",  "QET-MatQ-PES",                           "QET"),
-        Objective("MATGL_DIPOLE_QET",        "Dipole Magnitude [e·Å]",                  "QET-MatQ-PES",                           "QET"),
-        Objective("MATGL_STRUCT_CHARGES_QET","Structure with Charges",                  "QET-MatQ-PES",                           "QET"),
-        Objective("MATGL_E_STATIC_CHGNET",   "Static Energy CHGNet [eV/atom]",          "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",   "CHGNet"),
-        Objective("MATGL_STRUCT_MAGMOMS_CHGNET", "Structure with Magmoms",              "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",   "CHGNet"),
-    ])
+    objectives: ObjectiveRegistry = ObjectiveRegistry(
+        [
+            Objective(
+                "MATGL_EF_MEGNET",
+                "Formation Energy MEGNet [eV/atom]",
+                "MEGNet-Eform-MP-2018.6.1",
+                "MEGNet",
+            ),
+            Objective(
+                "MATGL_BG_MEGNET",
+                "Band Gap MEGNet [eV]",
+                "MEGNet-BandGap-mfi-MP-2019.4.1",
+                "MEGNet",
+            ),
+            Objective(
+                "MATGL_EF_M3GNET",
+                "Formation Energy M3GNet [eV/atom]",
+                "M3GNet-Eform-MP-2018.6.1",
+                "M3GNet",
+            ),
+            Objective(
+                "MATGL_EWALD_QET",
+                "Electrostatic (Ewald) Energy [eV/cell]",
+                "QET-PES-MatQ",
+                "QET",
+            ),
+            Objective(
+                "MATGL_CDIPOLE_QET",
+                "Charge Dipole Magnitude [e·Å]",
+                "QET-PES-MatQ",
+                "QET",
+            ),
+            Objective(
+                "MATGL_STRUCT_CHARGES_QET",
+                "Structure with Charges",
+                "QET-PES-MatQ",
+                "QET",
+            ),
+            Objective(
+                "MATGL_STRUCT_MAGMOMS_CHGNET",
+                "Structure with Magmoms",
+                "CHGNet-PES-MatPES-PBE-2025.2.10",
+                "CHGNet",
+            ),
+            Objective(
+                "MATGL_MDIPOLE_CHGNET",
+                "CHGNet Static Total Magmom [mu_B]",
+                "CHGNet-PES-MatPES-PBE-2025.2.10",
+                "CHGNet",
+            ),
+        ]
+    )
 
     supported_os: List[str] = ["windows", "macos", "linux"]
-    supported_devices: List[str] = ["cpu", "cuda"]  # platform-specific DGL/torch wheels; no device lock
+    supported_devices: List[str] = [
+        "cpu",
+        "cuda",
+    ]  # platform-specific DGL/torch wheels; no device lock
 
     def _env_path(self) -> Path:
         return self._env_root() / "matgl"
@@ -79,7 +124,7 @@ class MatGLAdapter(BaseCalculator):
 
         return [
             f"pip install '{dgl_req}'",
-            "pip install 'matgl>=2.0,<3.0'",
+            "pip install 'matgl>=3.0,<4.0'",
             "pip install 'ase>=3.23.0'",
             "pip install 'pymatgen>=2024.0'",
         ]
@@ -133,9 +178,6 @@ class MatGLAdapter(BaseCalculator):
     def run_on_structure(
         self,
         file_path: str,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -145,9 +187,6 @@ class MatGLAdapter(BaseCalculator):
         )
         result = super().run_on_structure(
             file_path,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             objectives=objectives,
             **kwargs,
         )
@@ -164,9 +203,6 @@ class MatGLAdapter(BaseCalculator):
         mode: str = "serial",
         max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         kwargs = dict(kwargs)
@@ -178,12 +214,14 @@ class MatGLAdapter(BaseCalculator):
             mode=mode,
             max_workers=max_workers,
             objectives=objectives,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             **kwargs,
         )
-        return self._deserialize_results(results)
+        parsed_results = self._deserialize_results(results)
+
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(parsed_results)
+
+        return parsed_results
 
     def _run_code(self) -> str:
         return _MATGL_WORKER_SCRIPT
@@ -233,22 +271,29 @@ def main():
 
     import matgl
 
+    # Redirect model cache into the micro-env so nothing is written to ~/.cache
+    _env_dir = os.path.dirname(os.path.dirname(os.__file__))
+    matgl.config.MATGL_CACHE = type(matgl.config.MATGL_CACHE)(
+        os.path.join(_env_dir, "matgl_cache")
+    )
+    matgl.config.MATGL_CACHE.mkdir(parents=True, exist_ok=True)
+
     matgl.set_backend("DGL")
-    from matgl.ext._ase_dgl import PESCalculator
+    from matgl.ext.ase import PESCalculator
     from pymatgen.analysis.ewald import EwaldSummation
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
 
     # Objective to Model Mapping
     OBJ_TO_MODEL = {
-        "MATGL_EF_MEGNET":          "MEGNet-MP-2018.6.1-Eform",
-        "MATGL_BG_MEGNET":          "MEGNet-MP-2019.4.1-BandGap-mfi",
-        "MATGL_EF_M3GNET":          "M3GNet-MP-2018.6.1-Eform",
-        "MATGL_EWALD_QET":          "QET-MatQ-PES",
-        "MATGL_DIPOLE_QET":         "QET-MatQ-PES",
-        "MATGL_STRUCT_CHARGES_QET": "QET-MatQ-PES",
-        "MATGL_E_STATIC_CHGNET":    "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
-        "MATGL_STRUCT_MAGMOMS_CHGNET": "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES",
+        "MATGL_EF_MEGNET":          "MEGNet-Eform-MP-2018.6.1",
+        "MATGL_BG_MEGNET":          "MEGNet-BandGap-mfi-MP-2019.4.1",
+        "MATGL_EF_M3GNET":          "M3GNet-Eform-MP-2018.6.1",
+        "MATGL_EWALD_QET":          "QET-PES-MatQ",
+        "MATGL_CDIPOLE_QET":        "QET-PES-MatQ",
+        "MATGL_STRUCT_CHARGES_QET": "QET-PES-MatQ",
+        "MATGL_STRUCT_MAGMOMS_CHGNET": "CHGNet-PES-MatPES-PBE-2025.2.10",
+        "MATGL_MDIPOLE_CHGNET":     "CHGNet-PES-MatPES-PBE-2025.2.10",
     }
 
     needed_models = {OBJ_TO_MODEL[obj] for obj in requested if obj in OBJ_TO_MODEL}
@@ -267,14 +312,14 @@ def main():
 
             # Property Predictions (MEGNet / M3GNet)
             if "MATGL_EF_MEGNET" in requested:
-                m = loaded_models.get("MEGNet-MP-2018.6.1-Eform")
+                m = loaded_models.get("MEGNet-Eform-MP-2018.6.1")
                 if m:
                     props["MATGL_EF_MEGNET"] = round4(
                         tensor_scalar(m.predict_structure(structure))
                     )
 
             if "MATGL_BG_MEGNET" in requested:
-                m = loaded_models.get("MEGNet-MP-2019.4.1-BandGap-mfi")
+                m = loaded_models.get("MEGNet-BandGap-mfi-MP-2019.4.1")
                 if m:
                     props["MATGL_BG_MEGNET"] = round4(
                         tensor_scalar(
@@ -286,7 +331,7 @@ def main():
                     )
 
             if "MATGL_EF_M3GNET" in requested:
-                m = loaded_models.get("M3GNet-MP-2018.6.1-Eform")
+                m = loaded_models.get("M3GNet-Eform-MP-2018.6.1")
                 if m:
                     props["MATGL_EF_M3GNET"] = round4(
                         tensor_scalar(m.predict_structure(structure))
@@ -299,7 +344,7 @@ def main():
                 "MATGL_STRUCT_CHARGES_QET",
             }
             if requested & qet_objs:
-                m = loaded_models.get("QET-MatQ-PES")
+                m = loaded_models.get("QET-PES-MatQ")
                 if m:
                     if atoms is None:
                         atoms = AseAtomsAdaptor.get_atoms(structure)
@@ -319,32 +364,28 @@ def main():
                         props["MATGL_EWALD_QET"] = round4(
                             EwaldSummation(s).total_energy
                         )
-                    if "MATGL_DIPOLE_QET" in requested:
+                    if "MATGL_CDIPOLE_QET" in requested:
                         cart = np.array(structure.cart_coords, dtype=float)
                         p_vec = np.sum(cart * charges.reshape(-1, 1), axis=0)
-                        props["MATGL_DIPOLE_QET"] = round4(np.linalg.norm(p_vec))
+                        props["MATGL_CDIPOLE_QET"] = round4(np.linalg.norm(p_vec))
 
             # PES Predictions (CHGNet)
-            chg_objs = {"MATGL_E_STATIC_CHGNET", "MATGL_STRUCT_MAGMOMS_CHGNET"}
+            chg_objs = {"MATGL_STRUCT_MAGMOMS_CHGNET", "MATGL_MDIPOLE_CHGNET"}
             if requested & chg_objs:
-                m = loaded_models.get("CHGNet-MatPES-PBE-2025.2.10-2.7M-PES")
+                m = loaded_models.get("CHGNet-PES-MatPES-PBE-2025.2.10")
                 if m:
                     if atoms is None:
                         atoms = AseAtomsAdaptor.get_atoms(structure)
                     atoms.set_calculator(PESCalculator(m))
-                    if "MATGL_E_STATIC_CHGNET" in requested:
-                        props["MATGL_E_STATIC_CHGNET"] = round4(
-                            atoms.get_potential_energy() / max(len(atoms), 1)
-                        )
+                    magmoms = np.array(atoms.get_magnetic_moments(), dtype=float).reshape(-1)
                     if "MATGL_STRUCT_MAGMOMS_CHGNET" in requested:
-                        magmoms = np.array(atoms.get_magnetic_moments(), dtype=float).reshape(
-                            -1
-                        )
                         s = structure.copy()
                         s.add_site_property("magmom", magmoms.tolist())
                         props["MATGL_STRUCT_MAGMOMS_CHGNET"] = {
                             STRUCTURE_MARKER_KEY: s.as_dict()
                         }
+                    if "MATGL_MDIPOLE_CHGNET" in requested:
+                        props["MATGL_MDIPOLE_CHGNET"] = round4(float(np.sum(magmoms)))
 
             results.append({"name": filename, "properties": props})
         except Exception as exc:
