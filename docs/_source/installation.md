@@ -16,8 +16,11 @@ Or for editable install (development)
 pip install -e .
 ```
 
-🚧 **Linux users:** First install DGL for torch >=2.3 🚧
+<blockquote style="color:#000000; background:#ffffff; border-left:4px solid #8e5e16; padding-left:12px; margin-bottom: 20;">
+<strong>Linux users:</strong>  First install DGL for torch >=2.3
+
 ``` shell
 python -m pip install "dgl==2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html
 pip install crystall
 ```
+</blockquote>
