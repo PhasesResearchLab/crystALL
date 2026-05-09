@@ -5,10 +5,9 @@ by :class:`~crystall.calculators.BaseCalculator`.  The micro-env is created unde
 ``<env_root>/alignn/``.
 """
 
-import os
 import subprocess as sp
 from pathlib import Path
-from typing import Sequence, Optional, Dict, Any, List, Literal
+from typing import Sequence, Dict, Any, List, Literal
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -30,18 +29,67 @@ class AlignnAdapter(BaseCalculator):
         """Initialize ALIGNN adapter."""
         super().__init__(**kwargs)
 
-    objectives: ObjectiveRegistry = ObjectiveRegistry([
-        Objective("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",          "mp_e_form",             "ALIGNN"),
-        Objective("ALIGNN_BG_MP",     "ALIGNN-MP PBE Bandgap [eV]",                    "mp_bandgap",            "ALIGNN"),
-        Objective("ALIGNN_EF_JV",     "ALIGNN-JARVIS Formation Energy [eV/atom]",       "jv_e_form",             "ALIGNN"),
-        Objective("ALIGNN_BG_JV_MBJ", "ALIGNN-JARVIS MBJ Bandgap [eV]",               "jv_mbj_bandgap",        "ALIGNN"),
-        Objective("ALIGNN_SHEAR_JV",  "ALIGNN-JARVIS Shear Modulus [GPa]",             "jv_mepscnn_kv",         "ALIGNN"),
-        Objective("ALIGNN_BULK_JV",   "ALIGNN-JARVIS Bulk Modulus [GPa]",              "jv_mepscnn_gv",         "ALIGNN"),
-        Objective("ALIGNN_EXFOL_JV",  "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",   "jv_exfoliation_energy", "ALIGNN"),
-        Objective("ALIGNN_BG_ALEX",   "ALIGNN-Alexandria Bandgap [eV]",                "alex_bandgap",          "ALIGNN"),
-        Objective("ALIGNN_EF_ALEX",   "ALIGNN-Alexandria Formation Energy [eV/atom]",  "alex_e_form",           "ALIGNN"),
-        Objective("ALIGNN_VOL_ALEX",  "ALIGNN-Alexandria Volume Per Atom [Å³]",        "alex_volume_per_atom",  "ALIGNN"),
-    ])
+    objectives: ObjectiveRegistry = ObjectiveRegistry(
+        [
+            Objective(
+                "ALIGNN_EF_MP",
+                "ALIGNN-MP Formation Energy [eV/atom]",
+                "mp_e_form",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_BG_MP", "ALIGNN-MP PBE Bandgap [eV]", "mp_bandgap", "ALIGNN"
+            ),
+            Objective(
+                "ALIGNN_EF_JV",
+                "ALIGNN-JARVIS Formation Energy [eV/atom]",
+                "jv_e_form",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_BG_JV_MBJ",
+                "ALIGNN-JARVIS MBJ Bandgap [eV]",
+                "jv_mbj_bandgap",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_SHEAR_JV",
+                "ALIGNN-JARVIS Shear Modulus [GPa]",
+                "jv_mepscnn_kv",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_BULK_JV",
+                "ALIGNN-JARVIS Bulk Modulus [GPa]",
+                "jv_mepscnn_gv",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_EXFOL_JV",
+                "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
+                "jv_exfoliation_energy",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_BG_ALEX",
+                "ALIGNN-Alexandria Bandgap [eV]",
+                "alex_bandgap",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_EF_ALEX",
+                "ALIGNN-Alexandria Formation Energy [eV/atom]",
+                "alex_e_form",
+                "ALIGNN",
+            ),
+            Objective(
+                "ALIGNN_VOL_ALEX",
+                "ALIGNN-Alexandria Volume Per Atom [Å³]",
+                "alex_volume_per_atom",
+                "ALIGNN",
+            ),
+        ]
+    )
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu"]  # torch installed without CUDA index
 
@@ -81,34 +129,45 @@ class AlignnAdapter(BaseCalculator):
 
     # ── Execution ───────────────────────────────────────────────────────────
 
+    def run_on_structure(
+        self,
+        file_path: str,
+        objectives: Sequence[str] | None = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Run ALIGNN static calculation on a single structure file."""
+        result = super().run_on_structure(
+            file_path,
+            objectives=objectives,
+            **kwargs,
+        )
+
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(result)
+
+        return result
+
     def run_on_directory(
         self,
         path: str,
         mode: str = "serial",
         max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         **kwargs,
     ) -> list[Dict[str, Any]]:
-        """Run ALIGNN static calculation on all structures in a directory.
-
-        ``isif``, ``optimizer``, and ``fmax`` are accepted for API
-        compatibility but **ignored** (ALIGNN is pure static calculation, no
-        relaxation).
-        """
-        return super().run_on_directory(
+        """Run ALIGNN static calculation on all structures in a directory."""
+        results = super().run_on_directory(
             path,
             mode=mode,
             max_workers=max_workers,
             objectives=objectives,
-            # isif/optimizer/fmax are passed through but the worker ignores them
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             **kwargs,
         )
+
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(results)
+
+        return results
 
     def _run_code(self) -> str:
         """Return a self-contained Python script for ALIGNN static calculation.
@@ -138,11 +197,35 @@ from decimal import Decimal, ROUND_DOWN
 
 
 def main():
+    _DISPATCH_KEY_TO_MODEL_NAME = {
+        "jv_e_form":             "ALIGNN-JARVIS Formation Energy [eV/atom]",
+        "jv_mbj_bandgap":        "ALIGNN-JARVIS MBJ Bandgap [eV]",
+        "jv_mepscnn_kv":         "ALIGNN-JARVIS Shear Modulus [GPa]",
+        "jv_mepscnn_gv":         "ALIGNN-JARVIS Bulk Modulus [GPa]",
+        "jv_exfoliation_energy": "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
+        "mp_e_form":             "ALIGNN-MP Formation Energy [eV/atom]",
+        "mp_bandgap":            "ALIGNN-MP PBE Bandgap [eV]",
+        "alex_bandgap":          "ALIGNN-Alexandria Bandgap [eV]",
+        "alex_e_form":           "ALIGNN-Alexandria Formation Energy [eV/atom]",
+        "alex_volume_per_atom":  "ALIGNN-Alexandria Volume Per Atom [A^3]",
+    }
+
     req_path = sys.argv[1]
     res_path = sys.argv[2]
 
     with open(req_path) as f:
         req = json.load(f)
+
+    # Resolve requested model names (None = run all models)
+    dispatch_keys = req.get("objectives")  # list[str] or None
+    if dispatch_keys:
+        requested_model_names = [
+            _DISPATCH_KEY_TO_MODEL_NAME[dk]
+            for dk in dispatch_keys
+            if dk in _DISPATCH_KEY_TO_MODEL_NAME
+        ]
+    else:
+        requested_model_names = None
 
     file_paths = req["file_paths"]
     # ALIGNN ignores isif/optimizer/fmax — pure static calculation
@@ -262,6 +345,10 @@ def main():
             if not rel:
                 continue
 
+            # Skip download for models not needed by the requested objectives
+            if requested_model_names is not None and model_dict["name"] not in requested_model_names:
+                continue
+
             traversable = alignn_root
             for part in rel.split('/'):
                 traversable = traversable.joinpath(part)
@@ -290,7 +377,18 @@ def main():
             print("[AlignnAdapter] ALIGNN model archives already valid")
 
         # Run calculation
-        raw_results = pretrained.run_models_from_directory(target_dir, mode="serial")
+        if len(file_paths) == 1:
+            raw_results = pretrained.run_models_from_structure(
+                file_paths[0],
+                mode="serial",
+                models=requested_model_names,
+            )
+        else:
+            raw_results = pretrained.run_models_from_directory(
+                target_dir,
+                mode="serial",
+                models=requested_model_names,
+            )
 
         # Filter to only requested files
         requested_names = set(os.path.basename(fp) for fp in file_paths)
