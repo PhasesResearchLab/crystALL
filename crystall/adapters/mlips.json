@@ -235,5 +235,30 @@
         "custom": {
             "model": "pet-oam-xl"
         }
+    },
+    "TensorNet": {
+        "setup": [
+            "pip install 'matgl~=3.0.0'"
+        ],
+        "calculator": [
+            "import torch; import matgl",
+            "from matgl.ext.ase import PESCalculator",
+            "pot = matgl.load_model('materialyze/{model}', cache_dir='{SFY_PATH}')",
+            "device = torch.device('{device}')",
+            "pot.model = pot.model.to(device)",
+            "calc = PESCalculator(potential=pot)"
+        ],
+        "device": [
+            "cpu",
+            "cuda"
+        ],
+        "os": [
+            "windows",
+            "macos",
+            "linux"
+        ],
+        "custom": {
+            "model": "TensorNet-PES-MatPES-PBE-2025.2"
+        }
     }
 }

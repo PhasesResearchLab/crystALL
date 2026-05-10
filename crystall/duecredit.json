@@ -168,5 +168,15 @@
             "reference-implementation"
         ],
         "cite_module": false
+    },
+    "TensorNet": {
+        "entry_type": "bibtex",
+        "entry": "@article{simeon2023tensornetcartesiantensorrepresentations, title={TensorNet: Cartesian Tensor Representations for Efficient Learning of Molecular Potentials}, author={Guillem Simeon and Gianni de Fabritiis}, year={2023}, eprint={2306.06482}, archivePrefix={arXiv}, primaryClass={cs.LG}, url={https://arxiv.org/abs/2306.06482},}",
+        "description": "TensorNet: Cartesian Tensor Representations for Efficient Learning of Molecular Potentials",
+        "path": "crystall.backends.TensorNet",
+        "tags": [
+            "reference-implementation"
+        ],
+        "cite_module": false
     }
 }
