@@ -48,7 +48,7 @@ class PhonaxAdapter(BaseCalculator):
         result = adapter.run_on_structure("POSCAR")
 
         # NequIP band structure only
-        result = adapter.run_on_structure("POSCAR", objectives=["PHONAX_BS_NEQUIP"])
+        result = adapter.run_on_structure("POSCAR", objectives=["PHONAX_PBS_NEQUIP"])
 
     Args:
         npoints: Number of k-points along the high-symmetry band path
@@ -69,65 +69,65 @@ class PhonaxAdapter(BaseCalculator):
         [
             # NequIP uniIAP -------------------------------------------------------
             Objective(
-                "PHONAX_BS_NEQUIP",
+                "PHONAX_PBS_NEQUIP",
                 "Phonon Band Structure — NequIP uniIAP",
                 "nequip-uniIAP:band_structure",
                 "Phonax",
             ),
             Objective(
-                "PHONAX_DOS_NEQUIP",
+                "PHONAX_PDOS_NEQUIP",
                 "Phonon DOS — NequIP uniIAP",
                 "nequip-uniIAP:dos",
                 "Phonax",
             ),
             # NequIP uniIAP fine-tuned --------------------------------------------
             Objective(
-                "PHONAX_BS_NEQUIP_FT",
+                "PHONAX_PBS_NEQUIP_FT",
                 "Phonon Band Structure — NequIP uniIAP fine-tuned",
                 "nequip-uniIAP-finetune:band_structure",
                 "Phonax",
             ),
             Objective(
-                "PHONAX_DOS_NEQUIP_FT",
+                "PHONAX_PDOS_NEQUIP_FT",
                 "Phonon DOS — NequIP uniIAP fine-tuned",
                 "nequip-uniIAP-finetune:dos",
                 "Phonax",
             ),
             # NequIP JAX uniIAP ---------------------------------------------------
             Objective(
-                "PHONAX_BS_NEQUIP_JAX",
+                "PHONAX_PBS_NEQUIP_JAX",
                 "Phonon Band Structure — NequIP JAX uniIAP",
                 "nequip-JAX-uniIAP:band_structure",
                 "Phonax",
             ),
             Objective(
-                "PHONAX_DOS_NEQUIP_JAX",
+                "PHONAX_PDOS_NEQUIP_JAX",
                 "Phonon DOS — NequIP JAX uniIAP",
                 "nequip-JAX-uniIAP:dos",
                 "Phonax",
             ),
             # MACE uniIAP ---------------------------------------------------------
             Objective(
-                "PHONAX_BS_MACE",
+                "PHONAX_PBS_MACE",
                 "Phonon Band Structure — MACE uniIAP",
                 "mace-uniIAP:band_structure",
                 "Phonax",
             ),
             Objective(
-                "PHONAX_DOS_MACE",
+                "PHONAX_PDOS_MACE",
                 "Phonon DOS — MACE uniIAP",
                 "mace-uniIAP:dos",
                 "Phonax",
             ),
             # MACE uniIAP fine-tuned ----------------------------------------------
             Objective(
-                "PHONAX_BS_MACE_FT",
+                "PHONAX_PBS_MACE_FT",
                 "Phonon Band Structure — MACE uniIAP fine-tuned",
                 "mace-uniIAP-finetune:band_structure",
                 "Phonax",
             ),
             Objective(
-                "PHONAX_DOS_MACE_FT",
+                "PHONAX_PDOS_MACE_FT",
                 "Phonon DOS — MACE uniIAP fine-tuned",
                 "mace-uniIAP-finetune:dos",
                 "Phonax",
@@ -144,16 +144,16 @@ class PhonaxAdapter(BaseCalculator):
     # Reverse map: dispatch_key → objective code, built once at class body time
     # so _deserialize_result can look up codes without accessing the registry.
     _DISPATCH_TO_CODE: Dict[str, str] = {
-        "nequip-uniIAP:band_structure": "PHONAX_BS_NEQUIP",
-        "nequip-uniIAP:dos": "PHONAX_DOS_NEQUIP",
-        "nequip-uniIAP-finetune:band_structure": "PHONAX_BS_NEQUIP_FT",
-        "nequip-uniIAP-finetune:dos": "PHONAX_DOS_NEQUIP_FT",
-        "nequip-JAX-uniIAP:band_structure": "PHONAX_BS_NEQUIP_JAX",
-        "nequip-JAX-uniIAP:dos": "PHONAX_DOS_NEQUIP_JAX",
-        "mace-uniIAP:band_structure": "PHONAX_BS_MACE",
-        "mace-uniIAP:dos": "PHONAX_DOS_MACE",
-        "mace-uniIAP-finetune:band_structure": "PHONAX_BS_MACE_FT",
-        "mace-uniIAP-finetune:dos": "PHONAX_DOS_MACE_FT",
+        "nequip-uniIAP:band_structure": "PHONAX_PBS_NEQUIP",
+        "nequip-uniIAP:dos": "PHONAX_PDOS_NEQUIP",
+        "nequip-uniIAP-finetune:band_structure": "PHONAX_PBS_NEQUIP_FT",
+        "nequip-uniIAP-finetune:dos": "PHONAX_PDOS_NEQUIP_FT",
+        "nequip-JAX-uniIAP:band_structure": "PHONAX_PBS_NEQUIP_JAX",
+        "nequip-JAX-uniIAP:dos": "PHONAX_PDOS_NEQUIP_JAX",
+        "mace-uniIAP:band_structure": "PHONAX_PBS_MACE",
+        "mace-uniIAP:dos": "PHONAX_PDOS_MACE",
+        "mace-uniIAP-finetune:band_structure": "PHONAX_PBS_MACE_FT",
+        "mace-uniIAP-finetune:dos": "PHONAX_PDOS_MACE_FT",
     }
 
     def __init__(
@@ -244,7 +244,9 @@ class PhonaxAdapter(BaseCalculator):
         )
 
     @staticmethod
-    def _dos_from_payload(payload: dict, structure: "Structure" | None) -> "CompletePhononDos" | dict:
+    def _dos_from_payload(
+        payload: dict, structure: "Structure" | None
+    ) -> "CompletePhononDos" | dict:
         from pymatgen.phonon.dos import PhononDos, CompletePhononDos
         import numpy as np
 
@@ -255,7 +257,10 @@ class PhonaxAdapter(BaseCalculator):
 
         if structure is None:
             # Fallback if structure parsing failed but DOS was generated
-            return {"total_dos": total_dos, "partial_dos": payload.get("partial_dos", {})}
+            return {
+                "total_dos": total_dos,
+                "partial_dos": payload.get("partial_dos", {}),
+            }
 
         ph_doses: Dict[Any, list] = {}
         partial_raw = payload.get("partial_dos", {})
