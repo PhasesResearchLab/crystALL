@@ -20,13 +20,20 @@ class UPETDosAdapter(BaseCalculator):
 
     name = "UPET-DOS"
     calculator_type: Literal["static"] = "static"
-    objectives: ObjectiveRegistry = ObjectiveRegistry([
-        Objective("UPETDOS_DOS", "UPET-MAD DOS",            "complete_dos", "UPET-DOS"),
-        Objective("UPETDOS_BG",  "UPET-MAD Bandgap [eV]",  "bandgap",     "UPET-DOS"),
-        Objective("UPETDOS_EF",  "UPET-MAD Fermi Level [eV]", "fermi_level", "UPET-DOS"),
-    ])
+    objectives: ObjectiveRegistry = ObjectiveRegistry(
+        [
+            Objective("UPETDOS_DOS", "UPET-MAD DOS", "complete_dos", "UPET-DOS"),
+            Objective("UPETDOS_BG", "UPET-MAD Bandgap [eV]", "bandgap", "UPET-DOS"),
+            Objective(
+                "UPETDOS_EF", "UPET-MAD Fermi Level [eV]", "fermi_level", "UPET-DOS"
+            ),
+        ]
+    )
     supported_os: List[str] = ["windows", "macos", "linux"]
-    supported_devices: List[str] = ["cpu", "cuda"]  # worker auto-selects via torch.cuda.is_available()
+    supported_devices: List[str] = [
+        "cpu",
+        "cuda",
+    ]  # worker auto-selects via torch.cuda.is_available()
 
     def _env_path(self) -> Path:
         return self._env_root() / "upetdos"
@@ -35,7 +42,7 @@ class UPETDosAdapter(BaseCalculator):
         return "3.11"
 
     def layer2_dependencies(self) -> List[str]:
-        return ["torch==2.3.0", "torchdata==0.9.0"]
+        return ["torch==2.10.0"]
 
     def setup_commands(self) -> List[str]:
         return [
@@ -56,12 +63,22 @@ class UPETDosAdapter(BaseCalculator):
 
     @classmethod
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Deserialize payload arrays inside a single result."""
+        """Deserialize payload and remap dispatch keys to objective codes.
+
+        Dispatch keys emitted by the worker (e.g. ``"complete_dos"``,
+        ``"bandgap"``, ``"fermi_level"``) are remapped to their canonical
+        objective codes (``"UPETDOS_DOS"``, ``"UPETDOS_BG"``,
+        ``"UPETDOS_EF"``) via :meth:`ObjectiveRegistry.code_for_dispatch_key`.
+        Unknown keys are kept as-is rather than silently dropped.
+        """
         if "properties" in result and isinstance(result["properties"], dict):
             props = result["properties"]
             updated_props = {}
             for k, v in props.items():
-                updated_props[k] = cls._deserialize_worker_value(k, v)
+                # Remap dispatch key → canonical objective code; fall back to
+                # the raw key so unknown entries are preserved.
+                code = cls.objectives.code_for_dispatch_key(k) or k
+                updated_props[code] = cls._deserialize_worker_value(k, v)
             result["properties"] = updated_props
         return result
 
@@ -75,25 +92,19 @@ class UPETDosAdapter(BaseCalculator):
     def run_on_structure(
         self,
         file_path: Path | str,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         res = super().run_on_structure(
             file_path,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
             objectives=objectives,
             **kwargs,
         )
         parsed = self._deserialize_result(res)
-        
+
         if not getattr(self, "_is_piped", False):
             self._print_results_section(parsed)
-            
+
         return parsed
 
     def run_on_directory(
@@ -102,9 +113,6 @@ class UPETDosAdapter(BaseCalculator):
         mode: str = "serial",
         max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
-        isif: int = 8,
-        optimizer: str = "FIRE",
-        fmax: float = 0.05,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         results = super().run_on_directory(
@@ -115,10 +123,10 @@ class UPETDosAdapter(BaseCalculator):
             **kwargs,
         )
         parsed_results = self._deserialize_results(results)
-        
+
         if not getattr(self, "_is_piped", False):
             self._print_results_section(parsed_results)
-            
+
         return parsed_results
 
 
@@ -157,13 +165,19 @@ def main():
             atoms = ase.io.read(fp)
             
             # Predict DOS properties
+            # calculate_dos returns (energy_grid, dos_tensor)
+            # calculate_bandgap(atoms, dos=<tensor>) — dos_energies is NOT a parameter
+            # calculate_efermi(atoms, dos=<tensor>, temperature=<float>)
             dos_energies, dos = calculator.calculate_dos(atoms, per_atom=False)
-            bandgap = calculator.calculate_bandgap(atoms, dos_energies, dos)
-            efermi = calculator.calculate_efermi(atoms, dos_energies, dos, temperature=0.0)
+            bandgap = calculator.calculate_bandgap(atoms, dos=dos)
+            efermi = calculator.calculate_efermi(atoms, dos=dos, temperature=0.0)
             
             # Build Pymatgen structures
             structure = AseAtomsAdaptor.get_structure(atoms)
-            dos_obj = Dos(float(efermi), dos_energies.tolist(), {Spin.up: dos.tolist()})
+            # Ensure 1D arrays for Pymatgen Dos object
+            energies_list = dos_energies.reshape(-1).tolist()
+            densities_list = dos.reshape(-1).tolist()
+            dos_obj = Dos(float(efermi), energies_list, {Spin.up: densities_list})
             complete_dos = CompleteDos(structure, dos_obj, pdoss={})
             
             props = {
