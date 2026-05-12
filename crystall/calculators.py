@@ -1008,14 +1008,14 @@ class BaseCalculator:
             objectives: Optional subset of objectives to return.
 
         Returns:
-            Dict with ``"name"`` and ``"properties"`` keys.
+            Dict with ``"name"`` and ``"objectives"`` keys.
         """
         self._cite_at_runtime(objectives)
         file_path = os.path.abspath(file_path)
         self._print_run_section("run_on_structure", os.path.basename(file_path))
         results = self._dispatch_worker([file_path], **kwargs)
         if not results:
-            return {"name": os.path.basename(file_path), "properties": {}}
+            return {"name": os.path.basename(file_path), "objectives": {}}
         return results[0]
 
     def run_on_directory(
@@ -1038,7 +1038,7 @@ class BaseCalculator:
             objectives: Optional subset of objective names to compute/return.
 
         Returns:
-            List of dicts, each with ``"name"`` and ``"properties"`` keys.
+            List of dicts, each with ``"name"`` and ``"objectives"`` keys.
         """
         self._cite_at_runtime(objectives)
         path = os.path.abspath(path)

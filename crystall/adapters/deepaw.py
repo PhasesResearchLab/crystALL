@@ -201,10 +201,10 @@ class DeePAWAdapter(BaseCalculator):
         )
 
         parsed = self._deserialize_result(result)
-        
+
         if not getattr(self, "_is_piped", False):
             self._print_results_section(parsed)
-            
+
         return parsed
 
     def run_on_directory(
@@ -242,10 +242,10 @@ class DeePAWAdapter(BaseCalculator):
         )
 
         parsed_results = [self._deserialize_result(r) for r in results]
-        
+
         if not getattr(self, "_is_piped", False):
             self._print_results_section(parsed_results)
-            
+
         return parsed_results
 
     def _run_code(self) -> str:
@@ -295,10 +295,10 @@ class DeePAWAdapter(BaseCalculator):
         """Deserialize marker-wrapped values in a result dict."""
         if not isinstance(result, dict):
             return result
-        props = result.get("properties")
+        props = result.get("objectives")
         if isinstance(props, dict):
             updated = dict(result)
-            updated["properties"] = {
+            updated["objectives"] = {
                 k: cls._deserialize_worker_value(v) for k, v in props.items()
             }
             return updated
@@ -461,12 +461,12 @@ with open(output_file, "w") as f:
 
             if result.returncode != 0:
                 print(f"[DeePAW] Calculation failed for {filename}: {result.stderr}")
-                results.append({"name": filename, "properties": {}})
+                results.append({"name": filename, "objectives": {}})
                 continue
 
             if not os.path.isfile(output_chgcar):
                 print(f"[DeePAW] Output not found for {filename}")
-                results.append({"name": filename, "properties": {}})
+                results.append({"name": filename, "objectives": {}})
                 continue
 
             try:
@@ -488,10 +488,10 @@ with open(output_file, "w") as f:
                         "__crystall_chgcar_raw__": raw_chgcar
                     }
                 }
-                results.append({"name": filename, "properties": props})
+                results.append({"name": filename, "objectives": props})
             except Exception as e:
                 print(f"[DeePAW] Failed to read {output_chgcar}: {e}")
-                results.append({"name": filename, "properties": {}})
+                results.append({"name": filename, "objectives": {}})
 
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)

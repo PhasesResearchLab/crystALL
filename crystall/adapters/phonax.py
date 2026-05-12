@@ -284,7 +284,7 @@ class PhonaxAdapter(BaseCalculator):
         """
         if not isinstance(result, dict):
             return result
-        props = result.get("properties")
+        props = result.get("objectives")
         if not isinstance(props, dict):
             return result
 
@@ -318,7 +318,7 @@ class PhonaxAdapter(BaseCalculator):
             except Exception:
                 updated_props[obj_code] = value
 
-        updated["properties"] = updated_props
+        updated["objectives"] = updated_props
         return updated
 
     def run_on_structure(
@@ -707,7 +707,7 @@ def main():
                 )
                 traceback.print_exc()
 
-        results.append({"name": filename, "properties": props})
+        results.append({"name": filename, "objectives": props})
 
     with open(res_path, "w") as f:
         json.dump({"results": results}, f)

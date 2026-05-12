@@ -412,7 +412,7 @@ def main():
                 elif isinstance(val, (int,)):
                     props[key] = float(val)
 
-            results.append({"name": name, "properties": props})
+            results.append({"name": name, "objectives": props})
 
         with open(res_path, "w") as f:
             json.dump({"results": results}, f)

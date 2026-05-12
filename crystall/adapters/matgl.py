@@ -151,10 +151,10 @@ class MatGLAdapter(BaseCalculator):
         if not isinstance(result, dict):
             return result
 
-        props = result.get("properties")
+        props = result.get("objectives")
         if isinstance(props, dict):
             updated = dict(result)
-            updated["properties"] = {
+            updated["objectives"] = {
                 k: cls._deserialize_worker_value(v) for k, v in props.items()
             }
             return updated
@@ -387,10 +387,10 @@ def main():
                     if "MATGL_MDIPOLE_CHGNET" in requested:
                         props["MATGL_MDIPOLE_CHGNET"] = round4(float(np.sum(magmoms)))
 
-            results.append({"name": filename, "properties": props})
+            results.append({"name": filename, "objectives": props})
         except Exception as exc:
             print(f"[MatGLAdapter] Error processing {filename}: {exc}")
-            results.append({"name": filename, "properties": {}})
+            results.append({"name": filename, "objectives": {}})
 
     with open(res_path, "w") as f:
         json.dump({"results": results}, f)

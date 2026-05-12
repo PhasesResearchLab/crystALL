@@ -71,15 +71,15 @@ class UPETDosAdapter(BaseCalculator):
         ``"UPETDOS_EF"``) via :meth:`ObjectiveRegistry.code_for_dispatch_key`.
         Unknown keys are kept as-is rather than silently dropped.
         """
-        if "properties" in result and isinstance(result["properties"], dict):
-            props = result["properties"]
+        if "objectives" in result and isinstance(result["objectives"], dict):
+            props = result["objectives"]
             updated_props = {}
             for k, v in props.items():
                 # Remap dispatch key → canonical objective code; fall back to
                 # the raw key so unknown entries are preserved.
                 code = cls.objectives.code_for_dispatch_key(k) or k
                 updated_props[code] = cls._deserialize_worker_value(k, v)
-            result["properties"] = updated_props
+            result["objectives"] = updated_props
         return result
 
     @classmethod
@@ -185,7 +185,7 @@ def main():
                 "bandgap": float(bandgap),
                 "fermi_level": float(efermi),
             }
-            results.append({"name": os.path.basename(fp), "properties": props})
+            results.append({"name": os.path.basename(fp), "objectives": props})
         except Exception as e:
             error_msg = f"{str(e)}\\n{traceback.format_exc()}"
             results.append({"name": os.path.basename(fp), "error": error_msg})

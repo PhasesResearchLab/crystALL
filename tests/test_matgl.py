@@ -86,7 +86,7 @@ class TestMatGLAdapterContract(unittest.TestCase):
         fake_results = [
             {
                 "name": "POSCAR",
-                "properties": {
+                "objectives": {
                     "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]": -1.2345,
                     "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms": {
                         STRUCTURE_MARKER_KEY: struct.as_dict()
@@ -107,13 +107,13 @@ class TestMatGLAdapterContract(unittest.TestCase):
         mock_dw.assert_called_once()
         self.assertEqual(len(results), 1)
         self.assertAlmostEqual(
-            results[0]["properties"][
+            results[0]["objectives"][
                 "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]"
             ],
             -1.2345,
         )
         self.assertIsInstance(
-            results[0]["properties"][
+            results[0]["objectives"][
                 "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms"
             ],
             Structure,
@@ -194,7 +194,7 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
                     res_data = json.load(f)
 
                 self.assertEqual(len(res_data["results"]), 1)
-                props = res_data["results"][0]["properties"]
+                props = res_data["results"][0]["objectives"]
                 self.assertIn(
                     "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]", props
                 )
@@ -262,7 +262,7 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
                     res_data = json.load(f)
 
                 self.assertEqual(len(res_data["results"]), 1)
-                props = res_data["results"][0]["properties"]
+                props = res_data["results"][0]["objectives"]
                 self.assertIn(
                     "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]", props
                 )

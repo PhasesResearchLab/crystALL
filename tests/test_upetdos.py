@@ -10,6 +10,7 @@ from crystall.adapters.upetdos import UPETDosAdapter
 
 from crystall.calculators import ObjectiveRegistry
 
+
 def test_upetdos_adapter_setup():
     """Test the basic configuration of the adapter."""
     adapter = UPETDosAdapter()
@@ -137,8 +138,8 @@ class TestUPETDosWorkerSemantics:
             assert "results" in res
             results = res["results"]
             assert len(results) == 1
-            assert "properties" in results[0]
-            props = results[0]["properties"]
+            assert "objectives" in results[0]
+            props = results[0]["objectives"]
 
             assert "complete_dos" in props
             assert props["complete_dos"]["@class"] == "CompleteDos"
@@ -149,7 +150,7 @@ class TestUPETDosWorkerSemantics:
 def test_deserialization():
     adapter = UPETDosAdapter()
     res = {
-        "properties": {
+        "objectives": {
             "complete_dos": {
                 "@module": "pymatgen.electronic_structure.dos",
                 "@class": "CompleteDos",
@@ -165,4 +166,4 @@ def test_deserialization():
     with patch("crystall.adapters.upetdos.CompleteDos.from_dict") as mock_from_dict:
         mock_from_dict.return_value = "mocked_dos"
         deserialized = adapter._deserialize_result(res)
-        assert deserialized["properties"]["complete_dos"] == "mocked_dos"
+        assert deserialized["objectives"]["UPETDOS_DOS"] == "mocked_dos"

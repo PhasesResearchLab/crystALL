@@ -462,7 +462,7 @@ class TestCrystALLSearch(unittest.TestCase):
                 self, path, mode="serial", max_workers=None, objectives=None, **kwargs
             ):
                 return [
-                    {"name": p["name"], "properties": {"ext_prop": 2.5}}
+                    {"name": p["name"], "objectives": {"ext_prop": 2.5}}
                     for p in self_test.cas.prototypes
                 ]
 
@@ -512,7 +512,7 @@ class TestCrystALLSearch(unittest.TestCase):
                 self, path, mode="serial", max_workers=None, objectives=None
             ):
                 return [
-                    {"name": "nonexistent.POSCAR", "properties": {"mismatch_prop": 1.0}}
+                    {"name": "nonexistent.POSCAR", "objectives": {"mismatch_prop": 1.0}}
                 ]
 
         self.cas.supported_calculators["nomatch"] = NoMatchAdapter
@@ -532,7 +532,7 @@ class TestCrystALLSearch(unittest.TestCase):
                     return [
                         {
                             "name": self_test.cas.prototypes[0]["name"],
-                            "properties": {"ext_prop": 4.2},
+                            "objectives": {"ext_prop": 4.2},
                         }
                     ]
                 return []

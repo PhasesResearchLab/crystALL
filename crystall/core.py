@@ -369,7 +369,7 @@ class CrystALLSearch:
 
     def setup_pysipfenn(self) -> None:
         """Set up builtin pySIPFENN models without eager imports."""
-        package_root, models, compatible_models, default_model = _pysipfenn_defaults(
+        package_root, compatible_models, default_model = _pysipfenn_defaults(
             _DEFAULT_PYSIPFENN_DESCRIPTOR
         )
         has_default = os.path.isfile(
@@ -933,7 +933,7 @@ class CrystALLSearch:
         matched = 0
         for r in results:
             name = r.get("name") if isinstance(r, dict) else None
-            props = r.get("properties", {}) if isinstance(r, dict) else {}
+            props = r.get("objectives", {}) if isinstance(r, dict) else {}
             if name in name_to_index:
                 # Recode dispatch keys → objective codes using the adapter registry so
                 # that define_objective / filter_prototypes can look up values with the
@@ -961,7 +961,7 @@ class CrystALLSearch:
         # are also registered in predicted_objectives.
         produced_objectives = set()
         for r in results:
-            props = r.get("properties", {}) if isinstance(r, dict) else {}
+            props = r.get("objectives", {}) if isinstance(r, dict) else {}
             for dispatch_key in props:
                 code = (
                     adapter_reg.code_for_dispatch_key(dispatch_key)

@@ -284,13 +284,13 @@ class TestDeserializeResult(unittest.TestCase):
             }
         }
 
-        result = {"name": "NaCl.cif", "properties": payload}
+        result = {"name": "NaCl.cif", "objectives": payload}
         deserialized = PhonaxAdapter._deserialize_result(result, struct.as_dict())
 
         import numpy as np
         from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
 
-        bs = deserialized["properties"]["PHONAX_BS: Phonax Phonon Band Structure"]
+        bs = deserialized["objectives"]["PHONAX_BS: Phonax Phonon Band Structure"]
         self.assertIsInstance(bs, PhononBandStructureSymmLine)
         self.assertEqual(bs.frequencies.shape, (6, n_qpoints))
         np.testing.assert_allclose(
@@ -316,27 +316,27 @@ class TestDeserializeResult(unittest.TestCase):
             }
         }
 
-        result = {"name": "NaCl.cif", "properties": payload}
+        result = {"name": "NaCl.cif", "objectives": payload}
         deserialized = PhonaxAdapter._deserialize_result(result, struct.as_dict())
 
         from pymatgen.phonon.dos import CompletePhononDos
 
-        dos = deserialized["properties"]["PHONAX_DOS: Phonax Phonon DOS"]
+        dos = deserialized["objectives"]["PHONAX_DOS: Phonax Phonon DOS"]
         self.assertIsInstance(dos, CompletePhononDos)
         self.assertEqual(len(dos.frequencies), n_total)
 
     def test_deserialize_passes_through_non_phonon_props(self):
         result = {
             "name": "test.cif",
-            "properties": {
+            "objectives": {
                 "phonon_band_structure": {"some": "data"},
                 "Static Energy [eV/atom]": -1.5,
             },
         }
         deserialized = PhonaxAdapter._deserialize_result(result, None)
-        self.assertEqual(deserialized["properties"]["Static Energy [eV/atom]"], -1.5)
+        self.assertEqual(deserialized["objectives"]["Static Energy [eV/atom]"], -1.5)
         self.assertEqual(
-            deserialized["properties"]["phonon_band_structure"], {"some": "data"}
+            deserialized["objectives"]["phonon_band_structure"], {"some": "data"}
         )
 
     def test_deserialize_non_dict_result(self):
@@ -358,7 +358,7 @@ class TestRunOnStructureWorkflow(unittest.TestCase):
 
             fake_payload = {
                 "name": "POSCAR",
-                "properties": {
+                "objectives": {
                     "phonon_band_structure": {
                         "frequencies_cm1": [[10.0] * 6],
                         "qpoints": [[0.0, 0.0, 0.0]],
@@ -374,7 +374,7 @@ class TestRunOnStructureWorkflow(unittest.TestCase):
 
             self.assertEqual(result["name"], "POSCAR")
             self.assertIn(
-                "PHONAX_BS: Phonax Phonon Band Structure", result["properties"]
+                "PHONAX_BS: Phonax Phonon Band Structure", result["objectives"]
             )
 
 

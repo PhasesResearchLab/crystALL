@@ -105,7 +105,7 @@ class TestAlignnAdapterContract(unittest.TestCase):
 
     def test_run_on_directory_dispatches_worker(self):
         """run_on_directory delegates to _dispatch_worker with correct kwargs."""
-        fake_results = [{"name": "POSCAR", "properties": {"dummy": 1.23}}]
+        fake_results = [{"name": "POSCAR", "objectives": {"dummy": 1.23}}]
 
         with (
             patch.object(
