@@ -51,8 +51,8 @@ dependencies = [
 packages = { find = { exclude = ["paper", "oldfiles"] } }
 
 [project.urls]
-"Documentation" = "https://crystall.readthedocs.io"
-"Repository" = "https://github.com/PhasesResearchLab/crystALL"
+documentation = "https://crystall.readthedocs.io"
+repository = "https://github.com/PhasesResearchLab/crystALL"
 
 [project.entry-points."crystall.calculators"]
 ALIGNN = "crystall.adapters.alignn:AlignnAdapter"

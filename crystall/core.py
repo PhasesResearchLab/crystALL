@@ -2118,7 +2118,10 @@ class CrystALLSearch:
 __name__ = "crystall"
 __version__ = "X.X.X"
 __release__ = "YYYY-MM"
-__authors__ = "Amaral, Ricardo and Krajewski, Adam"
+__authors__ = [
+    {"name": "Ricardo Amaral", "email": "rna5137@psu.edu"},
+    {"name": "Adam Krajewski", "email": "adam@phaseslab.org"},
+]
 __doc__ = "crystALL.mpdd.org"
 __rep__ = "github.com/PhasesResearchLab/crystALL"
 __bibtex__ = "@software{amaral-krajewski2026crystall, title={crystALL: A data-driven materials discovery platform}, author={{Amaral, R.} and {Krajewski, A. M.}}, journal={npj Computational Materials}, volume={X}, number={1}, pages={1-10}, year={2026}, publisher={Nature Publishing Group}, doi={10.xxxx.xxxxx-xxxx}}"

@@ -1,17 +1,17 @@
-name: Linux
+name: NoDeps Tests Linux
 
 on: 
   push:
     branches: [main]
     paths:
       - 'crystall/**'
-      - '.github/workflows/coreTests_LinuxUbuntu.yaml'
+      - '.github/workflows/nodeps_tests_linux.yaml'
   
   pull_request:
     branches: [main]
     paths:
       - 'crystall/**'
-      - '.github/workflows/coreTests_LinuxUbuntu.yaml'
+      - '.github/workflows/nodeps_tests_linux.yaml'
   
   workflow_dispatch:
 
