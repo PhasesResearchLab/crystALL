@@ -46,8 +46,61 @@ def _sanitize_model_code(name: str) -> str:
     return re.sub(r"_+", "_", sanitized)
 
 
-# NOTE: Once crystALL is released on PyPI, worker scripts should import this
-# mapping directly from the crystALL package rather than redefining it.
+def _upsert_objectives_json(
+    json_path: str,
+    filename: str,
+    new_objectives: dict,
+) -> None:
+    """Atomically merge new_objectives into the entry for filename.
+
+    Creates the file if absent. Overwrites the entry for filename in-place.
+    Uses a temp file + os.replace for write atomicity.
+    """
+    data = {}
+    if os.path.isfile(json_path):
+        try:
+            with open(json_path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    entry = data.get(filename, {"objectives": {}})
+    entry["objectives"].update(new_objectives)
+    data[filename] = entry
+    tmp = json_path + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, json_path)
+    except Exception as e:
+        print(f"[MLIPAdapter] Warning: could not write host objectives JSON: {e}")
+        if os.path.isfile(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _load_objectives_json(path: str) -> dict:
+    import os, json
+
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _classify_state(entry: dict, requested_keys: list) -> str:
+    if entry is None:
+        return "C"
+    present = entry.get("objectives", {})
+    if all(k in present for k in requested_keys):
+        return "A"
+    return "B"
+
+
 from crystall.prototypes import _STRUCTURE_FORMATS, _read_structure_format
 
 # ── Configuration helpers ───────────────────────────────────────────────────
@@ -140,7 +193,7 @@ class MLIPAdapter(BaseCalculator):
                 ),
                 Objective(
                     f"{self._model_code}_RELAX_F",
-                    f"{model_name} Relaxed RMS Force [eV/Å]",
+                    f"{model_name} Relaxed RMS Force [eV/A]",
                     "ase_relax",
                     model_name,
                 ),
@@ -152,7 +205,7 @@ class MLIPAdapter(BaseCalculator):
                 ),
                 Objective(
                     f"{self._model_code}_RELAX_VOL",
-                    f"{model_name} Relaxed Volume [Å³/atom]",
+                    f"{model_name} Relaxed Volume [A^3/atom]",
                     "ase_relax",
                     model_name,
                 ),
@@ -364,6 +417,23 @@ class MLIPAdapter(BaseCalculator):
         super()._setup_preflight()
         self.format_vars()
 
+    def _resolve_mlip_objective_keys(self, objectives):
+        if objectives is None:
+            own_codes = self._own_objectives.codes()
+        else:
+            own_codes = [c for c in objectives if c in self._own_objectives.codes()]
+
+        keys = []
+        for code in own_codes:
+            obj = self._own_objectives[code]
+            suffix = code.split(f"{self._model_code}_", 1)[-1]
+            desc = obj.description
+            if desc.startswith(f"{self.name} "):
+                desc = desc[len(f"{self.name} ") :]
+            key = f"{self._model_code}_{suffix}: {self.name} {desc}"
+            keys.append(key)
+        return keys
+
     def run_on_structure(
         self,
         file_path: str,
@@ -371,8 +441,20 @@ class MLIPAdapter(BaseCalculator):
         optimizer: str = "FIRE",
         fmax: float = 0.05,
         objectives: Sequence[str] | None = None,
+        persist_traj: bool = False,
         **kwargs,
     ) -> Dict[str, Any]:
+        """Run MLIP relaxation on a single structure file.
+
+        Args:
+            file_path: Path to the structure file.
+            isif: Relaxation ISIF flag.
+            optimizer: ASE optimizer name.
+            fmax: Force convergence threshold.
+            objectives: Subset of objectives to compute.
+            persist_traj: Whether to persist the ASE trajectory file after relaxation.
+            **kwargs: Additional kwargs forwarded to the worker request.
+        """
         if self._static_adapters:
             print()
             print("=" * 51)
@@ -397,6 +479,66 @@ class MLIPAdapter(BaseCalculator):
         # Naming convention: {model_name}_{stem}{fmt_ext}  e.g. ORB_Fe2O3.vasp
         output_stem_prefix = f"{self._model_name}_"
 
+        objectives_json_path = os.path.join(
+            output_dir, f"{self._model_name}_{stem}_results.json"
+        )
+        requested_keys = self._resolve_mlip_objective_keys(objectives)
+
+        self._current_output_dir = output_dir
+        self._current_output_stem_prefix = output_stem_prefix
+        self._current_persist_traj = persist_traj
+        self._current_objectives_json_path = objectives_json_path
+        self._current_requested_keys = requested_keys
+
+        data = _load_objectives_json(objectives_json_path)
+        filename = os.path.basename(abs_path)
+        existing_entry = data.get(filename)
+        state = _classify_state(existing_entry, requested_keys)
+
+        if state == "A":
+            existing_entry["name"] = filename
+            out_path = os.path.join(output_dir, f"{output_stem_prefix}{stem}{out_ext}")
+            struct_key = next(
+                (
+                    k
+                    for k in existing_entry.get("objectives", {})
+                    if k.endswith("Relaxed Structure")
+                ),
+                None,
+            )
+            if struct_key:
+                payload = existing_entry["objectives"][struct_key]
+                poscar_str = (
+                    payload.get("__crystall_pymatgen_structure__")
+                    if isinstance(payload, dict)
+                    else None
+                )
+                if poscar_str:
+                    try:
+                        import io as _io
+                        from ase.io import read as _ase_read, write as _ase_write
+
+                        _buf = _io.StringIO(poscar_str)
+                        _atoms_tmp = _ase_read(_buf, format="vasp")
+                        os.makedirs(output_dir, exist_ok=True)
+                        pmg_fmt = fmt_info[0] if fmt_info else "poscar"
+                        ase_fmt = _STRUCTURE_FORMATS.get(pmg_fmt, ["vasp"])[0]
+                        _ase_write(out_path, _atoms_tmp, format=ase_fmt)
+                    except Exception as _reexport_err:
+                        warnings.warn(
+                            f"[{self._model_name}] Could not re-export relaxed structure "
+                            f"to '{out_path}': {_reexport_err}"
+                        )
+
+            parsed = self._deserialize_result(existing_entry)
+            if self._static_adapters:
+                parsed = self._run_static_pipe_single(out_path, parsed)
+                _upsert_objectives_json(
+                    objectives_json_path, filename, parsed.get("objectives", {})
+                )
+            self._print_results_section(parsed)
+            return parsed
+
         result = super().run_on_structure(
             file_path,
             isif=isif,
@@ -413,6 +555,9 @@ class MLIPAdapter(BaseCalculator):
             saved_path = os.path.join(output_dir, f"{self._model_name}_{stem}{out_ext}")
             if os.path.isfile(saved_path):
                 parsed = self._run_static_pipe_single(saved_path, parsed)
+                _upsert_objectives_json(
+                    objectives_json_path, filename, parsed.get("objectives", {})
+                )
             else:
                 warnings.warn(
                     f"[{self._model_name}] Relaxed structure not found at "
@@ -430,6 +575,15 @@ class MLIPAdapter(BaseCalculator):
                 "calculator_code_lines": self._config.get("calculator", []),
                 "format_vars": self.format_vars(),
                 "model_code": self._model_code,  # sanitized code prefix for full-key labelling
+                "traj_dir": getattr(self, "_current_output_dir", ""),
+                "traj_prefix": getattr(self, "_current_output_stem_prefix", ""),
+                "persist_traj": getattr(self, "_current_persist_traj", False),
+                "objectives_json_path": getattr(
+                    self, "_current_objectives_json_path", ""
+                ),
+                "requested_objective_keys": getattr(
+                    self, "_current_requested_keys", []
+                ),
             }
         )
         return extras
@@ -459,10 +613,10 @@ class MLIPAdapter(BaseCalculator):
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(result, dict):
             return result
-        props = result.get("properties")
+        props = result.get("objectives")
         if isinstance(props, dict):
             updated = dict(result)
-            updated["properties"] = {
+            updated["objectives"] = {
                 k: cls._deserialize_worker_value(v) for k, v in props.items()
             }
             return updated
@@ -485,6 +639,7 @@ class MLIPAdapter(BaseCalculator):
         isif: int = 8,
         optimizer: str = "FIRE",
         fmax: float = 0.05,
+        persist_traj: bool = False,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         """Run MLIP relaxation on all structures in a directory.
@@ -501,6 +656,7 @@ class MLIPAdapter(BaseCalculator):
             isif: Relaxation ISIF flag.
             optimizer: ASE optimizer name.
             fmax: Force convergence threshold.
+            persist_traj: Whether to persist the ASE trajectory file after relaxation.
             results_dir: Optional explicit path for the output directory.
                 Defaults to ``{parent_of_path}/{model_name}_{input_dir_basename}``.
             **kwargs: Additional kwargs forwarded to the worker request.
@@ -521,27 +677,96 @@ class MLIPAdapter(BaseCalculator):
         )
         results_dir = kwargs.pop("results_dir", default_results_dir)
 
-        mlip_results = super().run_on_directory(
-            path,
-            mode=mode,
-            max_workers=max_workers,
-            objectives=objectives,
-            isif=isif,
-            optimizer=optimizer,
-            fmax=fmax,
-            output_dir=results_dir,
-            output_stem_prefix="",  # files in sibling dir keep original names
-            **kwargs,
+        objectives_json_path = os.path.join(
+            results_dir, f"{self._model_name}_{input_dir_name}_results.json"
         )
+        requested_keys = self._resolve_mlip_objective_keys(objectives)
 
-        if self._static_adapters and os.path.isdir(results_dir):
-            mlip_results = self._run_static_pipe(
-                results_dir,
-                mlip_results,
-                save_artifacts=self.save_artifacts,
+        self._current_output_dir = results_dir
+        self._current_output_stem_prefix = ""
+        self._current_persist_traj = persist_traj
+        self._current_objectives_json_path = objectives_json_path
+        self._current_requested_keys = requested_keys
+
+        data = _load_objectives_json(objectives_json_path)
+
+        pre_computed_results = []
+        missing_paths = []
+
+        for fp in os.listdir(path):
+            if not os.path.isfile(os.path.join(path, fp)):
+                continue
+            entry = data.get(fp)
+            state = _classify_state(entry, requested_keys)
+            if state == "A":
+                fmt_info = _read_structure_format(os.path.join(path, fp), None)
+                out_ext = fmt_info[1] if fmt_info else ".vasp"
+                stem = os.path.splitext(fp)[0] or fp
+                out_path = os.path.join(results_dir, f"{stem}{out_ext}")
+
+                struct_key = next(
+                    (
+                        k
+                        for k in entry.get("objectives", {})
+                        if k.endswith("Relaxed Structure")
+                    ),
+                    None,
+                )
+                if struct_key:
+                    payload = entry["objectives"][struct_key]
+                    poscar_str = (
+                        payload.get("__crystall_pymatgen_structure__")
+                        if isinstance(payload, dict)
+                        else None
+                    )
+                    if poscar_str:
+                        try:
+                            import io as _io
+                            from ase.io import read as _ase_read, write as _ase_write
+
+                            _buf = _io.StringIO(poscar_str)
+                            _atoms_tmp = _ase_read(_buf, format="vasp")
+                            os.makedirs(results_dir, exist_ok=True)
+                            pmg_fmt = fmt_info[0] if fmt_info else "poscar"
+                            ase_fmt = _STRUCTURE_FORMATS.get(pmg_fmt, ["vasp"])[0]
+                            _ase_write(out_path, _atoms_tmp, format=ase_fmt)
+                        except Exception as _reexport_err:
+                            warnings.warn(
+                                f"[{self._model_name}] Could not re-export relaxed structure "
+                                f"to '{out_path}': {_reexport_err}"
+                            )
+                pre_computed_results.append(entry)
+            else:
+                missing_paths.append(os.path.join(path, fp))
+
+        missing_paths.sort()
+        fresh_worker_results = []
+        if missing_paths:
+            fresh_worker_results = self._dispatch_worker(
+                missing_paths,
+                objectives=objectives,
+                isif=isif,
+                optimizer=optimizer,
+                fmax=fmax,
+                output_dir=results_dir,
+                output_stem_prefix="",
+                **kwargs,
             )
 
-        final_results = self._deserialize_results(mlip_results)
+        all_mlip_results = pre_computed_results + fresh_worker_results
+
+        if self._static_adapters and os.path.isdir(results_dir):
+            all_mlip_results = self._run_static_pipe(
+                results_dir,
+                all_mlip_results,
+                save_artifacts=self.save_artifacts,
+            )
+            for res in all_mlip_results:
+                _upsert_objectives_json(
+                    objectives_json_path, res["name"], res.get("objectives", {})
+                )
+
+        final_results = self._deserialize_results(all_mlip_results)
         self._print_results_section(final_results)
         return final_results
 
@@ -583,12 +808,12 @@ class MLIPAdapter(BaseCalculator):
                 warnings.warn(f"Static adapter '{adapter.name}' failed: {exc}")
                 continue
 
-            for obj_key, obj_val in static_res.get("properties", {}).items():
+            for obj_key, obj_val in static_res.get("objectives", {}).items():
                 static_code = (
                     adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
                 )
                 ns_code = f"{self._model_code}_{static_code}"
-                mlip_result.setdefault("properties", {})[ns_code] = obj_val
+                mlip_result.setdefault("objectives", {})[ns_code] = obj_val
 
         return mlip_result
 
@@ -628,12 +853,12 @@ class MLIPAdapter(BaseCalculator):
                 name = static_res["name"]
                 if name not in by_name:
                     continue
-                for obj_key, obj_val in static_res.get("properties", {}).items():
+                for obj_key, obj_val in static_res.get("objectives", {}).items():
                     static_code = (
                         adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
                     )
                     ns_code = f"{self._model_code}_{static_code}"
-                    by_name[name]["properties"][ns_code] = obj_val
+                    by_name[name]["objectives"][ns_code] = obj_val
 
         return list(by_name.values())
 
@@ -678,6 +903,60 @@ _STRUCTURE_FORMATS = {
     "json":   ["json"],
 }
 
+def _load_objectives_json(path):
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+def _classify_state(entry, requested_keys):
+    # Returns 'A', 'B', or 'C'
+    if entry is None:
+        return 'C'
+    present = entry.get('objectives', {})
+    if all(k in present for k in requested_keys):
+        return 'A'
+    return 'B'
+
+def _reexport_structure(entry, out_path, ase_fmt):
+    # Write relaxed structure from stored POSCAR string. No-op if key absent.
+    import io
+    objectives = entry.get('objectives', {})
+    struct_key = next((k for k in objectives if k.endswith('Relaxed Structure')), None)
+    if struct_key is None:
+        return
+    payload = objectives[struct_key]
+    poscar_str = payload.get('__crystall_pymatgen_structure__') if isinstance(payload, dict) else None
+    if not poscar_str:
+        return
+    try:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        # Import read/write here just in case they aren't globally available
+        from ase.io import read, write
+        atoms_tmp = read(io.StringIO(poscar_str), format='vasp')
+        write(out_path, atoms_tmp, format=ase_fmt)
+    except Exception as e:
+        print(f'[MLIPAdapter] Warning: could not re-export structure to {out_path}: {e}')
+
+def _upsert_objectives_json(json_path, filename, new_objectives):
+    # Atomically merge new_objectives into entry for filename.
+    data = _load_objectives_json(json_path)
+    entry = data.get(filename, {'objectives': {}})
+    entry['objectives'].update(new_objectives)
+    data[filename] = entry
+    tmp = json_path + '.tmp'
+    try:
+        with open(tmp, 'w') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, json_path)
+    except Exception as e:
+        print(f'[MLIPAdapter] Warning: could not write objectives JSON: {e}')
+        if os.path.isfile(tmp):
+            os.remove(tmp)
+
 def main():
     req_path = sys.argv[1]
     res_path = sys.argv[2]
@@ -687,12 +966,10 @@ def main():
 
     file_paths = req["file_paths"]
     model_name = req["model_name"]
-    model_code = req.get("model_code", "")  # sanitized code prefix, e.g. 'ORB_V2'
+    model_code = req["model_code"]
     # Helper: build a dispatch-key-compatible result label
     def _mk(code_suffix, description):
-        if model_code:
-            return f"{model_code}_{code_suffix}: {model_name} {description}"
-        return f"{model_name} {description}"  # backward-compat fallback
+        return f"{model_code}_{code_suffix}: {model_name} {description}"
     calculator_code_lines = req["calculator_code_lines"]
     format_vars = req["format_vars"]
     isif = req.get("isif", 8)
@@ -753,23 +1030,59 @@ def main():
         return float(round(float(value), 4))
 
     # ── Process structures ──────────────────────────────────────────
+    traj_dir = req.get("traj_dir", output_dir)
+    traj_prefix = req.get("traj_prefix", output_stem_prefix)
+    persist_traj = req.get("persist_traj", False)
+    objectives_json_path = req["objectives_json_path"]
+    requested_objective_keys = req.get("requested_objective_keys", [])
+
+    objectives_data = _load_objectives_json(objectives_json_path)
+
     results = []
     for filepath in file_paths:
         filename = os.path.basename(filepath)
         if not os.path.isfile(filepath):
             continue
 
-        # Read structure (try VASP format first, then auto-detect)
-        try:
-            atoms = read(filepath, format="vasp")
-        except Exception:
-            try:
-                atoms = read(filepath)
-            except Exception as e:
-                print(f"[MLIPAdapter] Skipping {filename}: cannot read ({e})")
-                continue
+        stem = os.path.splitext(filename)[0] or filename
+        traj_path = os.path.join(traj_dir, f"{traj_prefix}{stem}.traj")
+        pmg_fmt, out_ext = file_formats_map.get(filepath, ("poscar", ".vasp"))
+        ase_fmt = _STRUCTURE_FORMATS.get(pmg_fmt, ["vasp"])[0]
+        out_filename = f"{output_stem_prefix}{stem}{out_ext}"
+        out_path = os.path.join(output_dir, out_filename)
 
-        atoms.calc = calc
+        existing_entry = objectives_data.get(filename)
+        state = _classify_state(existing_entry, requested_objective_keys)
+
+        # State A: all requested MLIP objectives already recorded -> re-export, skip relaxation
+        # State B falls through to State C so the partial run is resumed from .traj
+        if state == "A":
+            os.makedirs(output_dir, exist_ok=True)
+            _reexport_structure(existing_entry, out_path, ase_fmt)
+            results.append({"name": filename, "objectives": existing_entry.get("objectives", {})})
+            continue
+
+        # State C: full computation
+        atoms = None
+        if os.path.isfile(traj_path):
+            try:
+                from ase.io.trajectory import Trajectory as _AseTraj
+                atoms = _AseTraj(traj_path)[-1]
+                atoms.calc = calc
+            except Exception:
+                atoms = None
+
+        if atoms is None:
+            try:
+                atoms = read(filepath, format="vasp")
+            except Exception:
+                try:
+                    atoms = read(filepath)
+                except Exception as e:
+                    print(f"[MLIPAdapter] Skipping {filename}: cannot read ({e})")
+                    continue
+            atoms.calc = calc
+
         n_atoms = len(atoms)
 
         # ── Apply ISIF constraints ──────────────────────────────────
@@ -790,12 +1103,18 @@ def main():
 
         # ── Run relaxation ──────────────────────────────────────────
         try:
+            from ase.io.trajectory import Trajectory as _TrajWriter
+            _traj_writer = _TrajWriter(traj_path, "a", atoms)
             opt = Optimizer(target)
-            opt.run(fmax=fmax)
+            opt.attach(_traj_writer.write, interval=1)
+            try:
+                opt.run(fmax=fmax)
+            finally:
+                _traj_writer.close()
         except Exception as e:
             print(f"[MLIPAdapter] Relaxation failed for {filename}: {e}")
             traceback.print_exc()
-            results.append({"name": filename, "properties": {}})
+            results.append({"name": filename, "objectives": {}})
             continue
 
         # ── Extract properties ──────────────────────────────────────
@@ -870,20 +1189,27 @@ def main():
             )
 
         # ── Write relaxed structure to disk ──────────────────────────────────
-        pmg_fmt, out_ext = file_formats_map.get(filepath, ("poscar", ".vasp"))
-        ase_fmt = _STRUCTURE_FORMATS.get(pmg_fmt, ["vasp"])[0]
-        in_stem = os.path.splitext(filename)[0] or filename
-        out_filename = f"{output_stem_prefix}{in_stem}{out_ext}"
         os.makedirs(output_dir, exist_ok=True)
         try:
-            write(os.path.join(output_dir, out_filename), atoms, format=ase_fmt)
+            write(out_path, atoms, format=ase_fmt)
         except Exception as _write_err:
             print(
                 f"[MLIPAdapter] Warning: could not write structure for "
                 f"{filename}: {_write_err}"
             )
 
-        results.append({"name": filename, "properties": props})
+        _upsert_objectives_json(objectives_json_path, filename, props)
+
+        if not persist_traj and os.path.isfile(traj_path):
+            try:
+                os.remove(traj_path)
+            except Exception as _rm_err:
+                import sys as _sys
+                _sys.stderr.write(
+                    f"[crystALL worker] WARNING: could not delete trajectory file '{traj_path}': {_rm_err}\n"
+                )
+
+        results.append({"name": filename, "objectives": props})
 
 
 

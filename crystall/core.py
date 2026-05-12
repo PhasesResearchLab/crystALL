@@ -943,7 +943,7 @@ class CrystALLSearch:
                     code = (
                         adapter_reg.code_for_dispatch_key(dispatch_key)
                         if adapter_reg is not None
-                        else None
+                        else dispatch_key
                     )
                     if code is not None:
                         recoded[code] = val

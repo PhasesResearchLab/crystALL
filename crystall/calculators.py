@@ -109,6 +109,10 @@ class ObjectiveRegistry:
 
     # ── Enumeration ─────────────────────────────────────────────────────────
 
+    def __getitem__(self, code: str) -> Objective:
+        """Get an objective by its code."""
+        return self._by_code[code]
+
     def values(self) -> List[Objective]:
         """Return all objectives in declaration order."""
         return list(self._objectives)
