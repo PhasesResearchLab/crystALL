@@ -18,10 +18,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from crystall.adapters.deepaw import DeePAWAdapter, _CHGCAR_MARKER_KEY
+from crystall.adapters.deepaw import DeePAWAdapter, _CHGCAR_RAW_KEY
 
 
 from crystall.calculators import ObjectiveRegistry
+
 
 class TestDeePAWAdapterMetadata(unittest.TestCase):
     """Adapter contract: name, type, objectives."""
@@ -45,8 +46,6 @@ class TestDeePAWAdapterMetadata(unittest.TestCase):
             "deepaw_charge_density",
         )
         self.assertEqual(objectives["DEEPAW_RHO"].backend, "DeePAW")
-
-    
 
     def test_default_grid_dimensions(self):
         self.assertEqual(self.adapter._nx, 40)
@@ -177,6 +176,7 @@ class TestDeePAWSetupSchema(unittest.TestCase):
 
     def test_setup_env_is_not_overridden(self):
         from crystall.calculators import BaseCalculator
+
         self.assertIs(
             DeePAWAdapter.setup_env,
             BaseCalculator.setup_env,
@@ -205,11 +205,18 @@ class TestDeePAWSetupSchema(unittest.TestCase):
         with (
             patch.object(self.adapter, "_env_path", return_value=Path("/env")),
             patch.object(self.adapter, "_downloads_dir", return_value=Path("/env/dl")),
-            patch.object(self.adapter, "_container_path", return_value=Path("/env/c.sif")),
-            patch.object(self.adapter, "_resolve_singularity_binary", return_value="singularity"),
+            patch.object(
+                self.adapter, "_container_path", return_value=Path("/env/c.sif")
+            ),
+            patch.object(
+                self.adapter, "_resolve_singularity_binary", return_value="singularity"
+            ),
         ):
             fv = self.adapter.format_vars()
-        self.assertEqual(set(fv.keys()), {"env_path", "downloads_dir", "container_path", "singularity_bin"})
+        self.assertEqual(
+            set(fv.keys()),
+            {"env_path", "downloads_dir", "container_path", "singularity_bin"},
+        )
 
     def test_layer2_dependencies_is_empty(self):
         self.assertEqual(self.adapter.layer2_dependencies(), [])
@@ -223,13 +230,13 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
         return {"@class": "Chgcar", "@module": "pymatgen.io.vasp.outputs", "data": {}}
 
     def test_marker_key_constant(self):
-        self.assertEqual(_CHGCAR_MARKER_KEY, "__crystall_pymatgen_chgcar__")
+        self.assertEqual(_CHGCAR_RAW_KEY, "__crystall_pymatgen_chgcar__")
 
     def test_deserialize_worker_value_reconstructs_chgcar(self):
         """Marker-wrapped dict must be reconstructed into a Chgcar object."""
         chgcar_mock = MagicMock()
         fake_dict = self._fake_chgcar_dict()
-        wrapped = {_CHGCAR_MARKER_KEY: fake_dict}
+        wrapped = {_CHGCAR_RAW_KEY: fake_dict}
 
         with (
             patch(
@@ -251,8 +258,8 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
         fake_dict = self._fake_chgcar_dict()
         raw_result = {
             "name": "POSCAR",
-            "properties": {
-                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
+            "objectives": {
+                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_RAW_KEY: fake_dict},
             },
         }
 
@@ -263,7 +270,7 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
 
         self.assertEqual(result["name"], "POSCAR")
         self.assertIs(
-            result["properties"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
+            result["objectives"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
         )
 
     def test_deserialize_non_marker_dict_passes_through(self):
@@ -298,7 +305,7 @@ class TestDeePAWWorkerScript(unittest.TestCase):
         self.assertIn("--nv", self.script)
 
     def test_worker_uses_chgcar_marker(self):
-        self.assertIn(_CHGCAR_MARKER_KEY, self.script)
+        self.assertIn(_CHGCAR_RAW_KEY, self.script)
 
     def test_worker_does_not_import_crystall(self):
         self.assertNotIn("import crystall", self.script)
@@ -331,8 +338,8 @@ class TestDeePAWRunOnStructure(unittest.TestCase):
         fake_dict = {"@class": "Chgcar", "data": {}}
         fake_result = {
             "name": "POSCAR",
-            "properties": {
-                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_MARKER_KEY: fake_dict},
+            "objectives": {
+                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_RAW_KEY: fake_dict},
             },
         }
 
@@ -355,7 +362,7 @@ class TestDeePAWRunOnStructure(unittest.TestCase):
 
         self.assertEqual(result["name"], "POSCAR")
         self.assertIs(
-            result["properties"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
+            result["objectives"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
         )
 
     def test_run_on_structure_raises_on_non_linux(self):
@@ -376,10 +383,8 @@ class TestDeePAWRunOnDirectory(unittest.TestCase):
         fake_results = [
             {
                 "name": "POSCAR",
-                "properties": {
-                    "DEEPAW_RHO: DeePAW Charge Density": {
-                        _CHGCAR_MARKER_KEY: fake_dict
-                    },
+                "objectives": {
+                    "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_RAW_KEY: fake_dict},
                 },
             }
         ]
@@ -402,7 +407,7 @@ class TestDeePAWRunOnDirectory(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertIs(
-            results[0]["properties"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
+            results[0]["objectives"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
         )
 
     def test_run_on_directory_raises_on_non_linux(self):
