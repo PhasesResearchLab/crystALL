@@ -26,8 +26,8 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 
 _STRUCTURE_FORMATS: dict[str, list[str]] = {
-    # key   = pymatgen fmt= string used for reading and writing
-    # value = [*accepted_aliases] (no dots)
+    # key   = structure file format
+    # value = [*accepted_extensions] (no dots)
     # value[0] is the extension crystALL uses when writing.
     "poscar": ["vasp", "poscar"],
     "cif": ["cif", "mcif"],

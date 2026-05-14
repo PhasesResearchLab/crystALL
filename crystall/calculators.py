@@ -28,6 +28,49 @@ with open(json_path, "r", encoding="utf-8") as _f:
     _BACKEND_CITATIONS = json.load(_f)
 
 
+_OBJECTIVES_JSON_FILENAME = "objectives.json"
+
+
+def _load_objectives_json(path: str) -> dict:
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _upsert_objectives_json(
+    json_path: str,
+    filename: str,
+    new_objectives: dict,
+) -> None:
+    data = _load_objectives_json(json_path)
+    entry = data.get(filename, {"objectives": {}})
+    entry.setdefault("objectives", {}).update(new_objectives)
+    data[filename] = entry
+    tmp = json_path + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, json_path)
+    except Exception as e:
+        print(f"[BaseCalculator] Warning: could not write objectives JSON: {e}")
+        if os.path.isfile(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _is_done(entry: dict | None, requested_keys: list[str]) -> bool:
+    if entry is None:
+        return False
+    present = entry.get("objectives", {})
+    return all(k in present for k in requested_keys)
+
+
 def _cite_backends(backends: set[str]) -> None:
     for backend in sorted(backends):
         payload = _BACKEND_CITATIONS.get(backend)
@@ -728,6 +771,20 @@ class BaseCalculator:
         """
         return {"save_artifacts": self.save_artifacts}
 
+    def _input_structure_format(self) -> str:
+        """Format the worker script natively reads.
+
+        The host converts any input file whose detected crystALL format
+        differs from this value to POSCAR before staging it for the worker.
+        The return value must be a key in ``crystall.prototypes._STRUCTURE_FORMATS``
+        or the sentinel ``"*"`` (accepts all formats; no conversion).
+
+        Default is ``"poscar"``: the worker always receives a POSCAR regardless
+        of original input format. Override with ``"*"`` when the worker natively
+        handles all crystALL-supported formats (e.g. uses ``ase.io.read``).
+        """
+        return "poscar"
+
     # ── Environment lifecycle ───────────────────────────────────────────────
 
     def setup_env(self) -> None:
@@ -920,6 +977,50 @@ class BaseCalculator:
             shell_env["PATH"] = micro_env_path
             sp.run(cmd, env=shell_env, shell=True, check=True)
 
+    def _maybe_print_results(self, result: Any) -> None:
+        """Print results section unless running inside a pipeline."""
+        if not getattr(self, "_is_piped", False):
+            self._print_results_section(result)
+
+    @staticmethod
+    def _is_done(entry: dict | None, requested_keys: list[str]) -> bool:
+        return _is_done(entry, requested_keys)
+
+    @staticmethod
+    def _upsert_objectives_json(
+        json_path: str, filename: str, new_objectives: dict
+    ) -> None:
+        _upsert_objectives_json(json_path, filename, new_objectives)
+
+    @staticmethod
+    def _results_json_path(target: str) -> str:
+        """Absolute path of the shared objectives JSON for a run target.
+
+        The filename is always ``objectives.json``; the directory is:
+
+        - **Structure file** → same directory as the file:
+          ``{dirname(file_path)}/objectives.json``
+        - **Directory** → parent of the target directory:
+          ``{parent_of_path}/objectives.json``
+
+        This convention ensures all adapters (including piped static adapters
+        called by ``MLIPAdapter``) always read from and write to the same file
+        for a given physical target location, with no adapter-specific path logic.
+        Not overridable.
+
+        Piped directory case detail: ``MLIPAdapter.run_on_directory`` writes
+        relaxed structures to a sibling directory (e.g. ``/data/ORB_structures/``).
+        It then calls piped static adapters via ``_run_static_pipe(relaxed_dir)``.
+        The static adapter calls ``run_on_directory(/data/ORB_structures/)`` which
+        resolves to ``parent(/data/ORB_structures/) == /data/``, giving
+        ``/data/objectives.json`` — the same file the MLIP adapter already wrote
+        its own results to (``parent(/data/structures/) == /data/``).
+        """
+        target = os.path.abspath(target)
+        if os.path.isdir(target):
+            return os.path.join(os.path.dirname(target), _OBJECTIVES_JSON_FILENAME)
+        return os.path.join(os.path.dirname(target), _OBJECTIVES_JSON_FILENAME)
+
     def _dispatch_worker(
         self,
         file_paths: List[str],
@@ -947,17 +1048,67 @@ class BaseCalculator:
         fmax = kwargs.pop("fmax", 0.05)
         file_format = kwargs.pop("file_format", None)
 
-        from crystall.prototypes import _read_structure_format
+        from crystall.prototypes import _read_structure_format, _STRUCTURE_FORMATS
+        import tempfile
+        import shutil
 
         file_formats_map = {}
-        for fp in file_paths:
+        staged_paths = []
+        basename_remap = {}
+        staging_dir = tempfile.mkdtemp(prefix="crystall_stage_")
+        target_format = self._input_structure_format()
+
+        for i, fp in enumerate(file_paths):
             fmt_info = _read_structure_format(fp, file_format)
             if fmt_info is None:
-                file_formats_map[fp] = ("poscar", ".vasp")
-            else:
-                file_formats_map[fp] = fmt_info
+                fmt_info = ("poscar", ".vasp")
 
-        # Resolve objective codes → dispatch keys and inject into the request
+            orig_fmt = fmt_info[0]
+            base = os.path.basename(fp)
+            if target_format != "*" and orig_fmt != target_format:
+                import ase.io
+
+                fmt_entry_in = _STRUCTURE_FORMATS.get(
+                    orig_fmt, [orig_fmt, f".{orig_fmt}"]
+                )
+                fmt_entry_out = _STRUCTURE_FORMATS.get(
+                    target_format, [target_format, f".{target_format}"]
+                )
+                ase_fmt_in = fmt_entry_in[0]
+                ase_fmt_out = fmt_entry_out[0]
+                out_ext = fmt_entry_out[1]
+
+                try:
+                    atoms = ase.io.read(fp, format=ase_fmt_in)
+                except Exception:
+                    atoms = ase.io.read(fp)
+
+                staged_name = (
+                    f"{i}_{base}{out_ext}"
+                    if len(file_paths) > 1
+                    else f"{base}{out_ext}"
+                )
+                staged_path = os.path.join(staging_dir, staged_name)
+
+                try:
+                    ase.io.write(staged_path, atoms, format=ase_fmt_out)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to convert {fp} to {target_format}: {e}"
+                    )
+
+                staged_paths.append(staged_path)
+                basename_remap[staged_name] = base
+                file_formats_map[staged_path] = (target_format, out_ext)
+            else:
+                staged_name = f"{i}_{base}" if len(file_paths) > 1 else base
+                staged_path = os.path.join(staging_dir, staged_name)
+                os.symlink(os.path.abspath(fp), staged_path)
+                staged_paths.append(staged_path)
+                basename_remap[staged_name] = base
+                file_formats_map[staged_path] = fmt_info
+
+            # Resolve objective codes → dispatch keys and inject into the request
         objectives = kwargs.pop("objectives", None)
         dispatch_keys = self.objectives.resolve_dispatch_keys(
             list(objectives) if objectives is not None else None
@@ -966,7 +1117,7 @@ class BaseCalculator:
 
         # Build request payload
         request = {
-            "file_paths": file_paths,
+            "file_paths": staged_paths,
             "model_name": self.name,
             "isif": isif,
             "optimizer": optimizer,
@@ -1074,7 +1225,12 @@ class BaseCalculator:
             with open(res_path) as f:
                 data = json.load(f)
 
-            return data.get("results", [])
+            results = data.get("results", [])
+            for res in results:
+                name = res.get("name")
+                if name in basename_remap:
+                    res["name"] = basename_remap[name]
+            return results
         finally:
             # Cleanup temp files
             for p in (req_path, res_path, code_path):
@@ -1082,6 +1238,7 @@ class BaseCalculator:
                     os.unlink(p)
                 except OSError:
                     pass
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
     # ── Public execution API ────────────────────────────────────────────────
 
@@ -1103,10 +1260,27 @@ class BaseCalculator:
         self._cite_at_runtime(objectives)
         file_path = os.path.abspath(file_path)
         self._print_run_section("run_on_structure", os.path.basename(file_path))
-        results = self._dispatch_worker([file_path], **kwargs)
+
+        json_path = self._results_json_path(file_path)
+        data = _load_objectives_json(json_path)
+        filename = os.path.basename(file_path)
+        requested_keys = (
+            list(objectives) if objectives is not None else self.objectives.codes()
+        )
+        entry = data.get(filename)
+        if self._is_done(entry, requested_keys):
+            entry = dict(entry)
+            entry["name"] = filename
+            return entry
+
+        results = self._dispatch_worker(
+            [file_path], objectives=objectives, objectives_json_path=json_path, **kwargs
+        )
         if not results:
-            return {"name": os.path.basename(file_path), "objectives": {}}
-        return results[0]
+            return {"name": filename, "objectives": {}}
+        result = results[0]
+        self._upsert_objectives_json(json_path, filename, result.get("objectives", {}))
+        return result
 
     def run_on_directory(
         self,
@@ -1123,6 +1297,7 @@ class BaseCalculator:
         Args:
             path: Directory containing structure files.
             objectives: Optional subset of objective names to compute/return.
+            batch: Optional chunk size to process pending files in smaller batches.
 
         Returns:
             List of dicts, each with ``"name"`` and ``"objectives"`` keys.
@@ -1144,7 +1319,53 @@ class BaseCalculator:
             warnings.warn(f"No files found in {path}")
             return []
 
-        return self._dispatch_worker(file_paths, **kwargs)
+        json_path = self._results_json_path(path)
+        data = _load_objectives_json(json_path)
+        requested_keys = (
+            list(objectives) if objectives is not None else self.objectives.codes()
+        )
+        skip_results: list[Dict[str, Any]] = []
+        pending_paths: list[str] = []
+
+        for fp in file_paths:
+            filename = os.path.basename(fp)
+            entry = data.get(filename)
+            if self._is_done(entry, requested_keys):
+                cached = dict(entry)
+                cached["name"] = filename
+                skip_results.append(cached)
+            else:
+                pending_paths.append(fp)
+
+        fresh_results: list[Dict[str, Any]] = []
+        if pending_paths:
+            if batch is not None and batch > 0:
+                for i in range(0, len(pending_paths), batch):
+                    chunk = pending_paths[i : i + batch]
+                    chunk_results = self._dispatch_worker(
+                        chunk,
+                        objectives=objectives,
+                        objectives_json_path=json_path,
+                        **kwargs,
+                    )
+                    for res in chunk_results:
+                        self._upsert_objectives_json(
+                            json_path, res.get("name", ""), res.get("objectives", {})
+                        )
+                    fresh_results.extend(chunk_results)
+            else:
+                fresh_results = self._dispatch_worker(
+                    pending_paths,
+                    objectives=objectives,
+                    objectives_json_path=json_path,
+                    **kwargs,
+                )
+                for res in fresh_results:
+                    self._upsert_objectives_json(
+                        json_path, res.get("name", ""), res.get("objectives", {})
+                    )
+
+        return skip_results + fresh_results
 
     # ── Utility ─────────────────────────────────────────────────────────────
 
