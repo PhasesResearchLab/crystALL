@@ -594,7 +594,7 @@ class TestCrystALLSearch(unittest.TestCase):
         new_name = f"scaled_{base_obj}"
 
         # Define a simple scaled objective #0 * 2
-        self.cas.define_objective(new_name, [base_obj], "#0 * 2")
+        self.cas.define_new_objective(new_name, [base_obj], "#0 * 2")
         self.assertIn(new_name, self.cas.predicted_objectives)
 
         # Filter using the newly defined objective
@@ -611,12 +611,12 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.filter_prototypes(max_prototypes=0, objective=new_name)
         self.assertGreaterEqual(len(self.cas.prototypes), 1)
 
-        # Edge cases for define_objective: invalid syntax and out-of-range index
+        # Edge cases for define_new_objective: invalid syntax and out-of-range index
         with self.assertRaises(AssertionError):
-            self.cas.define_objective("bad_syntax", [base_obj], "bad$expr")
+            self.cas.define_new_objective("bad_syntax", [base_obj], "bad$expr")
         with self.assertRaises(AssertionError):
             # index 1 is out-of-range when only one base objective is provided
-            self.cas.define_objective("out_of_range", [base_obj], "#1")
+            self.cas.define_new_objective("out_of_range", [base_obj], "#1")
 
         # Unhappy path: invalid objective name should raise
         with self.assertRaises(AssertionError):
@@ -1292,7 +1292,7 @@ class TestObjectiveRegistry(unittest.TestCase):
 
     @staticmethod
     def _make_minimal_search(registry, predicted, available=None):
-        """Build a CrystALLSearch instance with only the state define_objective needs.
+        """Build a CrystALLSearch instance with only the state define_new_objective needs.
 
         ``registry`` must be an ``ObjectiveRegistry`` instance.
         Uses ``object.__new__`` to bypass ``__init__`` so no MongoDB connection
@@ -1488,40 +1488,40 @@ class TestObjectiveRegistry(unittest.TestCase):
         self.assertEqual(fv["SFY_PATH"], "/envs/fake")
         self.assertEqual(fv["model"], "fake-default")
 
-    # ── Test 4: define_objective accepts a bare code ─────────────────────
+    # ── Test 4: define_new_objective accepts a bare code ─────────────────────
 
     def test_resolve_to_code_accepts_code(self) -> None:
-        """define_objective passes a bare registered code through unchanged."""
+        """define_new_objective passes a bare registered code through unchanged."""
         reg = ObjectiveRegistry(
             [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
         )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
-        self.assertEqual(cas.define_objective("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
+        self.assertEqual(cas.define_new_objective("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
 
-    # ── Test 5: define_objective accepts a legacy 'CODE: description' key ─
+    # ── Test 5: define_new_objective accepts a legacy 'CODE: description' key ─
 
     def test_resolve_to_code_accepts_full_key(self) -> None:
-        """define_objective extracts the bare code from a legacy 'CODE: description' key."""
+        """define_new_objective extracts the bare code from a legacy 'CODE: description' key."""
         reg = ObjectiveRegistry(
             [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
         )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         self.assertEqual(
-            cas.define_objective("ALIGNN_EF_MP: Formation energy (eV/atom)"),
+            cas.define_new_objective("ALIGNN_EF_MP: Formation energy (eV/atom)"),
             "ALIGNN_EF_MP",
         )
 
-    # ── Test 6: define_objective raises ValueError with a hint ────────────
+    # ── Test 6: define_new_objective raises ValueError with a hint ────────────
 
     def test_resolve_to_code_raises_on_unknown(self) -> None:
-        """define_objective raises ValueError naming the bad code and a prefix-matched hint."""
+        """define_new_objective raises ValueError naming the bad code and a prefix-matched hint."""
         reg = ObjectiveRegistry(
             [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
         )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         # 'ALIGNN_BG_MP' shares the 'ALIG' prefix with the only known code
         with self.assertRaises(ValueError) as ctx:
-            cas.define_objective("ALIGNN_BG_MP")
+            cas.define_new_objective("ALIGNN_BG_MP")
         msg = str(ctx.exception)
         self.assertIn("ALIGNN_BG_MP", msg, "Error must name the unrecognised code")
         self.assertIn(

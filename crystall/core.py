@@ -174,7 +174,7 @@ class CrystALLSearch:
 
             if hasattr(adapter, "is_env_ready") and adapter.is_env_ready():
                 # Store objective codes for available_calculators so that
-                # define_objective, predicted_objectives, and prototype keys
+                # define_new_objective, predicted_objectives, and prototype keys
                 # all share the same code-based namespace.
                 self.available_calculators[calc_name] = adapter.objectives.codes()
 
@@ -936,7 +936,7 @@ class CrystALLSearch:
             props = r.get("objectives", {}) if isinstance(r, dict) else {}
             if name in name_to_index:
                 # Recode dispatch keys → objective codes using the adapter registry so
-                # that define_objective / filter_prototypes can look up values with the
+                # that define_new_objective / filter_prototypes can look up values with the
                 # same code-based namespace used in predicted_objectives.
                 recoded = {}
                 for dispatch_key, val in props.items():
@@ -977,7 +977,7 @@ class CrystALLSearch:
             if obj not in self.predicted_objectives:
                 self.predicted_objectives.append(obj)
 
-    # No automatic objective aggregation here; users can call `define_objective` to derive new ones.
+    # No automatic objective aggregation here; users can call `define_new_objective` to derive new ones.
 
     def get_mpdd_convexhull(self) -> None:
         """
@@ -1046,7 +1046,7 @@ class CrystALLSearch:
             prototype.update({"MPDD_Stability": stability})
             entriesForPD.pop()
 
-    def define_objective(
+    def define_new_objective(
         self, name: str, objectives: List[str], definition: str
     ) -> None:
         """
