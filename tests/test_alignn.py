@@ -42,16 +42,16 @@ class TestAlignnAdapterContract(unittest.TestCase):
         self.assertEqual(objectives.codes(), expected_codes)
 
         cases = [
-            ("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",         "mp_e_form"),
-            ("ALIGNN_BG_MP",     "ALIGNN-MP PBE Bandgap [eV]",                   "mp_bandgap"),
-            ("ALIGNN_EF_JV",     "ALIGNN-JARVIS Formation Energy [eV/atom]",      "jv_e_form"),
-            ("ALIGNN_BG_JV_MBJ", "ALIGNN-JARVIS MBJ Bandgap [eV]",              "jv_mbj_bandgap"),
-            ("ALIGNN_SHEAR_JV",  "ALIGNN-JARVIS Shear Modulus [GPa]",            "jv_mepscnn_kv"),
-            ("ALIGNN_BULK_JV",   "ALIGNN-JARVIS Bulk Modulus [GPa]",             "jv_mepscnn_gv"),
-            ("ALIGNN_EXFOL_JV",  "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",  "jv_exfoliation_energy"),
-            ("ALIGNN_BG_ALEX",   "ALIGNN-Alexandria Bandgap [eV]",               "alex_bandgap"),
-            ("ALIGNN_EF_ALEX",   "ALIGNN-Alexandria Formation Energy [eV/atom]", "alex_e_form"),
-            ("ALIGNN_VOL_ALEX",  "ALIGNN-Alexandria Volume Per Atom [\u00c5\u00b3]",       "alex_volume_per_atom"),
+            ("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",         (("model", "ALIGNN-MP Formation Energy [eV/atom]"),)),
+            ("ALIGNN_BG_MP",     "ALIGNN-MP PBE Bandgap [eV]",                   (("model", "ALIGNN-MP PBE Bandgap [eV]"),)),
+            ("ALIGNN_EF_JV",     "ALIGNN-JARVIS Formation Energy [eV/atom]",     (("model", "ALIGNN-JARVIS Formation Energy [eV/atom]"),)),
+            ("ALIGNN_BG_JV_MBJ", "ALIGNN-JARVIS MBJ Bandgap [eV]",               (("model", "ALIGNN-JARVIS MBJ Bandgap [eV]"),)),
+            ("ALIGNN_SHEAR_JV",  "ALIGNN-JARVIS Shear Modulus [GPa]",            (("model", "ALIGNN-JARVIS Shear Modulus [GPa]"),)),
+            ("ALIGNN_BULK_JV",   "ALIGNN-JARVIS Bulk Modulus [GPa]",             (("model", "ALIGNN-JARVIS Bulk Modulus [GPa]"),)),
+            ("ALIGNN_EXFOL_JV",  "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",  (("model", "ALIGNN-JARVIS Exfoliation Energy [meV/atom]"),)),
+            ("ALIGNN_BG_ALEX",   "ALIGNN-Alexandria Bandgap [eV]",               (("model", "ALIGNN-Alexandria Bandgap [eV]"),)),
+            ("ALIGNN_EF_ALEX",   "ALIGNN-Alexandria Formation Energy [eV/atom]", (("model", "ALIGNN-Alexandria Formation Energy [eV/atom]"),)),
+            ("ALIGNN_VOL_ALEX",  "ALIGNN-Alexandria Volume Per Atom [\u00c5\u00b3]", (("model", "ALIGNN-Alexandria Volume Per Atom [A^3]"),)),
         ]
         for code, description, dispatch_key in cases:
             with self.subTest(code=code):

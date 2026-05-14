@@ -32,61 +32,64 @@ class AlignnAdapter(BaseCalculator):
     objectives: ObjectiveRegistry = ObjectiveRegistry(
         [
             Objective(
-                "ALIGNN_EF_MP",
-                "ALIGNN-MP Formation Energy [eV/atom]",
-                "mp_e_form",
-                "ALIGNN",
+                code="ALIGNN_EF_MP",
+                description="ALIGNN-MP Formation Energy [eV/atom]",
+                dispatch_key=(("model", "ALIGNN-MP Formation Energy [eV/atom]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_BG_MP", "ALIGNN-MP PBE Bandgap [eV]", "mp_bandgap", "ALIGNN"
+                code="ALIGNN_BG_MP",
+                description="ALIGNN-MP PBE Bandgap [eV]",
+                dispatch_key=(("model", "ALIGNN-MP PBE Bandgap [eV]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_EF_JV",
-                "ALIGNN-JARVIS Formation Energy [eV/atom]",
-                "jv_e_form",
-                "ALIGNN",
+                code="ALIGNN_EF_JV",
+                description="ALIGNN-JARVIS Formation Energy [eV/atom]",
+                dispatch_key=(("model", "ALIGNN-JARVIS Formation Energy [eV/atom]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_BG_JV_MBJ",
-                "ALIGNN-JARVIS MBJ Bandgap [eV]",
-                "jv_mbj_bandgap",
-                "ALIGNN",
+                code="ALIGNN_BG_JV_MBJ",
+                description="ALIGNN-JARVIS MBJ Bandgap [eV]",
+                dispatch_key=(("model", "ALIGNN-JARVIS MBJ Bandgap [eV]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_SHEAR_JV",
-                "ALIGNN-JARVIS Shear Modulus [GPa]",
-                "jv_mepscnn_kv",
-                "ALIGNN",
+                code="ALIGNN_SHEAR_JV",
+                description="ALIGNN-JARVIS Shear Modulus [GPa]",
+                dispatch_key=(("model", "ALIGNN-JARVIS Shear Modulus [GPa]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_BULK_JV",
-                "ALIGNN-JARVIS Bulk Modulus [GPa]",
-                "jv_mepscnn_gv",
-                "ALIGNN",
+                code="ALIGNN_BULK_JV",
+                description="ALIGNN-JARVIS Bulk Modulus [GPa]",
+                dispatch_key=(("model", "ALIGNN-JARVIS Bulk Modulus [GPa]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_EXFOL_JV",
-                "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
-                "jv_exfoliation_energy",
-                "ALIGNN",
+                code="ALIGNN_EXFOL_JV",
+                description="ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
+                dispatch_key=(("model", "ALIGNN-JARVIS Exfoliation Energy [meV/atom]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_BG_ALEX",
-                "ALIGNN-Alexandria Bandgap [eV]",
-                "alex_bandgap",
-                "ALIGNN",
+                code="ALIGNN_BG_ALEX",
+                description="ALIGNN-Alexandria Bandgap [eV]",
+                dispatch_key=(("model", "ALIGNN-Alexandria Bandgap [eV]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_EF_ALEX",
-                "ALIGNN-Alexandria Formation Energy [eV/atom]",
-                "alex_e_form",
-                "ALIGNN",
+                code="ALIGNN_EF_ALEX",
+                description="ALIGNN-Alexandria Formation Energy [eV/atom]",
+                dispatch_key=(("model", "ALIGNN-Alexandria Formation Energy [eV/atom]"),),
+                backend="ALIGNN",
             ),
             Objective(
-                "ALIGNN_VOL_ALEX",
-                "ALIGNN-Alexandria Volume Per Atom [Å³]",
-                "alex_volume_per_atom",
-                "ALIGNN",
+                code="ALIGNN_VOL_ALEX",
+                description="ALIGNN-Alexandria Volume Per Atom [Å³]",
+                dispatch_key=(("model", "ALIGNN-Alexandria Volume Per Atom [A^3]"),),
+                backend="ALIGNN",
             ),
         ]
     )
@@ -141,9 +144,8 @@ class AlignnAdapter(BaseCalculator):
             objectives=objectives,
             **kwargs,
         )
-        parsed = self._deserialize_result(result)
-        self._maybe_print_results(parsed)
-        return parsed
+        self._maybe_print_results(result)
+        return result
 
     def run_on_directory(
         self,
@@ -157,20 +159,8 @@ class AlignnAdapter(BaseCalculator):
             objectives=objectives,
             **kwargs,
         )
-        parsed = [self._deserialize_result(res) for res in results]
-        self._maybe_print_results(parsed)
-        return parsed
-
-    @classmethod
-    def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
-        props = result.get("objectives", {})
-        return {
-            **result,
-            "objectives": {
-                cls.objectives.code_for_dispatch_key(k) or k: v
-                for k, v in props.items()
-            },
-        }
+        self._maybe_print_results(results)
+        return results
 
     def _run_code(self) -> str:
         """Return a self-contained Python script for ALIGNN static calculation.
@@ -200,35 +190,38 @@ from decimal import Decimal, ROUND_DOWN
 
 
 def main():
-    _DISPATCH_KEY_TO_MODEL_NAME = {
-        "jv_e_form":             "ALIGNN-JARVIS Formation Energy [eV/atom]",
-        "jv_mbj_bandgap":        "ALIGNN-JARVIS MBJ Bandgap [eV]",
-        "jv_mepscnn_kv":         "ALIGNN-JARVIS Shear Modulus [GPa]",
-        "jv_mepscnn_gv":         "ALIGNN-JARVIS Bulk Modulus [GPa]",
-        "jv_exfoliation_energy": "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
-        "mp_e_form":             "ALIGNN-MP Formation Energy [eV/atom]",
-        "mp_bandgap":            "ALIGNN-MP PBE Bandgap [eV]",
-        "alex_bandgap":          "ALIGNN-Alexandria Bandgap [eV]",
-        "alex_e_form":           "ALIGNN-Alexandria Formation Energy [eV/atom]",
-        "alex_volume_per_atom":  "ALIGNN-Alexandria Volume Per Atom [A^3]",
-    }
-
     req_path = sys.argv[1]
     res_path = sys.argv[2]
 
     with open(req_path) as f:
         req = json.load(f)
 
-    # Resolve requested model names (None = run all models)
-    dispatch_keys = req.get("objectives")  # list[str] or None
-    if dispatch_keys:
-        requested_model_names = [
-            _DISPATCH_KEY_TO_MODEL_NAME[dk]
-            for dk in dispatch_keys
-            if dk in _DISPATCH_KEY_TO_MODEL_NAME
-        ]
-    else:
-        requested_model_names = None
+    spec = req.get("objective_spec", [])
+    groups = {}
+    for entry in spec:
+        dk = tuple(
+            sorted((k, v) for k, v in entry.items() if k not in ("code", "kind"))
+        )
+        groups.setdefault(dk, []).append(entry)
+
+    requested_model_names = []
+    model_to_codes = {}
+    for entries in groups.values():
+        if not entries:
+            continue
+        dispatch_params = {
+            k: v for k, v in entries[0].items() if k not in ("code", "kind")
+        }
+        model_name = dispatch_params.get("model")
+        if not isinstance(model_name, str):
+            continue
+        requested_model_names.append(model_name)
+        for entry in entries:
+            code = entry.get("code")
+            if isinstance(code, str):
+                model_to_codes.setdefault(model_name, []).append(code)
+
+    requested_model_names = sorted(set(requested_model_names)) or None
 
     file_paths = req["file_paths"]
     file_formats_map = req.get("file_formats_map", {})
@@ -415,14 +408,20 @@ def main():
             for key, val in r.items():
                 if key == "name":
                     continue
+                target_codes = model_to_codes.get(key)
+                if not target_codes:
+                    continue
                 if isinstance(val, float):
-                    props[key] = float(
+                    rounded = float(
                         Decimal(str(val)).quantize(
                             Decimal("0.0001"), rounding=ROUND_DOWN
                         )
                     )
+                    for code in target_codes:
+                        props[code] = rounded
                 elif isinstance(val, (int,)):
-                    props[key] = float(val)
+                    for code in target_codes:
+                        props[code] = float(val)
 
             results.append({"name": name, "objectives": props})
 

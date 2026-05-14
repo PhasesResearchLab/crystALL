@@ -138,34 +138,39 @@ class MLIPAdapter(BaseCalculator):
         self._own_objectives = ObjectiveRegistry(
             [
                 Objective(
-                    f"{self._model_code}_RELAX_E",
-                    f"{model_name} Relaxed Energy [eV/atom]",
-                    "ase_relax",
-                    model_name,
+                    code=f"{self._model_code}_RELAX_E",
+                    description=f"{model_name} Relaxed Energy [eV/atom]",
+                    dispatch_key=(("model", "ase_relax"),),
+                    backend=model_name,
+                    kind="scalar",
                 ),
                 Objective(
-                    f"{self._model_code}_RELAX_F",
-                    f"{model_name} Relaxed RMS Force [eV/A]",
-                    "ase_relax",
-                    model_name,
+                    code=f"{self._model_code}_RELAX_F",
+                    description=f"{model_name} Relaxed RMS Force [eV/A]",
+                    dispatch_key=(("model", "ase_relax"),),
+                    backend=model_name,
+                    kind="scalar",
                 ),
                 Objective(
-                    f"{self._model_code}_RELAX_STRESS",
-                    f"{model_name} Relaxed Von Mises Stress [GPa]",
-                    "ase_relax",
-                    model_name,
+                    code=f"{self._model_code}_RELAX_STRESS",
+                    description=f"{model_name} Relaxed Von Mises Stress [GPa]",
+                    dispatch_key=(("model", "ase_relax"),),
+                    backend=model_name,
+                    kind="scalar",
                 ),
                 Objective(
-                    f"{self._model_code}_RELAX_VOL",
-                    f"{model_name} Relaxed Volume [A^3/atom]",
-                    "ase_relax",
-                    model_name,
+                    code=f"{self._model_code}_RELAX_VOL",
+                    description=f"{model_name} Relaxed Volume [A^3/atom]",
+                    dispatch_key=(("model", "ase_relax"),),
+                    backend=model_name,
+                    kind="scalar",
                 ),
                 Objective(
-                    f"{self._model_code}_RELAX_STRUCT",
-                    f"{model_name} Relaxed Structure",
-                    "ase_relax",
-                    model_name,
+                    code=f"{self._model_code}_RELAX_STRUCT",
+                    description=f"{model_name} Relaxed Structure",
+                    dispatch_key=(("model", "ase_relax"),),
+                    backend=model_name,
+                    kind="artifact",
                 ),
             ]
         )
@@ -210,7 +215,13 @@ class MLIPAdapter(BaseCalculator):
                 ns_code = f"{self._model_code}_{obj.code}"
                 ns_desc = f"{obj.description} (via {adapter.name})"
                 all_objectives.append(
-                    Objective(ns_code, ns_desc, f"pipe::{adapter.name}", obj.backend)
+                    Objective(
+                        code=ns_code,
+                        description=ns_desc,
+                        dispatch_key=(("pipe", adapter.name),),
+                        backend=obj.backend,
+                        kind=obj.kind,
+                    )
                 )
         return ObjectiveRegistry(all_objectives)
 
@@ -372,23 +383,6 @@ class MLIPAdapter(BaseCalculator):
         super()._setup_preflight()
         self._helper_build_format_vars()
 
-    def _resolve_mlip_objective_keys(self, objectives):
-        if objectives is None:
-            own_codes = self._own_objectives.codes()
-        else:
-            own_codes = [c for c in objectives if c in self._own_objectives.codes()]
-
-        keys = []
-        for code in own_codes:
-            obj = self._own_objectives[code]
-            suffix = code.split(f"{self._model_code}_", 1)[-1]
-            desc = obj.description
-            if desc.startswith(f"{self.name} "):
-                desc = desc[len(f"{self.name} ") :]
-            key = f"{self._model_code}_{suffix}: {self.name} {desc}"
-            keys.append(key)
-        return keys
-
     def run_on_structure(
         self,
         file_path: str,
@@ -434,12 +428,9 @@ class MLIPAdapter(BaseCalculator):
         # Naming convention: {model_name}_{stem}{fmt_ext}  e.g. ORB_Fe2O3.vasp
         output_stem_prefix = f"{self._model_name}_"
 
-        requested_keys = self._resolve_mlip_objective_keys(objectives)
-
         self._current_output_dir = output_dir
         self._current_output_stem_prefix = output_stem_prefix
         self._current_persist_traj = persist_traj
-        self._current_requested_keys = requested_keys
 
         result = super().run_on_structure(
             file_path,
@@ -484,9 +475,6 @@ class MLIPAdapter(BaseCalculator):
                 "traj_dir": getattr(self, "_current_output_dir", ""),
                 "traj_prefix": getattr(self, "_current_output_stem_prefix", ""),
                 "persist_traj": getattr(self, "_current_persist_traj", False),
-                "requested_objective_keys": getattr(
-                    self, "_current_requested_keys", []
-                ),
             }
         )
         return extras
@@ -576,12 +564,9 @@ class MLIPAdapter(BaseCalculator):
         )
         results_dir = kwargs.pop("results_dir", default_results_dir)
 
-        requested_keys = self._resolve_mlip_objective_keys(objectives)
-
         self._current_output_dir = results_dir
         self._current_output_stem_prefix = ""
         self._current_persist_traj = persist_traj
-        self._current_requested_keys = requested_keys
 
         all_mlip_results = super().run_on_directory(
             path,
@@ -648,10 +633,7 @@ class MLIPAdapter(BaseCalculator):
                 continue
 
             for obj_key, obj_val in static_res.get("objectives", {}).items():
-                static_code = (
-                    adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
-                )
-                ns_code = f"{self._model_code}_{static_code}"
+                ns_code = f"{self._model_code}_{obj_key}"
                 mlip_result.setdefault("objectives", {})[ns_code] = obj_val
 
         return mlip_result
@@ -693,10 +675,7 @@ class MLIPAdapter(BaseCalculator):
                 if name not in by_name:
                     continue
                 for obj_key, obj_val in static_res.get("objectives", {}).items():
-                    static_code = (
-                        adapter.objectives.code_for_dispatch_key(obj_key) or obj_key
-                    )
-                    ns_code = f"{self._model_code}_{static_code}"
+                    ns_code = f"{self._model_code}_{obj_key}"
                     by_name[name]["objectives"][ns_code] = obj_val
 
         return list(by_name.values())
@@ -753,9 +732,32 @@ def main():
     file_paths = req["file_paths"]
     model_name = req["model_name"]
     model_code = req["model_code"]
-    # Helper: build a dispatch-key-compatible result label
-    def _mk(code_suffix, description):
-        return f"{model_code}_{code_suffix}: {model_name} {description}"
+    spec = req.get("objective_spec", [])
+    marker_keys = req.get("marker_keys", {})
+    structure_marker_key = marker_keys.get("structure", STRUCTURE_MARKER_KEY)
+
+    groups = {}
+    for entry in spec:
+        dispatch_identity = tuple(
+            sorted((k, v) for k, v in entry.items() if k not in ("code", "kind"))
+        )
+        groups.setdefault(dispatch_identity, []).append(entry)
+
+    requested_codes = {
+        entry.get("code") for entry in spec if isinstance(entry.get("code"), str)
+    }
+    code_relax_e = f"{model_code}_RELAX_E"
+    code_relax_f = f"{model_code}_RELAX_F"
+    code_relax_stress = f"{model_code}_RELAX_STRESS"
+    code_relax_vol = f"{model_code}_RELAX_VOL"
+    code_relax_struct = f"{model_code}_RELAX_STRUCT"
+    run_relax = True
+    if groups:
+        run_relax = any(
+            dict(dispatch_identity).get("model") == "ase_relax"
+            for dispatch_identity in groups
+        )
+
     calculator_code_lines = req["calculator_code_lines"]
     isif = req.get("isif", 8)
     optimizer_name = req.get("optimizer", "FIRE")
@@ -834,6 +836,10 @@ def main():
 
         pending_kind = _pending_kind(traj_path)
 
+        if not run_relax:
+            results.append({"name": filename, "error": "unsupported dispatch spec"})
+            continue
+
         # Resume or fresh computation
         atoms = None
         if pending_kind == "resume":
@@ -855,6 +861,7 @@ def main():
                     atoms = read(filepath)
                 except Exception as e:
                     print(f"[MLIPAdapter] Skipping {filename}: cannot read ({e})")
+                    results.append({"name": filename, "error": str(e)})
                     continue
             atoms.calc = calc
 
@@ -889,79 +896,76 @@ def main():
         except Exception as e:
             print(f"[MLIPAdapter] Relaxation failed for {filename}: {e}")
             traceback.print_exc()
-            results.append({"name": filename, "objectives": {}})
+            results.append({"name": filename, "error": str(e)})
             continue
 
         # ── Extract properties ──────────────────────────────────────
         props = {}
 
         # Energy per atom (total energy, NOT formation energy)
-        try:
-            energy = atoms.get_potential_energy()
-            props[_mk("RELAX_E", "Relaxed Energy [eV/atom]")] = to_float_4(
-                energy / n_atoms
-            )
-        except Exception:
-            pass
+        if code_relax_e in requested_codes:
+            try:
+                energy = atoms.get_potential_energy()
+                props[code_relax_e] = to_float_4(energy / n_atoms)
+            except Exception:
+                pass
 
         # RMS force
-        try:
-            forces = atoms.calc.results.get("forces")
-            if forces is not None:
-                f_arr = np.array(forces, dtype=float)
-                rms = float(np.sqrt(np.mean(f_arr ** 2)))
-                props[_mk("RELAX_F", "Relaxed RMS Force [eV/A]")] = to_float_4(rms)
-        except Exception:
-            pass
+        if code_relax_f in requested_codes:
+            try:
+                forces = atoms.calc.results.get("forces")
+                if forces is not None:
+                    f_arr = np.array(forces, dtype=float)
+                    rms = float(np.sqrt(np.mean(f_arr ** 2)))
+                    props[code_relax_f] = to_float_4(rms)
+            except Exception:
+                pass
 
         # Von Mises stress (ASE Voigt order: xx, yy, zz, yz, xz, xy)
-        try:
-            stress = atoms.calc.results.get("stress")
-            if stress is not None:
-                s = np.array(stress, dtype=float)
-                if s.shape == (6,):
-                    xx, yy, zz, yz, xz, xy = s
-                    vm_eV = float(np.sqrt(
-                        0.5 * ((xx - yy)**2 + (yy - zz)**2 + (zz - xx)**2)
-                        + 3.0 * (xy**2 + xz**2 + yz**2)
-                    ))
-                    props[_mk("RELAX_STRESS", "Relaxed Von Mises Stress [GPa]")] = (
-                        to_float_4(vm_eV * EV_A3_TO_GPA)
-                    )
-                elif s.shape == (3, 3):
-                    xx, yy, zz = s[0, 0], s[1, 1], s[2, 2]
-                    xy, xz, yz = s[0, 1], s[0, 2], s[1, 2]
-                    vm_eV = float(np.sqrt(
-                        0.5 * ((xx - yy)**2 + (yy - zz)**2 + (zz - xx)**2)
-                        + 3.0 * (xy**2 + xz**2 + yz**2)
-                    ))
-                    props[_mk("RELAX_STRESS", "Relaxed Von Mises Stress [GPa]")] = (
-                        to_float_4(vm_eV * EV_A3_TO_GPA)
-                    )
-        except Exception:
-            pass
+        if code_relax_stress in requested_codes:
+            try:
+                stress = atoms.calc.results.get("stress")
+                if stress is not None:
+                    s = np.array(stress, dtype=float)
+                    if s.shape == (6,):
+                        xx, yy, zz, yz, xz, xy = s
+                        vm_eV = float(np.sqrt(
+                            0.5 * ((xx - yy)**2 + (yy - zz)**2 + (zz - xx)**2)
+                            + 3.0 * (xy**2 + xz**2 + yz**2)
+                        ))
+                        props[code_relax_stress] = to_float_4(vm_eV * EV_A3_TO_GPA)
+                    elif s.shape == (3, 3):
+                        xx, yy, zz = s[0, 0], s[1, 1], s[2, 2]
+                        xy, xz, yz = s[0, 1], s[0, 2], s[1, 2]
+                        vm_eV = float(np.sqrt(
+                            0.5 * ((xx - yy)**2 + (yy - zz)**2 + (zz - xx)**2)
+                            + 3.0 * (xy**2 + xz**2 + yz**2)
+                        ))
+                        props[code_relax_stress] = to_float_4(vm_eV * EV_A3_TO_GPA)
+            except Exception:
+                pass
 
         # Volume per atom
-        try:
-            volume = atoms.get_volume()
-            props[_mk("RELAX_VOL", "Relaxed Volume [A^3/atom]")] = to_float_4(
-                volume / n_atoms
-            )
-        except Exception:
-            pass
+        if code_relax_vol in requested_codes:
+            try:
+                volume = atoms.get_volume()
+                props[code_relax_vol] = to_float_4(volume / n_atoms)
+            except Exception:
+                pass
 
         # ── Serialize relaxed structure as POSCAR string (ASE, no pymatgen) ─
         poscar_buf = io.StringIO()
-        try:
-            write(poscar_buf, atoms, format="vasp")
-            props[_mk("RELAX_STRUCT", "Relaxed Structure")] = {
-                STRUCTURE_MARKER_KEY: poscar_buf.getvalue()
-            }
-        except Exception as _ser_err:
-            print(
-                f"[MLIPAdapter] Warning: could not serialize structure for "
-                f"{filename}: {_ser_err}"
-            )
+        if code_relax_struct in requested_codes:
+            try:
+                write(poscar_buf, atoms, format="vasp")
+                props[code_relax_struct] = {
+                    structure_marker_key: poscar_buf.getvalue()
+                }
+            except Exception as _ser_err:
+                print(
+                    f"[MLIPAdapter] Warning: could not serialize structure for "
+                    f"{filename}: {_ser_err}"
+                )
 
         # ── Write relaxed structure to disk ──────────────────────────────────
         os.makedirs(output_dir, exist_ok=True)

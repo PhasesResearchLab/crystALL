@@ -923,11 +923,6 @@ class CrystALLSearch:
                 f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names."
             )
 
-        # Resolve the adapter's ObjectiveRegistry once for the whole merge.
-        adapter_reg = getattr(adapter, "objectives", None)
-        if not isinstance(adapter_reg, ObjectiveRegistry):
-            adapter_reg = None
-
         # Build index for fast merge
         name_to_index = {p.get("name"): i for i, p in enumerate(self.prototypes)}
         matched = 0
@@ -935,19 +930,7 @@ class CrystALLSearch:
             name = r.get("name") if isinstance(r, dict) else None
             props = r.get("objectives", {}) if isinstance(r, dict) else {}
             if name in name_to_index:
-                # Recode dispatch keys → objective codes using the adapter registry so
-                # that define_new_objective / filter_prototypes can look up values with the
-                # same code-based namespace used in predicted_objectives.
-                recoded = {}
-                for dispatch_key, val in props.items():
-                    code = (
-                        adapter_reg.code_for_dispatch_key(dispatch_key)
-                        if adapter_reg is not None
-                        else dispatch_key
-                    )
-                    if code is not None:
-                        recoded[code] = val
-                self.prototypes[name_to_index[name]].update(recoded)
+                self.prototypes[name_to_index[name]].update(props)
                 matched += 1
 
         if matched == 0:
@@ -962,14 +945,8 @@ class CrystALLSearch:
         produced_objectives = set()
         for r in results:
             props = r.get("objectives", {}) if isinstance(r, dict) else {}
-            for dispatch_key in props:
-                code = (
-                    adapter_reg.code_for_dispatch_key(dispatch_key)
-                    if adapter_reg is not None
-                    else None
-                )
-                if code is not None:
-                    produced_objectives.add(code)
+            for code in props:
+                produced_objectives.add(code)
         # If user passed a subset, intersect
         if objectives is not None:
             produced_objectives = produced_objectives.intersection(set(objectives))

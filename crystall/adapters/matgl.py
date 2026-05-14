@@ -39,52 +39,57 @@ class MatGLAdapter(BaseCalculator):
     objectives: ObjectiveRegistry = ObjectiveRegistry(
         [
             Objective(
-                "MATGL_EF_MEGNET",
-                "Formation Energy MEGNet [eV/atom]",
-                "MEGNet-Eform-MP-2018.6.1",
-                "MEGNet",
+                code="MATGL_EF_MEGNET",
+                description="Formation Energy MEGNet [eV/atom]",
+                dispatch_key=(("model", "MEGNet-Eform-MP-2018.6.1"),),
+                backend="MEGNet",
             ),
             Objective(
-                "MATGL_BG_MEGNET",
-                "Band Gap MEGNet [eV]",
-                "MEGNet-BandGap-mfi-MP-2019.4.1",
-                "MEGNet",
+                code="MATGL_BG_MEGNET",
+                description="Band Gap MEGNet [eV]",
+                dispatch_key=(
+                    ("model", "MEGNet-BandGap-mfi-MP-2019.4.1"),
+                    ("state_attr", 0),
+                ),
+                backend="MEGNet",
             ),
             Objective(
-                "MATGL_EF_M3GNET",
-                "Formation Energy M3GNet [eV/atom]",
-                "M3GNet-Eform-MP-2018.6.1",
-                "M3GNet",
+                code="MATGL_EF_M3GNET",
+                description="Formation Energy M3GNet [eV/atom]",
+                dispatch_key=(("model", "M3GNet-Eform-MP-2018.6.1"),),
+                backend="M3GNet",
             ),
             Objective(
-                "MATGL_EWALD_QET",
-                "Electrostatic (Ewald) Energy [eV/cell]",
-                "QET-PES-MatQ",
-                "QET",
+                code="MATGL_EWALD_QET",
+                description="Electrostatic (Ewald) Energy [eV/cell]",
+                dispatch_key=(("model", "QET-PES-MatQ"),),
+                backend="QET",
             ),
             Objective(
-                "MATGL_CDIPOLE_QET",
-                "Charge Dipole Magnitude [e·Å]",
-                "QET-PES-MatQ",
-                "QET",
+                code="MATGL_CDIPOLE_QET",
+                description="Charge Dipole Magnitude [e·Å]",
+                dispatch_key=(("model", "QET-PES-MatQ"),),
+                backend="QET",
             ),
             Objective(
-                "MATGL_STRUCT_CHARGES_QET",
-                "Structure with Charges",
-                "QET-PES-MatQ",
-                "QET",
+                code="MATGL_STRUCT_CHARGES_QET",
+                description="Structure with Charges",
+                dispatch_key=(("model", "QET-PES-MatQ"),),
+                backend="QET",
+                kind="artifact",
             ),
             Objective(
-                "MATGL_STRUCT_MAGMOMS_CHGNET",
-                "Structure with Magmoms",
-                "CHGNet-PES-MatPES-PBE-2025.2.10",
-                "CHGNet",
+                code="MATGL_STRUCT_MAGMOMS_CHGNET",
+                description="Structure with Magmoms",
+                dispatch_key=(("model", "CHGNet-PES-MatPES-PBE-2025.2.10"),),
+                backend="CHGNet",
+                kind="artifact",
             ),
             Objective(
-                "MATGL_MDIPOLE_CHGNET",
-                "CHGNet Static Total Magmom [mu_B]",
-                "CHGNet-PES-MatPES-PBE-2025.2.10",
-                "CHGNet",
+                code="MATGL_MDIPOLE_CHGNET",
+                description="CHGNet Static Total Magmom [mu_B]",
+                dispatch_key=(("model", "CHGNet-PES-MatPES-PBE-2025.2.10"),),
+                backend="CHGNet",
             ),
         ]
     )
@@ -157,7 +162,7 @@ class MatGLAdapter(BaseCalculator):
         if isinstance(props, dict):
             updated = dict(result)
             updated["objectives"] = {
-                (cls.objectives.code_for_dispatch_key(k) or k): cls._deserialize_worker_value(v)
+                k: cls._deserialize_worker_value(v)
                 for k, v in props.items()
             }
             return updated
@@ -226,16 +231,21 @@ def main():
         req = json.load(f)
 
     file_paths = req.get("file_paths", [])
+    spec = req.get("objective_spec", [])
+    marker_keys = req.get("marker_keys", {})
+    structure_marker_key = marker_keys.get("structure", STRUCTURE_MARKER_KEY)
+
+    groups = {}
+    for entry in spec:
+        dispatch_identity = tuple(
+            sorted((k, v) for k, v in entry.items() if k not in ("code", "kind"))
+        )
+        groups.setdefault(dispatch_identity, []).append(entry)
+
     if not file_paths:
         with open(res_path, "w") as f:
             json.dump({"results": []}, f)
         return
-
-    requested_codes = req.get("requested_objectives")
-    if requested_codes:
-        requested = set(requested_codes)
-    else:
-        requested = set()
 
     import matgl
 
@@ -252,22 +262,10 @@ def main():
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
 
-    CODE_TO_DISPATCH = {
-        "MATGL_EF_MEGNET": "MEGNet-Eform-MP-2018.6.1",
-        "MATGL_BG_MEGNET": "MEGNet-BandGap-mfi-MP-2019.4.1",
-        "MATGL_EF_M3GNET": "M3GNet-Eform-MP-2018.6.1",
-        "MATGL_EWALD_QET": "QET-PES-MatQ",
-        "MATGL_CDIPOLE_QET": "QET-PES-MatQ",
-        "MATGL_STRUCT_CHARGES_QET": "QET-PES-MatQ",
-        "MATGL_STRUCT_MAGMOMS_CHGNET": "CHGNet-PES-MatPES-PBE-2025.2.10",
-        "MATGL_MDIPOLE_CHGNET": "CHGNet-PES-MatPES-PBE-2025.2.10",
-    }
-
-    if not requested:
-        requested = set(CODE_TO_DISPATCH.keys())
-
     needed_models = {
-        CODE_TO_DISPATCH[obj] for obj in requested if obj in CODE_TO_DISPATCH
+        dict(dispatch_identity).get("model")
+        for dispatch_identity in groups
+        if dict(dispatch_identity).get("model")
     }
     loaded_models = {mname: matgl.load_model(mname) for mname in needed_models}
 
@@ -281,93 +279,88 @@ def main():
             structure = Structure.from_file(filepath)
             atoms = None  # Lazy ASE atoms
             props = {}
+            for dispatch_identity, entries in groups.items():
+                dispatch = dict(dispatch_identity)
+                model_name = dispatch.get("model")
+                if not isinstance(model_name, str):
+                    continue
 
-            # Property Predictions (MEGNet / M3GNet)
-            if "MATGL_EF_MEGNET" in requested:
-                m = loaded_models.get("MEGNet-Eform-MP-2018.6.1")
-                if m:
-                    props["MATGL_EF_MEGNET"] = round4(
-                        tensor_scalar(m.predict_structure(structure))
-                    )
+                model = loaded_models.get(model_name)
+                if model is None:
+                    continue
 
-            if "MATGL_BG_MEGNET" in requested:
-                m = loaded_models.get("MEGNet-BandGap-mfi-MP-2019.4.1")
-                if m:
-                    props["MATGL_BG_MEGNET"] = round4(
-                        tensor_scalar(
-                            m.predict_structure(
-                                structure=structure,
-                                state_attr=torch.tensor([0], dtype=torch.long),
+                codes = {entry.get("code") for entry in entries if entry.get("code")}
+
+                if model_name == "MEGNet-Eform-MP-2018.6.1":
+                    if "MATGL_EF_MEGNET" in codes:
+                        props["MATGL_EF_MEGNET"] = round4(
+                            tensor_scalar(model.predict_structure(structure))
+                        )
+                    continue
+
+                if model_name == "MEGNet-BandGap-mfi-MP-2019.4.1":
+                    if "MATGL_BG_MEGNET" in codes:
+                        state_attr = int(dispatch.get("state_attr", 0))
+                        props["MATGL_BG_MEGNET"] = round4(
+                            tensor_scalar(
+                                model.predict_structure(
+                                    structure=structure,
+                                    state_attr=torch.tensor([state_attr], dtype=torch.long),
+                                )
                             )
                         )
-                    )
+                    continue
 
-            if "MATGL_EF_M3GNET" in requested:
-                m = loaded_models.get("M3GNet-Eform-MP-2018.6.1")
-                if m:
-                    props["MATGL_EF_M3GNET"] = round4(
-                        tensor_scalar(m.predict_structure(structure))
-                    )
+                if model_name == "M3GNet-Eform-MP-2018.6.1":
+                    if "MATGL_EF_M3GNET" in codes:
+                        props["MATGL_EF_M3GNET"] = round4(
+                            tensor_scalar(model.predict_structure(structure))
+                        )
+                    continue
 
-            # PES Predictions (QET)
-            qet_objs = {
-                "MATGL_EWALD_QET",
-                "MATGL_CDIPOLE_QET",
-                "MATGL_STRUCT_CHARGES_QET",
-            }
-            if requested & qet_objs:
-                m = loaded_models.get("QET-PES-MatQ")
-                if m:
+                if model_name == "QET-PES-MatQ":
                     if atoms is None:
                         atoms = AseAtomsAdaptor.get_atoms(structure)
-                    atoms.set_calculator(PESCalculator(m))
+                    atoms.set_calculator(PESCalculator(model))
                     _ = atoms.get_potential_energy()
                     charges = np.array(atoms.get_charges(), dtype=float).reshape(-1)
 
-                    if "MATGL_STRUCT_CHARGES_QET" in requested:
+                    if "MATGL_STRUCT_CHARGES_QET" in codes:
                         s = structure.copy()
                         s.add_site_property("charge", charges.tolist())
                         props["MATGL_STRUCT_CHARGES_QET"] = {
-                            STRUCTURE_MARKER_KEY: s.as_dict()
+                            structure_marker_key: s.as_dict()
                         }
-                    if "MATGL_EWALD_QET" in requested:
+                    if "MATGL_EWALD_QET" in codes:
                         s = structure.copy()
                         s.add_oxidation_state_by_site(charges.tolist())
-                        props["MATGL_EWALD_QET"] = round4(
-                            EwaldSummation(s).total_energy
-                        )
-                    if "MATGL_CDIPOLE_QET" in requested:
+                        props["MATGL_EWALD_QET"] = round4(EwaldSummation(s).total_energy)
+                    if "MATGL_CDIPOLE_QET" in codes:
                         cart = np.array(structure.cart_coords, dtype=float)
                         p_vec = np.sum(cart * charges.reshape(-1, 1), axis=0)
                         props["MATGL_CDIPOLE_QET"] = round4(np.linalg.norm(p_vec))
+                    continue
 
-            # PES Predictions (CHGNet)
-            chg_objs = {
-                "MATGL_STRUCT_MAGMOMS_CHGNET",
-                "MATGL_MDIPOLE_CHGNET",
-            }
-            if requested & chg_objs:
-                m = loaded_models.get("CHGNet-PES-MatPES-PBE-2025.2.10")
-                if m:
+                if model_name == "CHGNet-PES-MatPES-PBE-2025.2.10":
                     if atoms is None:
                         atoms = AseAtomsAdaptor.get_atoms(structure)
-                    atoms.set_calculator(PESCalculator(m))
+                    atoms.set_calculator(PESCalculator(model))
                     magmoms = np.array(atoms.get_magnetic_moments(), dtype=float).reshape(-1)
-                    if "MATGL_STRUCT_MAGMOMS_CHGNET" in requested:
+
+                    if "MATGL_STRUCT_MAGMOMS_CHGNET" in codes:
                         s = structure.copy()
                         s.add_site_property("magmom", magmoms.tolist())
                         props["MATGL_STRUCT_MAGMOMS_CHGNET"] = {
-                            STRUCTURE_MARKER_KEY: s.as_dict()
+                            structure_marker_key: s.as_dict()
                         }
-                    if "MATGL_MDIPOLE_CHGNET" in requested:
-                        props["MATGL_MDIPOLE_CHGNET"] = round4(
-                            float(np.sum(magmoms))
-                        )
+                    if "MATGL_MDIPOLE_CHGNET" in codes:
+                        props["MATGL_MDIPOLE_CHGNET"] = round4(float(np.sum(magmoms)))
+                    continue
 
             results.append({"name": filename, "objectives": props})
         except Exception as exc:
             print(f"[MatGLAdapter] Error processing {filename}: {exc}")
-            results.append({"name": filename, "objectives": {}})
+            results.append({"name": filename, "error": str(exc)})
 
     with open(res_path, "w") as f:
         json.dump({"results": results}, f)

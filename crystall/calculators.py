@@ -29,6 +29,8 @@ with open(json_path, "r", encoding="utf-8") as _f:
 
 
 _OBJECTIVES_JSON_FILENAME = "objectives.json"
+DispatchPrimitive = str | int | float | bool | None
+DispatchSpec = tuple[tuple[str, DispatchPrimitive], ...]
 
 
 def _load_objectives_json(path: str) -> dict:
@@ -97,22 +99,21 @@ class Objective:
     Attributes:
         code:         Stable uppercase identifier (e.g. ``'MATGL_EF_MEGNET'``).
         description:  Human-readable label with units (e.g. ``'Formation Energy [eV/atom]'``).
-        dispatch_key: Internal adapter-defined token used to request and/or recover
-                      this objective from the backend. It is intentionally kept as
-                      a single opaque string for now, even though different adapters
-                      may attach different semantics to it. If future adapter
-                      reviews show that some objectives require multiple backend
-                      keys, this field may be promoted to a structured dispatch
-                      specification.
+        dispatch_key: Structured adapter-defined dispatch specification used by
+                      workers to load and invoke the correct backend model,
+                      represented as a tuple of key/value pairs.
         backend:      Citable model/library name (e.g. ``'MEGNet'``, ``'ALIGNN'``).
                       Consumed by the DueCredit citation layer to resolve which
                       references to emit at runtime.
+        kind:         Output kind tag used for contract-level result handling.
+                      Allowed values: ``'scalar'``, ``'tensor'``, ``'artifact'``.
     """
 
     code: str
     description: str
-    dispatch_key: str
+    dispatch_key: DispatchSpec
     backend: str
+    kind: str = "scalar"
 
 
 class ObjectiveRegistry:
@@ -137,7 +138,6 @@ class ObjectiveRegistry:
     def __init__(self, objectives: List[Objective]) -> None:
         self._objectives: List[Objective] = []
         self._by_code: Dict[str, Objective] = {}
-        self._by_dispatch: Dict[str, List[Objective]] = {}
         for obj in objectives:
             if obj.code in self._by_code:
                 warnings.warn(
@@ -148,13 +148,20 @@ class ObjectiveRegistry:
                 continue
             self._objectives.append(obj)
             self._by_code[obj.code] = obj
-            self._by_dispatch.setdefault(obj.dispatch_key, []).append(obj)
 
     # ── Enumeration ─────────────────────────────────────────────────────────
 
     def __getitem__(self, code: str) -> Objective:
         """Get an objective by its code."""
         return self._by_code[code]
+
+    def __contains__(self, code: object) -> bool:
+        """Check if a code is registered."""
+        return code in self._by_code
+
+    def get(self, code: str, default=None) -> Objective | None:
+        """Return the objective for *code*, or *default* if not found."""
+        return self._by_code.get(code, default)
 
     def values(self) -> List[Objective]:
         """Return all objectives in declaration order."""
@@ -166,7 +173,9 @@ class ObjectiveRegistry:
         """Return all codes in declaration order."""
         return [o.code for o in self._objectives]
 
-    def resolve_dispatch_keys(self, codes: Optional[List[str]] = None) -> List[str]:
+    def resolve_dispatch_keys(
+        self, codes: Optional[List[str]] = None
+    ) -> List[DispatchSpec]:
         """Return dispatch keys for the requested codes, or all if ``None``.
 
         Preserves declaration order and deduplicates dispatch keys that appear
@@ -177,13 +186,17 @@ class ObjectiveRegistry:
             if codes is None
             else [self._by_code[c] for c in codes if c in self._by_code]
         )
-        seen: set = set()
-        result: List[str] = []
+        seen: set[DispatchSpec] = set()
+        result: List[DispatchSpec] = []
         for obj in src:
             if obj.dispatch_key not in seen:
                 seen.add(obj.dispatch_key)
                 result.append(obj.dispatch_key)
         return result
+
+    def codes_by_kind(self, kind: str) -> list[str]:
+        """Return objective codes matching a specific kind tag."""
+        return [o.code for o in self._objectives if o.kind == kind]
 
     def resolve_backends(self, codes: Optional[List[str]] = None) -> set:
         """Return the set of backend names for the requested codes, or all."""
@@ -194,14 +207,27 @@ class ObjectiveRegistry:
         )
         return {o.backend for o in src}
 
-    def code_for_dispatch_key(self, dispatch_key: str) -> Optional[str]:
-        """Return the first objective code associated with a dispatch key.
+    def to_spec(self, codes: list[str] | None = None) -> list[dict]:
+        """Serialise objectives to JSON-safe flat dict entries.
 
-        Used by static pipe workers to map raw dispatch-key results back
-        to proper objective codes.
+        Each entry contains ``code``, ``kind``, plus all key/value pairs from
+        ``dispatch_key``. Objectives whose dispatch spec contains a ``pipe`` key
+        are excluded because they are handled by adapter-local piping logic.
         """
-        entries = self._by_dispatch.get(dispatch_key)
-        return entries[0].code if entries else None
+        src = (
+            self._objectives
+            if codes is None
+            else [self._by_code[c] for c in codes if c in self._by_code]
+        )
+        specs: list[dict] = []
+        for obj in src:
+            dispatch_dict = dict(obj.dispatch_key)
+            if "pipe" in dispatch_dict:
+                continue
+            entry = {"code": obj.code, "kind": obj.kind}
+            entry.update(dispatch_dict)
+            specs.append(entry)
+        return specs
 
     # ── Cross-adapter builder ────────────────────────────────────────────────
 
@@ -758,6 +784,52 @@ class BaseCalculator:
         The script receives a *request JSON* path as ``sys.argv[1]`` and writes
         a *results JSON* to ``sys.argv[2]``.  It must be entirely self-contained
         (no ``crystall`` imports).
+
+        Worker conventions:
+          C1. Read objectives from ``req["objective_spec"]``.
+          C2. Emit objective *codes* as output keys.
+          C3. Emit ``{"results": [{"name": ..., "objectives": {...}}]}``.
+          C4. Prefer single quotes inside embedded triple-double-quoted scripts.
+          C5. Read marker keys from ``req["marker_keys"]``.
+          C6. Report per-file errors as ``{"name": ..., "error": str(exc)}``.
+          C7. Do not define worker-local routing tables keyed by objective code.
+
+        Minimal skeleton::
+
+            import sys, os, json
+
+            def main():
+                req_path, res_path = sys.argv[1], sys.argv[2]
+                with open(req_path) as f:
+                    req = json.load(f)
+                file_paths = req['file_paths']
+                spec = req['objective_spec']
+                marker_keys = req.get('marker_keys', {})
+
+                groups = {}
+                for entry in spec:
+                    dk = tuple(
+                        sorted((k, v) for k, v in entry.items() if k not in ('code', 'kind'))
+                    )
+                    groups.setdefault(dk, []).append(entry)
+
+                results = []
+                for fp in file_paths:
+                    filename = os.path.basename(fp)
+                    try:
+                        props = {}
+                        for dispatch_identity, entries in groups.items():
+                            for entry in entries:
+                                props[entry['code']] = None
+                        results.append({'name': filename, 'objectives': props})
+                    except Exception as exc:
+                        results.append({'name': filename, 'error': str(exc)})
+
+                with open(res_path, 'w') as f:
+                    json.dump({'results': results}, f)
+
+            if __name__ == '__main__':
+                main()
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement _run_code()."
@@ -766,10 +838,13 @@ class BaseCalculator:
     def _request_extras(self) -> dict:
         """Additional keys merged into the request JSON sent to the worker.
 
-        Base implementation propagates save_artifacts to all workers.
+        Base implementation propagates save_artifacts and marker keys to workers.
         Subclasses must call super()._request_extras() and update the result.
         """
-        return {"save_artifacts": self.save_artifacts}
+        return {
+            "save_artifacts": self.save_artifacts,
+            "marker_keys": {"structure": "__crystall_pymatgen_structure__"},
+        }
 
     def _input_structure_format(self) -> str:
         """Format the worker script natively reads.
@@ -1108,12 +1183,9 @@ class BaseCalculator:
                 basename_remap[staged_name] = base
                 file_formats_map[staged_path] = fmt_info
 
-            # Resolve objective codes → dispatch keys and inject into the request
+        # Resolve objective codes -> serialized objective spec
         objectives = kwargs.pop("objectives", None)
-        dispatch_keys = self.objectives.resolve_dispatch_keys(
-            list(objectives) if objectives is not None else None
-        )
-        request_objectives = dispatch_keys if objectives is not None else None
+        objective_codes = list(objectives) if objectives is not None else None
 
         # Build request payload
         request = {
@@ -1129,8 +1201,7 @@ class BaseCalculator:
         request.update(self._request_extras())
         # Merge any extra kwargs (e.g. results_dir)
         request.update(kwargs)
-        if request_objectives is not None:
-            request["objectives"] = request_objectives
+        request["objective_spec"] = self.objectives.to_spec(objective_codes)
 
         # Write request and execute
         with tempfile.NamedTemporaryFile(

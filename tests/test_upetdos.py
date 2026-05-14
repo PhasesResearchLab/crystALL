@@ -22,15 +22,15 @@ def test_upetdos_adapter_setup():
     assert objectives.codes() == ["UPETDOS_DOS", "UPETDOS_BG", "UPETDOS_EF"]
 
     assert objectives["UPETDOS_DOS"].description == "UPET-MAD DOS"
-    assert objectives["UPETDOS_DOS"].dispatch_key == "complete_dos"
+    assert objectives["UPETDOS_DOS"].dispatch_key == (("model", "PET-MAD-DOS"),)
     assert objectives["UPETDOS_DOS"].backend == "UPET-DOS"
 
     assert objectives["UPETDOS_BG"].description == "UPET-MAD Bandgap [eV]"
-    assert objectives["UPETDOS_BG"].dispatch_key == "bandgap"
+    assert objectives["UPETDOS_BG"].dispatch_key == (("model", "PET-MAD-DOS"),)
     assert objectives["UPETDOS_BG"].backend == "UPET-DOS"
 
     assert objectives["UPETDOS_EF"].description == "UPET-MAD Fermi Level [eV]"
-    assert objectives["UPETDOS_EF"].dispatch_key == "fermi_level"
+    assert objectives["UPETDOS_EF"].dispatch_key == (("model", "PET-MAD-DOS"),)
     assert objectives["UPETDOS_EF"].backend == "UPET-DOS"
 
     cmds = adapter.setup_commands()
@@ -56,7 +56,17 @@ class TestUPETDosWorkerSemantics:
                 f.write("mock poscar")
 
             with open(req_path, "w") as f:
-                json.dump({"file_paths": [fake_struct_path]}, f)
+                json.dump(
+                    {
+                        "file_paths": [fake_struct_path],
+                        "objective_spec": [
+                            {"code": "UPETDOS_DOS", "kind": "artifact", "model": "PET-MAD-DOS"},
+                            {"code": "UPETDOS_BG", "kind": "scalar", "model": "PET-MAD-DOS"},
+                            {"code": "UPETDOS_EF", "kind": "scalar", "model": "PET-MAD-DOS"},
+                        ],
+                    },
+                    f,
+                )
 
             # Mock implementations
             class MockAtoms:
@@ -73,10 +83,10 @@ class TestUPETDosWorkerSemantics:
 
                     return np.array([-1.0, 0.0, 1.0]), np.array([0.1, 0.2, 0.1])
 
-                def calculate_bandgap(self, atoms, energies, dos):
+                def calculate_bandgap(self, atoms, dos):
                     return 1.2
 
-                def calculate_efermi(self, atoms, energies, dos, temperature=0.0):
+                def calculate_efermi(self, atoms, dos, temperature=0.0):
                     return 0.5
 
             # Setup test environment
@@ -86,7 +96,6 @@ class TestUPETDosWorkerSemantics:
                 "json": json,
                 "ase": MagicMock(),
                 "torch": MagicMock(),
-                "traceback": MagicMock(),
             }
 
             # Setup ASE mock
@@ -141,17 +150,17 @@ class TestUPETDosWorkerSemantics:
             assert "objectives" in results[0]
             props = results[0]["objectives"]
 
-            assert "complete_dos" in props
-            assert props["complete_dos"]["@class"] == "CompleteDos"
-            assert props["bandgap"] == 1.2
-            assert props["fermi_level"] == 0.5
+            assert "UPETDOS_DOS" in props
+            assert props["UPETDOS_DOS"]["@class"] == "CompleteDos"
+            assert props["UPETDOS_BG"] == 1.2
+            assert props["UPETDOS_EF"] == 0.5
 
 
 def test_deserialization():
     adapter = UPETDosAdapter()
     res = {
         "objectives": {
-            "complete_dos": {
+            "UPETDOS_DOS": {
                 "@module": "pymatgen.electronic_structure.dos",
                 "@class": "CompleteDos",
                 "energies": [],

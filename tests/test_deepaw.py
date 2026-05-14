@@ -43,7 +43,7 @@ class TestDeePAWAdapterMetadata(unittest.TestCase):
         self.assertEqual(objectives["DEEPAW_RHO"].description, "DeePAW Charge Density")
         self.assertEqual(
             objectives["DEEPAW_RHO"].dispatch_key,
-            "deepaw_charge_density",
+            (("model", "deepaw_charge_density"),),
         )
         self.assertEqual(objectives["DEEPAW_RHO"].backend, "DeePAW")
 
@@ -231,13 +231,12 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
         return {"@class": "Chgcar", "@module": "pymatgen.io.vasp.outputs", "data": {}}
 
     def test_marker_key_constant(self):
-        self.assertEqual(_CHGCAR_RAW_KEY, "__crystall_pymatgen_chgcar__")
+        self.assertEqual(_CHGCAR_RAW_KEY, "__crystall_chgcar_raw__")
 
     def test_deserialize_worker_value_reconstructs_chgcar(self):
         """Marker-wrapped dict must be reconstructed into a Chgcar object."""
         chgcar_mock = MagicMock()
-        fake_dict = self._fake_chgcar_dict()
-        wrapped = {_CHGCAR_RAW_KEY: fake_dict}
+        wrapped = {_CHGCAR_RAW_KEY: "fake chgcar text"}
 
         with (
             patch(
@@ -245,34 +244,31 @@ class TestDeePAWChgcarSerialization(unittest.TestCase):
                 wraps=DeePAWAdapter._deserialize_worker_value,
             ) as _,
             patch(
-                "pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock
-            ) as mock_fd,
+                "pymatgen.io.vasp.outputs.Chgcar.from_file", return_value=chgcar_mock
+            ) as mock_ff,
         ):
             result = DeePAWAdapter._deserialize_worker_value(wrapped)
 
-        mock_fd.assert_called_once_with(fake_dict)
+        mock_ff.assert_called_once()
         self.assertIs(result, chgcar_mock)
 
     def test_deserialize_result_applies_to_properties(self):
         """_deserialize_result must deserialize marker-wrapped values in properties."""
         chgcar_mock = MagicMock()
-        fake_dict = self._fake_chgcar_dict()
         raw_result = {
             "name": "POSCAR",
             "objectives": {
-                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_RAW_KEY: fake_dict},
+                "DEEPAW_RHO": {_CHGCAR_RAW_KEY: "fake chgcar text"},
             },
         }
 
         with patch(
-            "pymatgen.io.vasp.outputs.Chgcar.from_dict", return_value=chgcar_mock
+            "pymatgen.io.vasp.outputs.Chgcar.from_file", return_value=chgcar_mock
         ):
             result = DeePAWAdapter._deserialize_result(raw_result)
 
         self.assertEqual(result["name"], "POSCAR")
-        self.assertIs(
-            result["objectives"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
-        )
+        self.assertIs(result["objectives"]["DEEPAW_RHO"], chgcar_mock)
 
     def test_deserialize_non_marker_dict_passes_through(self):
         """Plain dicts without the marker key must be returned unchanged."""
@@ -336,11 +332,10 @@ class TestDeePAWRunOnStructure(unittest.TestCase):
 
     def test_run_on_structure_dispatches_and_deserializes(self):
         chgcar_mock = MagicMock()
-        fake_dict = {"@class": "Chgcar", "data": {}}
         fake_result = {
             "name": "POSCAR",
             "objectives": {
-                "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_RAW_KEY: fake_dict},
+                "DEEPAW_RHO": {_CHGCAR_RAW_KEY: "fake chgcar text"},
             },
         }
 
@@ -355,16 +350,14 @@ class TestDeePAWRunOnStructure(unittest.TestCase):
                     self.adapter, "_dispatch_worker", return_value=[fake_result]
                 ),
                 patch(
-                    "pymatgen.io.vasp.outputs.Chgcar.from_dict",
+                    "pymatgen.io.vasp.outputs.Chgcar.from_file",
                     return_value=chgcar_mock,
                 ),
             ):
                 result = self.adapter.run_on_structure(poscar)
 
         self.assertEqual(result["name"], "POSCAR")
-        self.assertIs(
-            result["objectives"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
-        )
+        self.assertIs(result["objectives"]["DEEPAW_RHO"], chgcar_mock)
 
     def test_run_on_structure_raises_on_non_linux(self):
         with patch("platform.system", return_value="Darwin"):
@@ -380,12 +373,11 @@ class TestDeePAWRunOnDirectory(unittest.TestCase):
 
     def test_run_on_directory_dispatches_and_deserializes(self):
         chgcar_mock = MagicMock()
-        fake_dict = {"@class": "Chgcar", "data": {}}
         fake_results = [
             {
                 "name": "POSCAR",
                 "objectives": {
-                    "DEEPAW_RHO: DeePAW Charge Density": {_CHGCAR_RAW_KEY: fake_dict},
+                    "DEEPAW_RHO": {_CHGCAR_RAW_KEY: "fake chgcar text"},
                 },
             }
         ]
@@ -400,16 +392,14 @@ class TestDeePAWRunOnDirectory(unittest.TestCase):
                     self.adapter, "_dispatch_worker", return_value=fake_results
                 ),
                 patch(
-                    "pymatgen.io.vasp.outputs.Chgcar.from_dict",
+                    "pymatgen.io.vasp.outputs.Chgcar.from_file",
                     return_value=chgcar_mock,
                 ),
             ):
                 results = self.adapter.run_on_directory(tmp)
 
         self.assertEqual(len(results), 1)
-        self.assertIs(
-            results[0]["objectives"]["DEEPAW_RHO: DeePAW Charge Density"], chgcar_mock
-        )
+        self.assertIs(results[0]["objectives"]["DEEPAW_RHO"], chgcar_mock)
 
     def test_run_on_directory_raises_on_non_linux(self):
         with patch("platform.system", return_value="Darwin"):

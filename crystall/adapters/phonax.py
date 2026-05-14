@@ -62,75 +62,84 @@ class PhonaxAdapter(BaseCalculator):
     calculator_type: Literal["static"] = "static"
 
     # ── Dispatch-key convention ───────────────────────────────────────────────
-    # Each dispatch_key encodes both the phonax model name and the output type
-    # as "<model_name>:<output_type>" so the worker can unambiguously route
-    # requests without exposing either token in the public objective code.
+    # Each dispatch_key stores the phonax model token. Output fan-out is driven
+    # by objective code inside the worker (e.g. PBS vs PDOS).
     objectives: ObjectiveRegistry = ObjectiveRegistry(
         [
             # NequIP uniIAP -------------------------------------------------------
             Objective(
-                "PHONAX_PBS_NEQUIP",
-                "Phonon Band Structure — NequIP uniIAP",
-                "nequip-uniIAP:band_structure",
-                "Phonax",
+                code="PHONAX_PBS_NEQUIP",
+                description="Phonon Band Structure — NequIP uniIAP",
+                dispatch_key=(("model", "nequip-uniIAP"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             Objective(
-                "PHONAX_PDOS_NEQUIP",
-                "Phonon DOS — NequIP uniIAP",
-                "nequip-uniIAP:dos",
-                "Phonax",
+                code="PHONAX_PDOS_NEQUIP",
+                description="Phonon DOS — NequIP uniIAP",
+                dispatch_key=(("model", "nequip-uniIAP"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             # NequIP uniIAP fine-tuned --------------------------------------------
             Objective(
-                "PHONAX_PBS_NEQUIP_FT",
-                "Phonon Band Structure — NequIP uniIAP fine-tuned",
-                "nequip-uniIAP-finetune:band_structure",
-                "Phonax",
+                code="PHONAX_PBS_NEQUIP_FT",
+                description="Phonon Band Structure — NequIP uniIAP fine-tuned",
+                dispatch_key=(("model", "nequip-uniIAP-finetune"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             Objective(
-                "PHONAX_PDOS_NEQUIP_FT",
-                "Phonon DOS — NequIP uniIAP fine-tuned",
-                "nequip-uniIAP-finetune:dos",
-                "Phonax",
+                code="PHONAX_PDOS_NEQUIP_FT",
+                description="Phonon DOS — NequIP uniIAP fine-tuned",
+                dispatch_key=(("model", "nequip-uniIAP-finetune"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             # NequIP JAX uniIAP ---------------------------------------------------
             Objective(
-                "PHONAX_PBS_NEQUIP_JAX",
-                "Phonon Band Structure — NequIP JAX uniIAP",
-                "nequip-JAX-uniIAP:band_structure",
-                "Phonax",
+                code="PHONAX_PBS_NEQUIP_JAX",
+                description="Phonon Band Structure — NequIP JAX uniIAP",
+                dispatch_key=(("model", "nequip-JAX-uniIAP"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             Objective(
-                "PHONAX_PDOS_NEQUIP_JAX",
-                "Phonon DOS — NequIP JAX uniIAP",
-                "nequip-JAX-uniIAP:dos",
-                "Phonax",
+                code="PHONAX_PDOS_NEQUIP_JAX",
+                description="Phonon DOS — NequIP JAX uniIAP",
+                dispatch_key=(("model", "nequip-JAX-uniIAP"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             # MACE uniIAP ---------------------------------------------------------
             Objective(
-                "PHONAX_PBS_MACE",
-                "Phonon Band Structure — MACE uniIAP",
-                "mace-uniIAP:band_structure",
-                "Phonax",
+                code="PHONAX_PBS_MACE",
+                description="Phonon Band Structure — MACE uniIAP",
+                dispatch_key=(("model", "mace-uniIAP"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             Objective(
-                "PHONAX_PDOS_MACE",
-                "Phonon DOS — MACE uniIAP",
-                "mace-uniIAP:dos",
-                "Phonax",
+                code="PHONAX_PDOS_MACE",
+                description="Phonon DOS — MACE uniIAP",
+                dispatch_key=(("model", "mace-uniIAP"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             # MACE uniIAP fine-tuned ----------------------------------------------
             Objective(
-                "PHONAX_PBS_MACE_FT",
-                "Phonon Band Structure — MACE uniIAP fine-tuned",
-                "mace-uniIAP-finetune:band_structure",
-                "Phonax",
+                code="PHONAX_PBS_MACE_FT",
+                description="Phonon Band Structure — MACE uniIAP fine-tuned",
+                dispatch_key=(("model", "mace-uniIAP-finetune"),),
+                backend="Phonax",
+                kind="artifact",
             ),
             Objective(
-                "PHONAX_PDOS_MACE_FT",
-                "Phonon DOS — MACE uniIAP fine-tuned",
-                "mace-uniIAP-finetune:dos",
-                "Phonax",
+                code="PHONAX_PDOS_MACE_FT",
+                description="Phonon DOS — MACE uniIAP fine-tuned",
+                dispatch_key=(("model", "mace-uniIAP-finetune"),),
+                backend="Phonax",
+                kind="artifact",
             ),
         ]
     )
@@ -266,13 +275,7 @@ class PhonaxAdapter(BaseCalculator):
     def _deserialize_result(
         cls, result: Dict[str, Any], struct_dict: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
-        """Convert raw worker payload into pymatgen objects keyed by objective code.
-
-        The worker now stores results under dispatch-key strings
-        (e.g. ``"nequip-uniIAP:band_structure"``) rather than generic names.
-        This method maps each dispatch key to its public objective code and
-        deserialises the payload into the appropriate pymatgen object.
-        """
+        """Convert raw worker payload into pymatgen objects keyed by objective code."""
         if not isinstance(result, dict):
             return result
         props = result.get("objectives")
@@ -286,23 +289,17 @@ class PhonaxAdapter(BaseCalculator):
 
         structure = Structure.from_dict(struct_dict) if struct_dict else None
 
-        for dispatch_key, value in props.items():
-            obj_code = cls.objectives.code_for_dispatch_key(dispatch_key)
-            if obj_code is None:
-                # Unknown key — pass through untouched
-                updated_props[dispatch_key] = value
-                continue
-
+        for obj_code, value in props.items():
             if not isinstance(value, dict):
                 updated_props[obj_code] = value
                 continue
 
             try:
-                if dispatch_key.endswith(":band_structure"):
+                if "_PBS_" in obj_code:
                     updated_props[obj_code] = cls._band_structure_from_payload(
                         value, structure
                     )
-                elif dispatch_key.endswith(":dos"):
+                elif "_PDOS_" in obj_code:
                     updated_props[obj_code] = cls._dos_from_payload(value, structure)
                 else:
                     updated_props[obj_code] = value
@@ -459,17 +456,18 @@ from phonax.phonons import (
 )
 
 
-# Maps the model tag embedded in each dispatch_key to its phonax loader.
-# Dispatch keys have the form "<model_tag>:<output_type>" and are produced by
-# the host-side PhonaxAdapter.objectives registry — this map is the only place
-# inside the worker that knows the actual phonax model names.
-MODEL_LOADERS = {
-    "nequip-uniIAP":         NequIP_JAXMD_uniIAP_model,
-    "nequip-uniIAP-finetune": NequIP_JAXMD_uniIAP_PBEsol_finetuned_model,
-    "nequip-JAX-uniIAP":     NequIP_JAX_uniIAP_model,
-    "mace-uniIAP":           MACE_uniIAP_model,
-    "mace-uniIAP-finetune":  MACE_uniIAP_PBEsol_finetuned_model,
-}
+def _load_model_bundle(model_tag, weights_path):
+    if model_tag == "nequip-uniIAP":
+        return NequIP_JAXMD_uniIAP_model(weights_path)
+    if model_tag == "nequip-uniIAP-finetune":
+        return NequIP_JAXMD_uniIAP_PBEsol_finetuned_model(weights_path)
+    if model_tag == "nequip-JAX-uniIAP":
+        return NequIP_JAX_uniIAP_model(weights_path)
+    if model_tag == "mace-uniIAP":
+        return MACE_uniIAP_model(weights_path)
+    if model_tag == "mace-uniIAP-finetune":
+        return MACE_uniIAP_PBEsol_finetuned_model(weights_path)
+    raise ValueError(f"Unknown Phonax model tag: {model_tag!r}")
 
 # Physical constants (phonax/phonons.py)
 EV_TO_J = 1.60218e-19
@@ -490,17 +488,22 @@ def cm1_to_thz(freq_cm1):
     return freq_cm1 * CM1_TO_THZ
 
 
-def _parse_dispatch_keys(objectives):
-    # Return {model_tag: set_of_output_types} from a list of dispatch keys.
-    # Each dispatch key has the form "<model_tag>:<output_type>" where
-    # output_type is one of "band_structure" or "dos".
-    model_outputs: Dict[str, set] = {}
-    for key in objectives:
-        if ":" not in key:
-            warnings.warn(f"[PhonaxAdapter] Unrecognised dispatch key format: {key!r}")
+def _build_model_outputs(spec):
+    # Build per-model fan-out targets from objective spec entries.
+    # Returns {model_tag: {"band_structure": [codes], "dos": [codes]}}.
+    model_outputs: Dict[str, Dict[str, list]] = {}
+    for entry in spec:
+        model_tag = entry.get("model")
+        code = entry.get("code")
+        if not isinstance(model_tag, str) or not isinstance(code, str):
             continue
-        model_tag, output_type = key.split(":", 1)
-        model_outputs.setdefault(model_tag, set()).add(output_type)
+        bucket = model_outputs.setdefault(
+            model_tag, {"band_structure": [], "dos": []}
+        )
+        if "_PBS_" in code:
+            bucket["band_structure"].append(code)
+        elif "_PDOS_" in code:
+            bucket["dos"].append(code)
     return model_outputs
 
 
@@ -617,19 +620,11 @@ def main():
 
     file_paths      = req["file_paths"]
     weights_path    = req["weights_path"]
-    objectives      = req.get("objectives", [])
+    spec            = req.get("objective_spec", [])
     npoints         = req.get("npoints", 1000)
     bz_mesh         = req.get("bz_mesh", [10, 10, 10])
     dos_sigma       = req.get("dos_sigma", 2.0)
-    # Determine which (model_tag, output_type) pairs are needed.
-    # When objectives is empty we fall back to running all models for both
-    # outputs, matching the "no objectives => run everything" contract.
-    if objectives:
-        model_outputs = _parse_dispatch_keys(objectives)
-    else:
-        model_outputs = {
-            tag: {"band_structure", "dos"} for tag in MODEL_LOADERS
-        }
+    model_outputs   = _build_model_outputs(spec)
 
     results = []
 
@@ -639,20 +634,15 @@ def main():
             continue
 
         props = {}
+        model_errors = []
 
         # ── Per-model loop ────────────────────────────────────────────
-        for model_tag, output_types in model_outputs.items():
-            if model_tag not in MODEL_LOADERS:
-                warnings.warn(
-                    f"[PhonaxAdapter] Unknown model tag '{model_tag}' — skipping."
-                )
-                continue
-
+        for model_tag, outputs in model_outputs.items():
             try:
                 print(f"[PhonaxAdapter] Loading {model_tag} weights from: {weights_path}")
-                model_fn, params, num_message_passing, r_max = MODEL_LOADERS[
-                    model_tag
-                ](weights_path)
+                model_fn, params, num_message_passing, r_max = _load_model_bundle(
+                    model_tag, weights_path
+                )
 
                 # atoms and graph must come from the same call so the graph
                 # topology is consistent with the atoms object.
@@ -664,25 +654,33 @@ def main():
                 # masses: [N] float64
                 masses = np.array(atoms.get_masses(), dtype=np.float64)
 
-                if "band_structure" in output_types:
-                    dk = f"{model_tag}:band_structure"
-                    props[dk] = _compute_band_structure(
+                if outputs["band_structure"]:
+                    payload = _compute_band_structure(
                         atoms, graph, H, masses, npoints,
                     )
+                    for code in outputs["band_structure"]:
+                        props[code] = payload
 
-                if "dos" in output_types:
-                    dk = f"{model_tag}:dos"
-                    props[dk] = _compute_dos(
+                if outputs["dos"]:
+                    payload = _compute_dos(
                         atoms, graph, H, masses, bz_mesh, dos_sigma,
                     )
+                    for code in outputs["dos"]:
+                        props[code] = payload
 
             except Exception as e:
                 warnings.warn(
                     f"[PhonaxAdapter] Failed for {filename} / {model_tag}: {e}"
                 )
                 traceback.print_exc()
+                model_errors.append(f"{model_tag}: {e}")
 
-        results.append({"name": filename, "objectives": props})
+        if props:
+            results.append({"name": filename, "objectives": props})
+        elif model_errors:
+            results.append({"name": filename, "error": "; ".join(model_errors)})
+        else:
+            results.append({"name": filename, "objectives": {}})
 
     with open(res_path, "w") as f:
         json.dump({"results": results}, f)

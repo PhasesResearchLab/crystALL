@@ -9,8 +9,8 @@ from crystall.calculators import _is_done
 def test_is_done():
     """Test _is_done helper for restart logic."""
     requested = [
-        "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]",
-        "ORB_V2_RELAX_F: ORB-v2 Relaxed RMS Force [eV/A]",
+        "ORB_V2_RELAX_E",
+        "ORB_V2_RELAX_F",
     ]
 
     assert _is_done(None, requested) is False
@@ -19,7 +19,7 @@ def test_is_done():
         _is_done(
             {
                 "objectives": {
-                    "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]": -3.0
+                    "ORB_V2_RELAX_E": -3.0
                 }
             },
             requested,
@@ -30,8 +30,8 @@ def test_is_done():
         _is_done(
             {
                 "objectives": {
-                    "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]": -3.0,
-                    "ORB_V2_RELAX_F: ORB-v2 Relaxed RMS Force [eV/A]": 0.05,
+                    "ORB_V2_RELAX_E": -3.0,
+                    "ORB_V2_RELAX_F": 0.05,
                 }
             },
             requested,
@@ -66,7 +66,7 @@ def test_upsert_objectives_json_idempotency():
 def test_mlipadapter_host_side_state_a_skip():
     """Test that State A skips worker dispatch and re-exports directly."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        json_path = os.path.join(tmpdir, "MACE_test_results.json")
+        json_path = os.path.join(tmpdir, "objectives.json")
         filename = "test.vasp"
         file_path = os.path.join(tmpdir, filename)
         with open(file_path, "w") as f:
@@ -75,11 +75,11 @@ def test_mlipadapter_host_side_state_a_skip():
         # Mock an existing State A entry
         mock_entry = {
             "objectives": {
-                "MACE_RELAX_E: MACE Relaxed Energy [eV/atom]": -5.0,
-                "MACE_RELAX_F: MACE Relaxed RMS Force [eV/A]": 0.01,
-                "MACE_RELAX_STRESS: MACE Relaxed Von Mises Stress [GPa]": 1.0,
-                "MACE_RELAX_VOL: MACE Relaxed Volume [A^3/atom]": 10.0,
-                "MACE_RELAX_STRUCT: MACE Relaxed Structure": {"__crystall_pymatgen_structure__": "mock structure"},
+                "MACE_RELAX_E": -5.0,
+                "MACE_RELAX_F": 0.01,
+                "MACE_RELAX_STRESS": 1.0,
+                "MACE_RELAX_VOL": 10.0,
+                "MACE_RELAX_STRUCT": {"__crystall_pymatgen_structure__": "mock structure"},
             }
         }
         _upsert_objectives_json(json_path, filename, mock_entry["objectives"])
@@ -91,14 +91,12 @@ def test_mlipadapter_host_side_state_a_skip():
         adapter.setup_env = MagicMock()
         adapter._print_results_section = MagicMock()
 
-        with patch("ase.io.write") as mock_write, patch("ase.io.read") as mock_read:
+        with patch.object(adapter, "_dispatch_worker") as mock_dispatch:
             result = adapter.run_on_structure(file_path)
 
         assert result["name"] == filename
-        assert result["objectives"]["MACE_RELAX_E: MACE Relaxed Energy [eV/atom]"] == -5.0
-        # The structure should have been re-exported
-        assert mock_read.called
-        assert mock_write.called
+        assert result["objectives"]["MACE_RELAX_E"] == -5.0
+        mock_dispatch.assert_not_called()
 
 def test_mlip_worker_state_b_warm_restart():
     """Test that State B logic warm restarts via trajectory file."""
@@ -108,42 +106,29 @@ def test_mlip_worker_state_b_warm_restart():
     adapter._current_output_dir = "/tmp"
     adapter._current_output_stem_prefix = "MACE_"
     adapter._current_persist_traj = True
-    adapter._current_requested_keys = ["MACE_RELAX_E: MACE Relaxed Energy [eV/atom]"]
 
     extras = adapter._request_extras()
     assert extras["traj_dir"] == "/tmp"
     assert extras["traj_prefix"] == "MACE_"
     assert extras["persist_traj"] is True
-    assert "objectives_json_path" not in extras, (
-        "objectives_json_path must not be in _request_extras; it is passed as a direct kwarg"
+    assert "objective_spec" not in extras, (
+        "objective_spec is injected by BaseCalculator._dispatch_worker, not _request_extras"
     )
-    assert extras["requested_objective_keys"] == ["MACE_RELAX_E: MACE Relaxed Energy [eV/atom]"]
 
-    # Worker must derive objectives_json_path from output_dir when not passed explicitly
     worker_script = adapter._run_code()
-    assert 'req.get("objectives_json_path")' in worker_script, (
-        'Worker must use req.get(...) with a fallback, not req[...]"
-    )'
+    assert 'req.get("objective_spec", [])' in worker_script
     assert "atoms = _AseTraj(traj_path)[-1]" in worker_script
-    assert "atoms = read(filepath, format=\"vasp\")" in worker_script
+    assert "atoms = read(filepath, format=fmt_hint)" in worker_script
     assert "opt.attach(_traj_writer.write, interval=1)" in worker_script
 
 def test_worker_state_b_is_not_skipped():
-    """State B entries must fall through to relaxation, not be silently returned."""
+    """Worker contract should stay spec-driven and keep relaxation fallthrough paths."""
     from crystall.adapters.mlips import MLIPAdapter
-    requested = ["KEY_A", "KEY_B"]
-    assert "KEY_B" not in {"KEY_A": 1.0}
     adapter = MLIPAdapter("MACE")
     worker_script = adapter._run_code()
-    assert 'if state in ("A", "B")' not in worker_script, (
-        'State B must not be grouped with State A; it must fall through to relaxation'
-    )
-    assert 'if state == "A":' in worker_script
-    # Fix 6: _mk must be a single unconditional return; no backward-compat branch
-    assert 'if model_code:' not in worker_script, (
-        '_mk() must not contain a model_code guard; req["model_code"] is always set'
-    )
-    assert 'req["model_code"]' in worker_script
+    assert 'req.get("objective_spec", [])' in worker_script
+    assert "groups = {}" in worker_script
+    assert 'dict(dispatch_identity).get("model") == "ase_relax"' in worker_script
 
 def test_persist_traj_false_deletes_traj_file():
     """After a successful relaxation, .traj is deleted when persist_traj=False."""
@@ -160,7 +145,6 @@ def test_persist_traj_true_sets_request_field():
     adapter._current_output_dir = '/tmp'
     adapter._current_output_stem_prefix = 'MACE_'
     adapter._current_persist_traj = True
-    adapter._current_requested_keys = []
     extras = adapter._request_extras()
     assert extras['persist_traj'] is True
 
@@ -171,7 +155,6 @@ def test_persist_traj_false_sets_request_field():
     adapter._current_output_dir = '/tmp'
     adapter._current_output_stem_prefix = 'MACE_'
     adapter._current_persist_traj = False
-    adapter._current_requested_keys = []
     extras = adapter._request_extras()
     assert extras['persist_traj'] is False
 
@@ -183,7 +166,7 @@ def test_worker_cold_start_fallback_present():
     # Warm-restart path
     assert '_AseTraj(traj_path)[-1]' in worker_script
     # Cold-start fallback path
-    assert 'atoms = read(filepath, format="vasp")' in worker_script
+    assert 'atoms = read(filepath, format=fmt_hint)' in worker_script
     # Fallback-of-fallback (format-agnostic)
     assert 'atoms = read(filepath)' in worker_script
 
@@ -204,11 +187,11 @@ def test_run_on_directory_state_a_skips_worker(tmp_path):
 
     # Pre-populate a complete State A entry
     complete_objectives = {
-        'MACE_RELAX_E: MACE Relaxed Energy [eV/atom]': -3.0,
-        'MACE_RELAX_F: MACE Relaxed RMS Force [eV/A]': 0.01,
-        'MACE_RELAX_STRESS: MACE Relaxed Von Mises Stress [GPa]': 0.5,
-        'MACE_RELAX_VOL: MACE Relaxed Volume [A^3/atom]': 10.0,
-        'MACE_RELAX_STRUCT: MACE Relaxed Structure': {
+        'MACE_RELAX_E': -3.0,
+        'MACE_RELAX_F': 0.01,
+        'MACE_RELAX_STRESS': 0.5,
+        'MACE_RELAX_VOL': 10.0,
+        'MACE_RELAX_STRUCT': {
             '__crystall_pymatgen_structure__': 'mock poscar'
         },
     }
@@ -218,10 +201,6 @@ def test_run_on_directory_state_a_skips_worker(tmp_path):
     adapter._resolve_device = MagicMock(return_value='cpu')
     adapter._assert_os_supported = MagicMock()
     adapter._print_results_section = MagicMock()
-    # _resolve_mlip_objective_keys must return the full key list matching the entry
-    adapter._resolve_mlip_objective_keys = MagicMock(
-        return_value=list(complete_objectives.keys())
-    )
 
     with patch.object(adapter, '_dispatch_worker', return_value=[]) as mock_dw:
         with patch('ase.io.write'):  # avoid actual file write for re-export
@@ -258,24 +237,23 @@ def test_state_b_dispatches_worker(tmp_path):
 
     # Populate a partial (State B) entry: only RELAX_E is present, RELAX_F is missing
     partial_objectives = {
-        "MACE_RELAX_E: MACE Relaxed Energy [eV/atom]": -3.0,
+        "MACE_RELAX_E": -3.0,
     }
     _upsert_objectives_json(str(json_path), "Fe2O3.vasp", partial_objectives)
 
     # Full key list that the adapter will request
     full_keys = [
-        "MACE_RELAX_E: MACE Relaxed Energy [eV/atom]",
-        "MACE_RELAX_F: MACE Relaxed RMS Force [eV/A]",
-        "MACE_RELAX_STRESS: MACE Relaxed Von Mises Stress [GPa]",
-        "MACE_RELAX_VOL: MACE Relaxed Volume [A^3/atom]",
-        "MACE_RELAX_STRUCT: MACE Relaxed Structure",
+        "MACE_RELAX_E",
+        "MACE_RELAX_F",
+        "MACE_RELAX_STRESS",
+        "MACE_RELAX_VOL",
+        "MACE_RELAX_STRUCT",
     ]
 
     adapter = MLIPAdapter("MACE")
     adapter._resolve_device = MagicMock(return_value="cpu")
     adapter._assert_os_supported = MagicMock()
     adapter._print_results_section = MagicMock()
-    adapter._resolve_mlip_objective_keys = MagicMock(return_value=full_keys)
 
     with patch.object(adapter, "_dispatch_worker", return_value=[]) as mock_dw:
         adapter.run_on_directory(
@@ -292,50 +270,13 @@ def test_state_b_dispatches_worker(tmp_path):
 
 
 def test_traj_cleanup_persist_false(tmp_path):
-    """When persist_traj=False (default), os.remove is called on the .traj file
-    after a successful relaxation.
-    """
-    import os
-    from unittest.mock import MagicMock, patch, call
+    """The worker script owns transient trajectory cleanup."""
     from crystall.adapters.mlips import MLIPAdapter
 
-    struct_file = tmp_path / "Al.vasp"
-    struct_file.write_text("mock poscar")
-    traj_path = tmp_path / "MACE_Al.traj"
-    traj_path.write_text(""  # simulate an existing traj file
-)
-
     adapter = MLIPAdapter("MACE")
-    adapter._resolve_device = MagicMock(return_value="cpu")
-    adapter._assert_os_supported = MagicMock()
-    adapter._print_results_section = MagicMock()
-
-    full_keys = [
-        "MACE_RELAX_E: MACE Relaxed Energy [eV/atom]",
-        "MACE_RELAX_F: MACE Relaxed RMS Force [eV/A]",
-        "MACE_RELAX_STRESS: MACE Relaxed Von Mises Stress [GPa]",
-        "MACE_RELAX_VOL: MACE Relaxed Volume [A^3/atom]",
-        "MACE_RELAX_STRUCT: MACE Relaxed Structure",
-    ]
-    worker_result = [{
-        "name": "Al.vasp",
-        "objectives": {
-            "MACE_RELAX_E: MACE Relaxed Energy [eV/atom]": -3.5,
-            "MACE_RELAX_F: MACE Relaxed RMS Force [eV/A]": 0.01,
-            "MACE_RELAX_STRESS: MACE Relaxed Von Mises Stress [GPa]": 0.3,
-            "MACE_RELAX_VOL: MACE Relaxed Volume [A^3/atom]": 11.0,
-            "MACE_RELAX_STRUCT: MACE Relaxed Structure": {"__crystall_pymatgen_structure__": "mock"},
-        },
-    }]
-
-    with patch.object(adapter, "_dispatch_worker", return_value=worker_result),          patch("ase.io.write"),          patch("ase.io.read"),          patch("os.path.isfile", side_effect=lambda p: str(p).endswith(".traj") or os.path.isfile(p)),          patch("os.remove") as mock_remove:
-        adapter.run_on_structure(
-            str(struct_file),
-            persist_traj=False,
-        )
-
-    traj_calls = [c for c in mock_remove.call_args_list if ".traj" in str(c)]
-    assert traj_calls, "os.remove must be called on the .traj file when persist_traj=False"
+    worker_script = adapter._run_code()
+    assert "if not persist_traj and os.path.isfile(traj_path):" in worker_script
+    assert "os.remove(traj_path)" in worker_script
 
 
 def test_traj_cleanup_persist_true(tmp_path):
@@ -357,11 +298,11 @@ def test_traj_cleanup_persist_true(tmp_path):
     worker_result = [{
         "name": "Al.vasp",
         "objectives": {
-            "MACE_RELAX_E: MACE Relaxed Energy [eV/atom]": -3.5,
-            "MACE_RELAX_F: MACE Relaxed RMS Force [eV/A]": 0.01,
-            "MACE_RELAX_STRESS: MACE Relaxed Von Mises Stress [GPa]": 0.3,
-            "MACE_RELAX_VOL: MACE Relaxed Volume [A^3/atom]": 11.0,
-            "MACE_RELAX_STRUCT: MACE Relaxed Structure": {"__crystall_pymatgen_structure__": "mock"},
+            "MACE_RELAX_E": -3.5,
+            "MACE_RELAX_F": 0.01,
+            "MACE_RELAX_STRESS": 0.3,
+            "MACE_RELAX_VOL": 11.0,
+            "MACE_RELAX_STRUCT": {"__crystall_pymatgen_structure__": "mock"},
         },
     }]
 

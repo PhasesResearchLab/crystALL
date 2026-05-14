@@ -38,7 +38,11 @@ class DeePAWAdapter(BaseCalculator):
     objectives: ObjectiveRegistry = ObjectiveRegistry(
         [
             Objective(
-                "DEEPAW_RHO", "DeePAW Charge Density", "deepaw_charge_density", "DeePAW"
+                code="DEEPAW_RHO",
+                description="DeePAW Charge Density",
+                dispatch_key=(("model", "deepaw_charge_density"),),
+                backend="DeePAW",
+                kind="artifact",
             ),
         ]
     )
@@ -163,6 +167,8 @@ class DeePAWAdapter(BaseCalculator):
     def _request_extras(self) -> dict:
         """Pass grid dimensions and container path to the worker script."""
         extras = super()._request_extras()
+        marker_keys = dict(extras.get("marker_keys", {}))
+        marker_keys["chgcar"] = _CHGCAR_RAW_KEY
         extras.update(
             {
                 "nx": self._nx,
@@ -170,6 +176,7 @@ class DeePAWAdapter(BaseCalculator):
                 "nz": self._nz,
                 "container_path": str(self._container_path()),
                 "singularity_cmd": self._resolve_singularity_binary(),
+                "marker_keys": marker_keys,
             }
         )
         return extras
@@ -295,7 +302,7 @@ class DeePAWAdapter(BaseCalculator):
         return {
             **result,
             "objectives": {
-                (cls.objectives.code_for_dispatch_key(k) or k): cls._deserialize_worker_value(v)
+                k: cls._deserialize_worker_value(v)
                 for k, v in props.items()
             },
         }
@@ -318,7 +325,12 @@ def main():
         req = json.load(f)
 
     file_paths = req["file_paths"]
-    model_name = req.get("model_name", "DeePAW")
+    spec = req.get("objective_spec", [])
+    requested_codes = {
+        entry.get("code") for entry in spec if isinstance(entry.get("code"), str)
+    }
+    marker_keys = req.get("marker_keys", {})
+    chgcar_marker = marker_keys.get("chgcar", "__crystall_chgcar_raw__")
 
     container_path = req.get("container_path")
     if not container_path or not os.path.isfile(container_path):
@@ -335,6 +347,9 @@ def main():
     for filepath in file_paths:
         filename = os.path.basename(filepath)
         if not os.path.isfile(filepath):
+            continue
+        if requested_codes and "DEEPAW_RHO" not in requested_codes:
+            results.append({"name": filename, "objectives": {}})
             continue
 
         work_dir = tempfile.mkdtemp(prefix="deepaw_")
@@ -463,12 +478,12 @@ with open(output_file, "w") as f:
 
             if result.returncode != 0:
                 print(f"[DeePAW] Calculation failed for {filename}: {result.stderr}")
-                results.append({"name": filename, "objectives": {}})
+                results.append({"name": filename, "error": result.stderr.strip() or "container run failed"})
                 continue
 
             if not os.path.isfile(output_chgcar):
                 print(f"[DeePAW] Output not found for {filename}")
-                results.append({"name": filename, "objectives": {}})
+                results.append({"name": filename, "error": "output CHGCAR not found"})
                 continue
 
             try:
@@ -486,14 +501,14 @@ with open(output_file, "w") as f:
                     shutil.copy2(output_chgcar, saved_path)
 
                 props = {
-                    "DEEPAW_RHO: DeePAW Charge Density": {
-                        "__crystall_chgcar_raw__": raw_chgcar
+                    "DEEPAW_RHO": {
+                        chgcar_marker: raw_chgcar
                     }
                 }
                 results.append({"name": filename, "objectives": props})
             except Exception as e:
                 print(f"[DeePAW] Failed to read {output_chgcar}: {e}")
-                results.append({"name": filename, "objectives": {}})
+                results.append({"name": filename, "error": str(e)})
 
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)

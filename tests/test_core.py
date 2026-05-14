@@ -866,7 +866,14 @@ class TestBaseCalculator(unittest.TestCase):
     class DummyStaticCalculator(BaseCalculator):
         name = "dummy-static"
         objectives = ObjectiveRegistry(
-            [Objective("DUMMY_STA", "Dummy Static", "dummy", "DummySta")]
+            [
+                Objective(
+                    code="DUMMY_STA",
+                    description="Dummy Static",
+                    dispatch_key=(("model", "dummy"),),
+                    backend="DummySta",
+                )
+            ]
         )
 
         def _run_code(self) -> str:
@@ -1027,7 +1034,14 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
     class _GuardAdapter(BaseCalculator):
         name = "_Guard"
         objectives = ObjectiveRegistry(
-            [Objective("GUARD_X", "Guard test output", "guard", "Guard")]
+            [
+                Objective(
+                    code="GUARD_X",
+                    description="Guard test output",
+                    dispatch_key=(("model", "guard"),),
+                    backend="Guard",
+                )
+            ]
         )
         supported_os = ["linux", "macos", "windows"]
         supported_devices = ["cpu", "cuda"]
@@ -1212,13 +1226,14 @@ class TestObjectiveRegistry(unittest.TestCase):
         obj = Objective(
             code="ALIGNN_EF_MP",
             description="Formation Energy [eV/atom]",
-            dispatch_key="mp_e_form",
+            dispatch_key=(("model", "mp_e_form"),),
             backend="ALIGNN",
         )
         self.assertEqual(obj.code, "ALIGNN_EF_MP")
         self.assertEqual(obj.description, "Formation Energy [eV/atom]")
-        self.assertEqual(obj.dispatch_key, "mp_e_form")
+        self.assertEqual(obj.dispatch_key, (("model", "mp_e_form"),))
         self.assertEqual(obj.backend, "ALIGNN")
+        self.assertEqual(obj.kind, "scalar")
 
         # Objective is frozen — mutation must raise
         with self.assertRaises((AttributeError, TypeError)):
@@ -1236,7 +1251,10 @@ class TestObjectiveRegistry(unittest.TestCase):
             objectives = ObjectiveRegistry(
                 [
                     Objective(
-                        "DUPCODE", "Formation Energy from adapter 1", "ef_dup1", "Dup1"
+                        code="DUPCODE",
+                        description="Formation Energy from adapter 1",
+                        dispatch_key=(("model", "ef_dup1"),),
+                        backend="Dup1",
                     ),
                 ]
             )
@@ -1246,7 +1264,10 @@ class TestObjectiveRegistry(unittest.TestCase):
             objectives = ObjectiveRegistry(
                 [
                     Objective(
-                        "DUPCODE", "Formation Energy from adapter 2", "ef_dup2", "Dup2"
+                        code="DUPCODE",
+                        description="Formation Energy from adapter 2",
+                        dispatch_key=(("model", "ef_dup2"),),
+                        backend="Dup2",
                     ),
                 ]
             )
@@ -1257,10 +1278,10 @@ class TestObjectiveRegistry(unittest.TestCase):
             registry = ObjectiveRegistry.from_adapters(adapters)
 
         # First entry must be preserved
-        self.assertIn("DUPCODE", registry)
+        self.assertIn("DUPCODE", registry.codes())
         obj = registry["DUPCODE"]
         self.assertEqual(obj.description, "Formation Energy from adapter 1")
-        self.assertEqual(obj.dispatch_key, "ef_dup1")
+        self.assertEqual(obj.dispatch_key, (("model", "ef_dup1"),))
         self.assertEqual(obj.backend, "Dup1")
 
         # Warning must name both the duplicate code and the offending adapter
@@ -1324,10 +1345,10 @@ class TestObjectiveRegistry(unittest.TestCase):
             objectives = ObjectiveRegistry(
                 [
                     Objective(
-                        "DUMMY_EF",
-                        "Dummy formation energy (eV/atom)",
-                        "dummy_ef",
-                        "Dummy",
+                        code="DUMMY_EF",
+                        description="Dummy formation energy (eV/atom)",
+                        dispatch_key=(("model", "dummy_ef"),),
+                        backend="Dummy",
                     ),
                 ]
             )
@@ -1488,40 +1509,61 @@ class TestObjectiveRegistry(unittest.TestCase):
         self.assertEqual(fv["SFY_PATH"], "/envs/fake")
         self.assertEqual(fv["model"], "fake-default")
 
-    # ── Test 4: define_new_objective accepts a bare code ─────────────────────
+    # ── Test 4: _resolve_to_code accepts a bare code ──────────────────────────
 
     def test_resolve_to_code_accepts_code(self) -> None:
-        """define_new_objective passes a bare registered code through unchanged."""
+        """_resolve_to_code passes a bare registered code through unchanged."""
         reg = ObjectiveRegistry(
-            [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
+            [
+                Objective(
+                    code="ALIGNN_EF_MP",
+                    description="Formation energy",
+                    dispatch_key=(("model", "mp_e_form"),),
+                    backend="ALIGNN",
+                )
+            ]
         )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
-        self.assertEqual(cas.define_new_objective("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
+        self.assertEqual(cas._resolve_to_code("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
 
-    # ── Test 5: define_new_objective accepts a legacy 'CODE: description' key ─
+    # ── Test 5: _resolve_to_code accepts a legacy 'CODE: description' key ─────
 
     def test_resolve_to_code_accepts_full_key(self) -> None:
-        """define_new_objective extracts the bare code from a legacy 'CODE: description' key."""
+        """_resolve_to_code extracts the bare code from a legacy 'CODE: description' key."""
         reg = ObjectiveRegistry(
-            [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
+            [
+                Objective(
+                    code="ALIGNN_EF_MP",
+                    description="Formation energy",
+                    dispatch_key=(("model", "mp_e_form"),),
+                    backend="ALIGNN",
+                )
+            ]
         )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         self.assertEqual(
-            cas.define_new_objective("ALIGNN_EF_MP: Formation energy (eV/atom)"),
+            cas._resolve_to_code("ALIGNN_EF_MP: Formation energy (eV/atom)"),
             "ALIGNN_EF_MP",
         )
 
-    # ── Test 6: define_new_objective raises ValueError with a hint ────────────
+    # ── Test 6: _resolve_to_code raises ValueError with a hint ────────────────
 
     def test_resolve_to_code_raises_on_unknown(self) -> None:
-        """define_new_objective raises ValueError naming the bad code and a prefix-matched hint."""
+        """_resolve_to_code raises ValueError naming the bad code and a prefix-matched hint."""
         reg = ObjectiveRegistry(
-            [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
+            [
+                Objective(
+                    code="ALIGNN_EF_MP",
+                    description="Formation energy",
+                    dispatch_key=(("model", "mp_e_form"),),
+                    backend="ALIGNN",
+                )
+            ]
         )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         # 'ALIGNN_BG_MP' shares the 'ALIG' prefix with the only known code
         with self.assertRaises(ValueError) as ctx:
-            cas.define_new_objective("ALIGNN_BG_MP")
+            cas._resolve_to_code("ALIGNN_BG_MP")
         msg = str(ctx.exception)
         self.assertIn("ALIGNN_BG_MP", msg, "Error must name the unrecognised code")
         self.assertIn(

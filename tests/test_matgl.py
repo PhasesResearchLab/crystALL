@@ -33,29 +33,44 @@ class TestMatGLAdapterContract(unittest.TestCase):
             "MATGL_BG_MEGNET",
             "MATGL_EF_M3GNET",
             "MATGL_EWALD_QET",
-            "MATGL_DIPOLE_QET",
+            "MATGL_CDIPOLE_QET",
             "MATGL_STRUCT_CHARGES_QET",
-            "MATGL_E_STATIC_CHGNET",
             "MATGL_STRUCT_MAGMOMS_CHGNET",
+            "MATGL_MDIPOLE_CHGNET",
         ]
         self.assertEqual(objectives.codes(), expected_codes)
 
         cases = [
-            ("MATGL_EF_MEGNET",          "Formation Energy MEGNet [eV/atom]",       "MEGNet-MP-2018.6.1-Eform"),
-            ("MATGL_BG_MEGNET",          "Band Gap MEGNet [eV]",                    "MEGNet-MP-2019.4.1-BandGap-mfi"),
-            ("MATGL_EF_M3GNET",         "Formation Energy M3GNet [eV/atom]",       "M3GNet-MP-2018.6.1-Eform"),
-            ("MATGL_EWALD_QET",         "Electrostatic (Ewald) Energy [eV/cell]",  "QET-MatQ-PES"),
-            ("MATGL_DIPOLE_QET",        "Dipole Magnitude [e\u00b7\u00c5]",                 "QET-MatQ-PES"),
-            ("MATGL_STRUCT_CHARGES_QET","Structure with Charges",                  "QET-MatQ-PES"),
-            ("MATGL_E_STATIC_CHGNET",   "Static Energy CHGNet [eV/atom]",          "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES"),
-            ("MATGL_STRUCT_MAGMOMS_CHGNET", "Structure with Magmoms",              "CHGNet-MatPES-PBE-2025.2.10-2.7M-PES"),
+            ("MATGL_EF_MEGNET", "Formation Energy MEGNet [eV/atom]", (("model", "MEGNet-Eform-MP-2018.6.1"),), "MEGNet"),
+            (
+                "MATGL_BG_MEGNET",
+                "Band Gap MEGNet [eV]",
+                (("model", "MEGNet-BandGap-mfi-MP-2019.4.1"), ("state_attr", 0)),
+                "MEGNet",
+            ),
+            ("MATGL_EF_M3GNET", "Formation Energy M3GNet [eV/atom]", (("model", "M3GNet-Eform-MP-2018.6.1"),), "M3GNet"),
+            ("MATGL_EWALD_QET", "Electrostatic (Ewald) Energy [eV/cell]", (("model", "QET-PES-MatQ"),), "QET"),
+            ("MATGL_CDIPOLE_QET", "Charge Dipole Magnitude [e\u00b7\u00c5]", (("model", "QET-PES-MatQ"),), "QET"),
+            ("MATGL_STRUCT_CHARGES_QET", "Structure with Charges", (("model", "QET-PES-MatQ"),), "QET"),
+            (
+                "MATGL_STRUCT_MAGMOMS_CHGNET",
+                "Structure with Magmoms",
+                (("model", "CHGNet-PES-MatPES-PBE-2025.2.10"),),
+                "CHGNet",
+            ),
+            (
+                "MATGL_MDIPOLE_CHGNET",
+                "CHGNet Static Total Magmom [mu_B]",
+                (("model", "CHGNet-PES-MatPES-PBE-2025.2.10"),),
+                "CHGNet",
+            ),
         ]
-        for code, description, dispatch_key in cases:
+        for code, description, dispatch_key, backend in cases:
             with self.subTest(code=code):
                 obj = objectives[code]
                 self.assertEqual(obj.description,  description)
                 self.assertEqual(obj.dispatch_key, dispatch_key)
-                self.assertEqual(obj.backend,      "MatGL")
+                self.assertEqual(obj.backend, backend)
 
     
 
@@ -69,8 +84,8 @@ class TestMatGLAdapterContract(unittest.TestCase):
 
     def test_run_code_contains_model_ids(self):
         script = self.adapter._run_code()
-        self.assertIn("CHGNet-MatPES-PBE-2025.2.10-2.7M-PES", script)
-        self.assertIn("QET-MatQ-PES", script)
+        self.assertIn("CHGNet-PES-MatPES-PBE-2025.2.10", script)
+        self.assertIn("QET-PES-MatQ", script)
 
     def test_env_path_contains_matgl(self):
         env_path = self.adapter._env_path()
@@ -87,8 +102,8 @@ class TestMatGLAdapterContract(unittest.TestCase):
             {
                 "name": "POSCAR",
                 "objectives": {
-                    "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]": -1.2345,
-                    "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms": {
+                    "MATGL_MDIPOLE_CHGNET": -1.2345,
+                    "MATGL_STRUCT_MAGMOMS_CHGNET": {
                         STRUCTURE_MARKER_KEY: struct.as_dict()
                     },
                 },
@@ -107,17 +122,10 @@ class TestMatGLAdapterContract(unittest.TestCase):
         mock_dw.assert_called_once()
         self.assertEqual(len(results), 1)
         self.assertAlmostEqual(
-            results[0]["objectives"][
-                "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]"
-            ],
+            results[0]["objectives"]["MATGL_MDIPOLE_CHGNET"],
             -1.2345,
         )
-        self.assertIsInstance(
-            results[0]["objectives"][
-                "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms"
-            ],
-            Structure,
-        )
+        self.assertIsInstance(results[0]["objectives"]["MATGL_STRUCT_MAGMOMS_CHGNET"], Structure)
 
     def test_run_on_directory_empty_dir_returns_empty(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertWarns(UserWarning):
@@ -155,10 +163,10 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
 
             req_data = {
                 "file_paths": [poscar_path],
-                "requested_objectives": [
-                    "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]",
-                    "MATGL_DIPOLE_QET: Dipole Magnitude [e\u00b7\u00c5]",
-                    "MATGL_STRUCT_CHARGES_QET: Structure with Charges",
+                "objective_spec": [
+                    {"code": "MATGL_EWALD_QET", "kind": "scalar", "model": "QET-PES-MatQ"},
+                    {"code": "MATGL_CDIPOLE_QET", "kind": "scalar", "model": "QET-PES-MatQ"},
+                    {"code": "MATGL_STRUCT_CHARGES_QET", "kind": "artifact", "model": "QET-PES-MatQ"},
                 ],
             }
             with open(req_path, "w") as f:
@@ -166,7 +174,12 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
 
             matgl_mock = MagicMock()
             matgl_mock.set_backend = MagicMock()
+            from pathlib import Path
+
+            matgl_mock.config.MATGL_CACHE = Path(tmp) / "matgl_cache"
+            matgl_mock.load_model.return_value = MagicMock()
             pes_calculator_mock = MagicMock()
+            torch_mock = MagicMock()
 
             with (
                 patch("sys.argv", ["worker.py", req_path, res_path]),
@@ -175,11 +188,13 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
                     {
                         "matgl": matgl_mock,
                         "matgl.ext": MagicMock(),
-                        "matgl.ext._ase_dgl": MagicMock(
+                        "matgl.ext.ase": MagicMock(
                             PESCalculator=pes_calculator_mock
                         ),
+                        "torch": torch_mock,
                     },
                 ),
+                patch.object(os, "__file__", os.path.join(tmp, "python", "os.py")),
                 patch("pymatgen.io.ase.AseAtomsAdaptor.get_atoms") as mock_get_atoms,
             ):
                 mock_atoms = MagicMock()
@@ -195,10 +210,8 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
 
                 self.assertEqual(len(res_data["results"]), 1)
                 props = res_data["results"][0]["objectives"]
-                self.assertIn(
-                    "MATGL_EWALD_QET: Electrostatic (Ewald) Energy [eV/cell]", props
-                )
-                self.assertIn("MATGL_STRUCT_CHARGES_QET: Structure with Charges", props)
+                self.assertIn("MATGL_EWALD_QET", props)
+                self.assertIn("MATGL_STRUCT_CHARGES_QET", props)
 
                 # Ensure documented ASE methods were called
                 mock_atoms.get_potential_energy.assert_called_once()
@@ -223,9 +236,9 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
 
             req_data = {
                 "file_paths": [poscar_path],
-                "requested_objectives": [
-                    "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]",
-                    "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms",
+                "objective_spec": [
+                    {"code": "MATGL_MDIPOLE_CHGNET", "kind": "scalar", "model": "CHGNet-PES-MatPES-PBE-2025.2.10"},
+                    {"code": "MATGL_STRUCT_MAGMOMS_CHGNET", "kind": "artifact", "model": "CHGNet-PES-MatPES-PBE-2025.2.10"},
                 ],
             }
             with open(req_path, "w") as f:
@@ -233,7 +246,12 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
 
             matgl_mock = MagicMock()
             matgl_mock.set_backend = MagicMock()
+            from pathlib import Path
+
+            matgl_mock.config.MATGL_CACHE = Path(tmp) / "matgl_cache"
+            matgl_mock.load_model.return_value = MagicMock()
             pes_calculator_mock = MagicMock()
+            torch_mock = MagicMock()
 
             with (
                 patch("sys.argv", ["worker.py", req_path, res_path]),
@@ -242,11 +260,13 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
                     {
                         "matgl": matgl_mock,
                         "matgl.ext": MagicMock(),
-                        "matgl.ext._ase_dgl": MagicMock(
+                        "matgl.ext.ase": MagicMock(
                             PESCalculator=pes_calculator_mock
                         ),
+                        "torch": torch_mock,
                     },
                 ),
+                patch.object(os, "__file__", os.path.join(tmp, "python", "os.py")),
                 patch("pymatgen.io.ase.AseAtomsAdaptor.get_atoms") as mock_get_atoms,
             ):
                 mock_atoms = MagicMock()
@@ -263,15 +283,10 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
 
                 self.assertEqual(len(res_data["results"]), 1)
                 props = res_data["results"][0]["objectives"]
-                self.assertIn(
-                    "MATGL_E_STATIC_CHGNET: Static Energy CHGNet [eV/atom]", props
-                )
-                self.assertIn(
-                    "MATGL_STRUCT_MAGMOMS_CHGNET: Structure with Magmoms", props
-                )
+                self.assertIn("MATGL_MDIPOLE_CHGNET", props)
+                self.assertIn("MATGL_STRUCT_MAGMOMS_CHGNET", props)
 
                 # Ensure documented ASE methods were called
-                mock_atoms.get_potential_energy.assert_called_once()
                 mock_atoms.get_magnetic_moments.assert_called_once()
 
 
