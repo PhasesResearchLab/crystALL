@@ -95,6 +95,9 @@ class MatGLAdapter(BaseCalculator):
         "cuda",
     ]  # platform-specific DGL/torch wheels; no device lock
 
+    def _input_structure_format(self) -> str:
+        return "*"
+
     def _env_path(self) -> Path:
         return self._env_root() / "matgl"
 
@@ -150,12 +153,12 @@ class MatGLAdapter(BaseCalculator):
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(result, dict):
             return result
-
         props = result.get("objectives")
         if isinstance(props, dict):
             updated = dict(result)
             updated["objectives"] = {
-                k: cls._deserialize_worker_value(v) for k, v in props.items()
+                (cls.objectives.code_for_dispatch_key(k) or k): cls._deserialize_worker_value(v)
+                for k, v in props.items()
             }
             return updated
         return result
@@ -166,36 +169,14 @@ class MatGLAdapter(BaseCalculator):
     ) -> List[Dict[str, Any]]:
         return [cls._deserialize_result(r) for r in results]
 
-    @staticmethod
-    def _normalize_objectives(
-        requested: Sequence[str] | None, available: Sequence[str]
-    ) -> List[str]:
-        if requested is None:
-            return list(available)
-        keep = set(available)
-        return [obj for obj in requested if obj in keep]
-
     def run_on_structure(
         self,
         file_path: str,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        kwargs = dict(kwargs)
-        kwargs["requested_objectives"] = self._normalize_objectives(
-            objectives, self.objectives.codes()
-        )
-        result = super().run_on_structure(
-            file_path,
-            objectives=objectives,
-            **kwargs,
-        )
-        parsed = self._deserialize_result(result)
-
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed)
-
-        return parsed
+        result = super().run_on_structure(file_path, objectives=objectives, **kwargs)
+        return self._deserialize_result(result)
 
     def run_on_directory(
         self,
@@ -203,23 +184,8 @@ class MatGLAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
-        kwargs = dict(kwargs)
-        kwargs["requested_objectives"] = self._normalize_objectives(
-            objectives, self.objectives.codes()
-        )
-        results = super().run_on_directory(
-            path,
-            mode=mode,
-            max_workers=max_workers,
-            objectives=objectives,
-            **kwargs,
-        )
-        parsed_results = self._deserialize_results(results)
-
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed_results)
-
-        return parsed_results
+        results = super().run_on_directory(path, objectives=objectives, **kwargs)
+        return self._deserialize_results(results)
 
     def _run_code(self) -> str:
         return _MATGL_WORKER_SCRIPT
@@ -265,7 +231,11 @@ def main():
             json.dump({"results": []}, f)
         return
 
-    requested = set(req.get("requested_objectives") or [])
+    requested_codes = req.get("requested_objectives")
+    if requested_codes:
+        requested = set(requested_codes)
+    else:
+        requested = set()
 
     import matgl
 
@@ -282,19 +252,23 @@ def main():
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
 
-    # Objective to Model Mapping
-    OBJ_TO_MODEL = {
-        "MATGL_EF_MEGNET":          "MEGNet-Eform-MP-2018.6.1",
-        "MATGL_BG_MEGNET":          "MEGNet-BandGap-mfi-MP-2019.4.1",
-        "MATGL_EF_M3GNET":          "M3GNet-Eform-MP-2018.6.1",
-        "MATGL_EWALD_QET":          "QET-PES-MatQ",
-        "MATGL_CDIPOLE_QET":        "QET-PES-MatQ",
+    CODE_TO_DISPATCH = {
+        "MATGL_EF_MEGNET": "MEGNet-Eform-MP-2018.6.1",
+        "MATGL_BG_MEGNET": "MEGNet-BandGap-mfi-MP-2019.4.1",
+        "MATGL_EF_M3GNET": "M3GNet-Eform-MP-2018.6.1",
+        "MATGL_EWALD_QET": "QET-PES-MatQ",
+        "MATGL_CDIPOLE_QET": "QET-PES-MatQ",
         "MATGL_STRUCT_CHARGES_QET": "QET-PES-MatQ",
         "MATGL_STRUCT_MAGMOMS_CHGNET": "CHGNet-PES-MatPES-PBE-2025.2.10",
-        "MATGL_MDIPOLE_CHGNET":     "CHGNet-PES-MatPES-PBE-2025.2.10",
+        "MATGL_MDIPOLE_CHGNET": "CHGNet-PES-MatPES-PBE-2025.2.10",
     }
 
-    needed_models = {OBJ_TO_MODEL[obj] for obj in requested if obj in OBJ_TO_MODEL}
+    if not requested:
+        requested = set(CODE_TO_DISPATCH.keys())
+
+    needed_models = {
+        CODE_TO_DISPATCH[obj] for obj in requested if obj in CODE_TO_DISPATCH
+    }
     loaded_models = {mname: matgl.load_model(mname) for mname in needed_models}
 
     results = []
@@ -338,7 +312,7 @@ def main():
             # PES Predictions (QET)
             qet_objs = {
                 "MATGL_EWALD_QET",
-                "MATGL_DIPOLE_QET",
+                "MATGL_CDIPOLE_QET",
                 "MATGL_STRUCT_CHARGES_QET",
             }
             if requested & qet_objs:
@@ -368,7 +342,10 @@ def main():
                         props["MATGL_CDIPOLE_QET"] = round4(np.linalg.norm(p_vec))
 
             # PES Predictions (CHGNet)
-            chg_objs = {"MATGL_STRUCT_MAGMOMS_CHGNET", "MATGL_MDIPOLE_CHGNET"}
+            chg_objs = {
+                "MATGL_STRUCT_MAGMOMS_CHGNET",
+                "MATGL_MDIPOLE_CHGNET",
+            }
             if requested & chg_objs:
                 m = loaded_models.get("CHGNet-PES-MatPES-PBE-2025.2.10")
                 if m:
@@ -383,7 +360,9 @@ def main():
                             STRUCTURE_MARKER_KEY: s.as_dict()
                         }
                     if "MATGL_MDIPOLE_CHGNET" in requested:
-                        props["MATGL_MDIPOLE_CHGNET"] = round4(float(np.sum(magmoms)))
+                        props["MATGL_MDIPOLE_CHGNET"] = round4(
+                            float(np.sum(magmoms))
+                        )
 
             results.append({"name": filename, "objectives": props})
         except Exception as exc:

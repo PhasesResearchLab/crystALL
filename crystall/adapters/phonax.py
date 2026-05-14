@@ -141,27 +141,14 @@ class PhonaxAdapter(BaseCalculator):
         "cuda",
     ]  # JAX supports CPU; CUDA via jax[cuda]
 
-    # Reverse map: dispatch_key → objective code, built once at class body time
-    # so _deserialize_result can look up codes without accessing the registry.
-    _DISPATCH_TO_CODE: Dict[str, str] = {
-        "nequip-uniIAP:band_structure": "PHONAX_PBS_NEQUIP",
-        "nequip-uniIAP:dos": "PHONAX_PDOS_NEQUIP",
-        "nequip-uniIAP-finetune:band_structure": "PHONAX_PBS_NEQUIP_FT",
-        "nequip-uniIAP-finetune:dos": "PHONAX_PDOS_NEQUIP_FT",
-        "nequip-JAX-uniIAP:band_structure": "PHONAX_PBS_NEQUIP_JAX",
-        "nequip-JAX-uniIAP:dos": "PHONAX_PDOS_NEQUIP_JAX",
-        "mace-uniIAP:band_structure": "PHONAX_PBS_MACE",
-        "mace-uniIAP:dos": "PHONAX_PDOS_MACE",
-        "mace-uniIAP-finetune:band_structure": "PHONAX_PBS_MACE_FT",
-        "mace-uniIAP-finetune:dos": "PHONAX_PDOS_MACE_FT",
-    }
-
     def __init__(
         self,
         npoints: int = 1000,
         bz_mesh: tuple[int, int, int] = (10, 10, 10),
         dos_sigma: float = 2.0,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self._npoints = npoints
         self._bz_mesh = bz_mesh
         self._dos_sigma = dos_sigma
@@ -201,12 +188,16 @@ class PhonaxAdapter(BaseCalculator):
         ]
 
     def _request_extras(self) -> dict:
-        return {
-            "weights_path": str(self._env_path() / "trained-models"),
-            "npoints": self._npoints,
-            "bz_mesh": list(self._bz_mesh),
-            "dos_sigma": self._dos_sigma,
-        }
+        extras = super()._request_extras()
+        extras.update(
+            {
+                "weights_path": str(self._env_path() / "trained-models"),
+                "npoints": self._npoints,
+                "bz_mesh": list(self._bz_mesh),
+                "dos_sigma": self._dos_sigma,
+            }
+        )
+        return extras
 
     def _run_code(self) -> str:
         return _PHONAX_WORKER_SCRIPT
@@ -296,7 +287,7 @@ class PhonaxAdapter(BaseCalculator):
         structure = Structure.from_dict(struct_dict) if struct_dict else None
 
         for dispatch_key, value in props.items():
-            obj_code = cls._DISPATCH_TO_CODE.get(dispatch_key)
+            obj_code = cls.objectives.code_for_dispatch_key(dispatch_key)
             if obj_code is None:
                 # Unknown key — pass through untouched
                 updated_props[dispatch_key] = value
@@ -328,9 +319,6 @@ class PhonaxAdapter(BaseCalculator):
         **kwargs,
     ) -> Dict[str, Any]:
         """Run Phonax phonon static calculation on a single structure file."""
-        self._cite_at_runtime(objectives)
-        internal_objectives = self.objectives.resolve_dispatch_keys(objectives)
-
         file_path_abs = os.path.abspath(file_path)
 
         from pymatgen.core import Structure
@@ -344,16 +332,14 @@ class PhonaxAdapter(BaseCalculator):
 
         result = super().run_on_structure(
             file_path_abs,
-            objectives=internal_objectives,
+            objectives=objectives,
             _structure_dict=struct_dict,
             **kwargs,
         )
 
         parsed = self._deserialize_result(result, struct_dict=struct_dict)
 
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed)
-
+        self._maybe_print_results(parsed)
         return parsed
 
     def run_on_directory(
@@ -362,14 +348,9 @@ class PhonaxAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> list[Dict[str, Any]]:
-        self._cite_at_runtime(objectives)
-        internal_objectives = self.objectives.resolve_dispatch_keys(objectives)
-
         results = super().run_on_directory(
             path,
-            mode=mode,
-            max_workers=max_workers,
-            objectives=internal_objectives,
+            objectives=objectives,
             **kwargs,
         )
 
@@ -390,9 +371,7 @@ class PhonaxAdapter(BaseCalculator):
                 self._deserialize_result(res, struct_dict=struct_dict)
             )
 
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed_results)
-
+        self._maybe_print_results(parsed_results)
         return parsed_results
 
 
@@ -636,13 +615,12 @@ def main():
     with open(req_path) as f:
         req = json.load(f)
 
-    file_paths   = req["file_paths"]
-    weights_path = req["weights_path"]
-    objectives   = req.get("objectives", [])
-    npoints      = req.get("npoints", 1000)
-    bz_mesh      = req.get("bz_mesh", [10, 10, 10])
-    dos_sigma    = req.get("dos_sigma", 2.0)
-
+    file_paths      = req["file_paths"]
+    weights_path    = req["weights_path"]
+    objectives      = req.get("objectives", [])
+    npoints         = req.get("npoints", 1000)
+    bz_mesh         = req.get("bz_mesh", [10, 10, 10])
+    dos_sigma       = req.get("dos_sigma", 2.0)
     # Determine which (model_tag, output_type) pairs are needed.
     # When objectives is empty we fall back to running all models for both
     # outputs, matching the "no objectives => run everything" contract.
@@ -662,7 +640,7 @@ def main():
 
         props = {}
 
-        # ── Per-model loop ────────────────────────────────────────────────
+        # ── Per-model loop ────────────────────────────────────────────
         for model_tag, output_types in model_outputs.items():
             if model_tag not in MODEL_LOADERS:
                 warnings.warn(
@@ -677,8 +655,7 @@ def main():
                 ](weights_path)
 
                 # atoms and graph must come from the same call so the graph
-                # topology is consistent with the atoms object (matches the
-                # phonax usage example exactly).
+                # topology is consistent with the atoms object.
                 atoms, graph = crystal_struct_to_graph(
                     filepath, r_max, num_message_passing
                 )

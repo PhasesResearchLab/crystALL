@@ -115,6 +115,9 @@ class DeePAWAdapter(BaseCalculator):
     def layer2_dependencies(self) -> List[str]:
         return []
 
+    def _input_structure_format(self) -> str:
+        return "*"
+
     def _setup_preflight(self) -> None:
         """DeePAW-specific preflight: verify GPU runtime and singularity.
 
@@ -128,49 +131,48 @@ class DeePAWAdapter(BaseCalculator):
         self._assert_gpu_runtime_supported()
         self._resolve_singularity_binary()
 
-    def format_vars(self) -> Dict[str, str]:
-        """Template variables for Layer-3 shell commands."""
-        return {
-            "env_path": str(self._env_path()),
-            "downloads_dir": str(self._downloads_dir()),
-            "container_path": str(self._container_path()),
-            "singularity_bin": self._resolve_singularity_binary(),
-        }
-
     def setup_commands(self) -> List[str]:
         """Layer-3 shell commands that download and build the DeePAW container."""
+        env_path = str(self._env_path())
+        downloads_dir = str(self._downloads_dir())
+        container_path = str(self._container_path())
+        singularity_bin = self._resolve_singularity_binary()
         return [
             # Step 1 -- Download 32 split parts from Zenodo (curl -C - resumes partials)
             (
-                "mkdir -p {downloads_dir} && "
+                f"mkdir -p {downloads_dir} && "
                 "i=0; "
                 'while [ "$i" -le 31 ]; do '
                 "  part=$(printf '%03d' \"$i\"); "
                 "  curl -C - -L "
-                '    -o "{downloads_dir}/deepaw-cpp-v1.tar.gz.part$part" '
+                f'    -o "{downloads_dir}/deepaw-cpp-v1.tar.gz.part$part" '
                 '    "https://zenodo.org/records/18311602/files/deepaw-cpp-v1.tar.gz.part$part?download=1"; '
                 "  i=$((i + 1)); "
                 "done"
             ),
             # Step 2 -- Assemble parts into single archive
-            "cat {downloads_dir}/deepaw-cpp-v1.tar.gz.part* > {env_path}/deepaw-cpp-v1.tar.gz",
+            f"cat {downloads_dir}/deepaw-cpp-v1.tar.gz.part* > {env_path}/deepaw-cpp-v1.tar.gz",
             # Step 3 -- Decompress to Docker archive (.tar)
-            "gunzip -f {env_path}/deepaw-cpp-v1.tar.gz",
+            f"gunzip -f {env_path}/deepaw-cpp-v1.tar.gz",
             # Step 4 -- Build Singularity container from Docker archive
-            "{singularity_bin} build --force --fakeroot {container_path} docker-archive://{env_path}/deepaw-cpp-v1.tar",
+            f"{singularity_bin} build --force --fakeroot {container_path} docker-archive://{env_path}/deepaw-cpp-v1.tar",
             # Step 5 -- Remove build artifacts, keep only the .sif
-            "rm -rf {downloads_dir} {env_path}/deepaw-cpp-v1.tar",
+            f"rm -rf {downloads_dir} {env_path}/deepaw-cpp-v1.tar",
         ]
 
     def _request_extras(self) -> dict:
         """Pass grid dimensions and container path to the worker script."""
-        return {
-            "nx": self._nx,
-            "ny": self._ny,
-            "nz": self._nz,
-            "container_path": str(self._container_path()),
-            "singularity_cmd": self._resolve_singularity_binary(),
-        }
+        extras = super()._request_extras()
+        extras.update(
+            {
+                "nx": self._nx,
+                "ny": self._ny,
+                "nz": self._nz,
+                "container_path": str(self._container_path()),
+                "singularity_cmd": self._resolve_singularity_binary(),
+            }
+        )
+        return extras
 
     # ── Execution ────────────────────────────────────────────────────────
 
@@ -202,9 +204,7 @@ class DeePAWAdapter(BaseCalculator):
 
         parsed = self._deserialize_result(result)
 
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed)
-
+        self._maybe_print_results(parsed)
         return parsed
 
     def run_on_directory(
@@ -239,9 +239,7 @@ class DeePAWAdapter(BaseCalculator):
 
         parsed_results = [self._deserialize_result(r) for r in results]
 
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed_results)
-
+        self._maybe_print_results(parsed_results)
         return parsed_results
 
     def _run_code(self) -> str:
@@ -292,13 +290,15 @@ class DeePAWAdapter(BaseCalculator):
         if not isinstance(result, dict):
             return result
         props = result.get("objectives")
-        if isinstance(props, dict):
-            updated = dict(result)
-            updated["objectives"] = {
-                k: cls._deserialize_worker_value(v) for k, v in props.items()
-            }
-            return updated
-        return result
+        if not isinstance(props, dict):
+            return result
+        return {
+            **result,
+            "objectives": {
+                (cls.objectives.code_for_dispatch_key(k) or k): cls._deserialize_worker_value(v)
+                for k, v in props.items()
+            },
+        }
 
 
 _DEEPAW_WORKER_SCRIPT = """\
@@ -344,12 +344,15 @@ def main():
             shutil.copy2(filepath, input_copy)
 
             output_chgcar = os.path.join(work_dir, "CHG_DEEPAW.vasp")
+            
+            fmt_hint = req.get("file_formats_map", {}).get(filepath, ("poscar",))[0]
 
             container_env = {
                 "APPTAINERENV_PYTHONPATH": "/app:/app/deepaw",
                 "APPTAINERENV_LD_LIBRARY_PATH": "/app/deepaw:/usr/local/lib/python3.12/dist-packages/torch/lib",
                 "DEEPAW_INPUT": input_copy,
                 "DEEPAW_OUTPUT": output_chgcar,
+                "DEEPAW_INPUT_FORMAT": fmt_hint,
             }
 
             cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
@@ -367,6 +370,9 @@ import os
 import collections
 input_file = os.environ["DEEPAW_INPUT"]
 output_file = os.environ["DEEPAW_OUTPUT"]
+fmt_hint = os.environ.get("DEEPAW_INPUT_FORMAT", "vasp")
+if fmt_hint == "poscar":
+    fmt_hint = "vasp"
 
 from ase.io import read
 import numpy as np
@@ -374,7 +380,7 @@ import torch
 from deepaw.data import KdTreeGraphConstructor, collate_list_of_dicts
 from deepaw import Model
 
-atoms = read(input_file)
+atoms = read(input_file, format=fmt_hint)
 cell = np.array(atoms.cell)
 
 nx = {req.get("nx", 40)}

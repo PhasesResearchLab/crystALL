@@ -3,35 +3,40 @@ import json
 import tempfile
 from unittest.mock import patch, MagicMock
 
-from crystall.adapters.mlips import (
-    _classify_state,
-    _upsert_objectives_json,
-    MLIPAdapter,
-)
+from crystall.adapters.mlips import _upsert_objectives_json, MLIPAdapter
+from crystall.calculators import _is_done
 
-def test_classify_state():
-    """Test State A/B/C classification logic."""
+def test_is_done():
+    """Test _is_done helper for restart logic."""
     requested = [
         "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]",
-        "ORB_V2_RELAX_F: ORB-v2 Relaxed RMS Force [eV/A]"
+        "ORB_V2_RELAX_F: ORB-v2 Relaxed RMS Force [eV/A]",
     ]
 
-    # State C: None or missing
-    assert _classify_state(None, requested) == "C"
-    assert _classify_state({"objectives": {}}, requested) == "B"
-
-    # State B: Partial
-    assert _classify_state({"objectives": {"ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]": -3.0}}, requested) == "B"
-
-    # State A: Complete
+    assert _is_done(None, requested) is False
+    assert _is_done({"objectives": {}}, requested) is False
     assert (
-        _classify_state(
-            {"objectives": {
-                "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]": -3.0, 
-                "ORB_V2_RELAX_F: ORB-v2 Relaxed RMS Force [eV/A]": 0.05
-            }}, requested
+        _is_done(
+            {
+                "objectives": {
+                    "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]": -3.0
+                }
+            },
+            requested,
         )
-        == "A"
+        is False
+    )
+    assert (
+        _is_done(
+            {
+                "objectives": {
+                    "ORB_V2_RELAX_E: ORB-v2 Relaxed Energy [eV/atom]": -3.0,
+                    "ORB_V2_RELAX_F: ORB-v2 Relaxed RMS Force [eV/A]": 0.05,
+                }
+            },
+            requested,
+        )
+        is True
     )
 
 def test_upsert_objectives_json_idempotency():
@@ -103,28 +108,32 @@ def test_mlip_worker_state_b_warm_restart():
     adapter._current_output_dir = "/tmp"
     adapter._current_output_stem_prefix = "MACE_"
     adapter._current_persist_traj = True
-    adapter._current_objectives_json_path = "/tmp/MACE_results.json"
     adapter._current_requested_keys = ["MACE_RELAX_E: MACE Relaxed Energy [eV/atom]"]
-    
+
     extras = adapter._request_extras()
     assert extras["traj_dir"] == "/tmp"
     assert extras["traj_prefix"] == "MACE_"
     assert extras["persist_traj"] is True
-    assert extras["objectives_json_path"] == "/tmp/MACE_results.json"
+    assert "objectives_json_path" not in extras, (
+        "objectives_json_path must not be in _request_extras; it is passed as a direct kwarg"
+    )
     assert extras["requested_objective_keys"] == ["MACE_RELAX_E: MACE Relaxed Energy [eV/atom]"]
-    
-    # Check that worker string has the warm restart fallback
+
+    # Worker must derive objectives_json_path from output_dir when not passed explicitly
     worker_script = adapter._run_code()
+    assert 'req.get("objectives_json_path")' in worker_script, (
+        'Worker must use req.get(...) with a fallback, not req[...]"
+    )'
     assert "atoms = _AseTraj(traj_path)[-1]" in worker_script
     assert "atoms = read(filepath, format=\"vasp\")" in worker_script
     assert "opt.attach(_traj_writer.write, interval=1)" in worker_script
 
 def test_worker_state_b_is_not_skipped():
     """State B entries must fall through to relaxation, not be silently returned."""
-    from crystall.adapters.mlips import MLIPAdapter, _classify_state
-    requested = ['KEY_A', 'KEY_B']
-    assert _classify_state({'objectives': {'KEY_A': 1.0}}, requested) == 'B'
-    adapter = MLIPAdapter('MACE')
+    from crystall.adapters.mlips import MLIPAdapter
+    requested = ["KEY_A", "KEY_B"]
+    assert "KEY_B" not in {"KEY_A": 1.0}
+    adapter = MLIPAdapter("MACE")
     worker_script = adapter._run_code()
     assert 'if state in ("A", "B")' not in worker_script, (
         'State B must not be grouped with State A; it must fall through to relaxation'
@@ -151,7 +160,6 @@ def test_persist_traj_true_sets_request_field():
     adapter._current_output_dir = '/tmp'
     adapter._current_output_stem_prefix = 'MACE_'
     adapter._current_persist_traj = True
-    adapter._current_objectives_json_path = '/tmp/MACE_results.json'
     adapter._current_requested_keys = []
     extras = adapter._request_extras()
     assert extras['persist_traj'] is True
@@ -163,7 +171,6 @@ def test_persist_traj_false_sets_request_field():
     adapter._current_output_dir = '/tmp'
     adapter._current_output_stem_prefix = 'MACE_'
     adapter._current_persist_traj = False
-    adapter._current_objectives_json_path = '/tmp/MACE_results.json'
     adapter._current_requested_keys = []
     extras = adapter._request_extras()
     assert extras['persist_traj'] is False
@@ -193,7 +200,7 @@ def test_run_on_directory_state_a_skips_worker(tmp_path):
 
     results_dir = tmp_path / 'MACE_structs'
     results_dir.mkdir()
-    json_path = results_dir / 'MACE_structs_results.json'
+    json_path = tmp_path / 'objectives.json'
 
     # Pre-populate a complete State A entry
     complete_objectives = {
@@ -216,8 +223,6 @@ def test_run_on_directory_state_a_skips_worker(tmp_path):
         return_value=list(complete_objectives.keys())
     )
 
-    # Now that run_on_directory calls self._dispatch_worker (not super()),
-    # patching on the instance correctly intercepts all dispatch attempts.
     with patch.object(adapter, '_dispatch_worker', return_value=[]) as mock_dw:
         with patch('ase.io.write'):  # avoid actual file write for re-export
             adapter.run_on_directory(
@@ -249,7 +254,7 @@ def test_state_b_dispatches_worker(tmp_path):
 
     results_dir = tmp_path / "MACE_structs"
     results_dir.mkdir()
-    json_path = results_dir / "MACE_structs_results.json"
+    json_path = tmp_path / "objectives.json"
 
     # Populate a partial (State B) entry: only RELAX_E is present, RELAX_F is missing
     partial_objectives = {

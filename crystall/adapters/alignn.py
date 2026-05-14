@@ -7,7 +7,7 @@ by :class:`~crystall.calculators.BaseCalculator`.  The micro-env is created unde
 
 import subprocess as sp
 from pathlib import Path
-from typing import Sequence, Dict, Any, List, Literal
+from typing import Sequence, Any, List, Literal, Dict
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -141,11 +141,9 @@ class AlignnAdapter(BaseCalculator):
             objectives=objectives,
             **kwargs,
         )
-
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(result)
-
-        return result
+        parsed = self._deserialize_result(result)
+        self._maybe_print_results(parsed)
+        return parsed
 
     def run_on_directory(
         self,
@@ -159,11 +157,20 @@ class AlignnAdapter(BaseCalculator):
             objectives=objectives,
             **kwargs,
         )
+        parsed = [self._deserialize_result(res) for res in results]
+        self._maybe_print_results(parsed)
+        return parsed
 
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(results)
-
-        return results
+    @classmethod
+    def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        props = result.get("objectives", {})
+        return {
+            **result,
+            "objectives": {
+                cls.objectives.code_for_dispatch_key(k) or k: v
+                for k, v in props.items()
+            },
+        }
 
     def _run_code(self) -> str:
         """Return a self-contained Python script for ALIGNN static calculation.
@@ -224,6 +231,7 @@ def main():
         requested_model_names = None
 
     file_paths = req["file_paths"]
+    file_formats_map = req.get("file_formats_map", {})
     # ALIGNN ignores isif/optimizer/fmax — pure static calculation
 
     # ALIGNN's run_models_from_directory needs a directory, not individual files.
@@ -374,12 +382,20 @@ def main():
 
         # Run calculation
         if len(file_paths) == 1:
+            fp = file_paths[0]
+            fmt_hint = file_formats_map.get(fp, ("poscar",))[0]
+            if fmt_hint == "poscar":
+                fmt_hint = "vasp"
             raw_results = pretrained.run_models_from_structure(
-                file_paths[0],
+                fp,
                 mode="serial",
                 models=requested_model_names,
+                format=fmt_hint,
             )
         else:
+            # No explicit format hint is needed here: BaseCalculator stages
+            # ALIGNN inputs in the worker's native format (POSCAR/vasp) before
+            # directory dispatch, so ALIGNN's own directory scan sees uniform files.
             raw_results = pretrained.run_models_from_directory(
                 target_dir,
                 mode="serial",

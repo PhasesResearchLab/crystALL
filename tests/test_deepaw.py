@@ -212,11 +212,12 @@ class TestDeePAWSetupSchema(unittest.TestCase):
                 self.adapter, "_resolve_singularity_binary", return_value="singularity"
             ),
         ):
-            fv = self.adapter.format_vars()
-        self.assertEqual(
-            set(fv.keys()),
-            {"env_path", "downloads_dir", "container_path", "singularity_bin"},
-        )
+            cmds = self.adapter.setup_commands()
+        joined = "\n".join(cmds)
+        self.assertIn("/env", joined)
+        self.assertIn("/env/dl", joined)
+        self.assertIn("/env/c.sif", joined)
+        self.assertIn("singularity", joined)
 
     def test_layer2_dependencies_is_empty(self):
         self.assertEqual(self.adapter.layer2_dependencies(), [])

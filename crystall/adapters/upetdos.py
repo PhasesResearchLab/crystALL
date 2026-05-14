@@ -35,11 +35,17 @@ class UPETDosAdapter(BaseCalculator):
         "cuda",
     ]  # worker auto-selects via torch.cuda.is_available()
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+
     def _env_path(self) -> Path:
         return self._env_root() / "upetdos"
 
     def python_version(self) -> str:
         return "3.11"
+
+    def _input_structure_format(self) -> str:
+        return "*"
 
     def layer2_dependencies(self) -> List[str]:
         return ["torch==2.10.0"]
@@ -102,16 +108,12 @@ class UPETDosAdapter(BaseCalculator):
         )
         parsed = self._deserialize_result(res)
 
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed)
-
+        self._maybe_print_results(parsed)
         return parsed
 
     def run_on_directory(
         self,
         path: Path | str,
-        mode: str = "serial",
-        max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
@@ -121,10 +123,7 @@ class UPETDosAdapter(BaseCalculator):
             **kwargs,
         )
         parsed_results = self._deserialize_results(results)
-
-        if not getattr(self, "_is_piped", False):
-            self._print_results_section(parsed_results)
-
+        self._maybe_print_results(parsed_results)
         return parsed_results
 
 
@@ -146,6 +145,7 @@ def main():
     with open(req_path) as f:
         req = json.load(f)
     file_paths = req["file_paths"]
+    file_formats_map = req.get("file_formats_map", {})
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -160,7 +160,10 @@ def main():
     results = []
     for fp in file_paths:
         try:
-            atoms = ase.io.read(fp)
+            fmt_hint = file_formats_map.get(fp, ("poscar",))[0]
+            if fmt_hint == "poscar":
+                fmt_hint = "vasp"
+            atoms = ase.io.read(fp, format=fmt_hint)
             
             # Predict DOS properties
             # calculate_dos returns (energy_grid, dos_tensor)
