@@ -856,7 +856,7 @@ class CrystALLSearch:
             f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN"
         )
 
-    def get_calculator_properties(
+    def get_calculator_objectives(
         self,
         calculator: str,
         mode: Literal["serial", "parallel"] = "serial",

@@ -293,7 +293,11 @@ class TestCrystALLSearch(unittest.TestCase):
             patch.object(self.cas.Calculator, "downloadModels") as mocked_dl,
             patch(
                 "crystall.core._pysipfenn_defaults",
-                return_value=("fake/root", ["SIPFENN_Krajewski2022_NN30"], "SIPFENN_Krajewski2022_NN30"),
+                return_value=(
+                    "fake/root",
+                    ["SIPFENN_Krajewski2022_NN30"],
+                    "SIPFENN_Krajewski2022_NN30",
+                ),
             ),
             patch("os.path.isfile", return_value=True),
         ):
@@ -317,7 +321,11 @@ class TestCrystALLSearch(unittest.TestCase):
             ) as mocked_retry_dl,
             patch(
                 "crystall.core._pysipfenn_defaults",
-                return_value=("fake/root", ["SIPFENN_Krajewski2022_NN30"], "SIPFENN_Krajewski2022_NN30"),
+                return_value=(
+                    "fake/root",
+                    ["SIPFENN_Krajewski2022_NN30"],
+                    "SIPFENN_Krajewski2022_NN30",
+                ),
             ),
             patch("os.path.isfile", return_value=True),
         ):
@@ -450,8 +458,8 @@ class TestCrystALLSearch(unittest.TestCase):
         # before that assertion, so we do not test that here.
 
     @pytest.mark.order(5)
-    def test_get_calculator_properties(self) -> None:
-        """Test get_calculator_properties wiring using a dummy external calculator adapter."""
+    def test_get_calculator_objectives(self) -> None:
+        """Test get_calculator_objectives wiring using a dummy external calculator adapter."""
 
         self_test = self
 
@@ -473,7 +481,7 @@ class TestCrystALLSearch(unittest.TestCase):
         if not self.cas.prototype_path:
             self.cas.prototype_path = "dummy_path"
 
-        self.cas.get_calculator_properties("dummy", mode="serial")
+        self.cas.get_calculator_objectives("dummy", mode="serial")
 
         for p in self.cas.prototypes:
             self.assertIn("ext_prop", p)
@@ -481,12 +489,12 @@ class TestCrystALLSearch(unittest.TestCase):
 
         # Unhappy path: unknown calculator should raise
         with self.assertRaises(AssertionError):
-            self.cas.get_calculator_properties("nonexistent")
+            self.cas.get_calculator_objectives("nonexistent")
 
         # Exercise objectives subset intersection branch
         self.cas.supported_calculators["dummy2"] = DummyAdapter
         self.cas.available_calculators["dummy2"] = ["ext_prop", "other_prop"]
-        self.cas.get_calculator_properties(
+        self.cas.get_calculator_objectives(
             "dummy2", mode="serial", objectives=["ext_prop"]
         )
         self.assertIn("ext_prop", self.cas.predicted_objectives)
@@ -500,9 +508,9 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.supported_calculators["bad_adapter"] = BadAdapter
         self.cas.available_calculators["bad_adapter"] = []
         with self.assertRaises(RuntimeError):
-            # core.get_calculator_properties wraps instantiation exceptions
+            # core.get_calculator_objectives wraps instantiation exceptions
             # into RuntimeError; assert this propagation happens
-            self.cas.get_calculator_properties("bad_adapter")
+            self.cas.get_calculator_objectives("bad_adapter")
 
         # No-match branch: adapter returns results but names don't match prototypes
         class NoMatchAdapter:
@@ -518,7 +526,7 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.supported_calculators["nomatch"] = NoMatchAdapter
         self.cas.available_calculators["nomatch"] = ["mismatch_prop"]
         with self.assertRaises(AssertionError):
-            self.cas.get_calculator_properties("nomatch")
+            self.cas.get_calculator_objectives("nomatch")
 
         # Length-mismatch warning: adapter returns fewer entries than prototypes
         class PartialAdapter:
@@ -541,7 +549,7 @@ class TestCrystALLSearch(unittest.TestCase):
         self.cas.available_calculators["partial"] = ["ext_prop"]
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            self.cas.get_calculator_properties("partial")
+            self.cas.get_calculator_objectives("partial")
             # Should have emitted at least one warnings.warn about returned N results
             self.assertTrue(
                 any("returned" in str(x.message) or "returned" in str(x) for x in w)
@@ -857,7 +865,9 @@ class TestBaseCalculator(unittest.TestCase):
 
     class DummyStaticCalculator(BaseCalculator):
         name = "dummy-static"
-        objectives = ObjectiveRegistry([Objective("DUMMY_STA", "Dummy Static", "dummy", "DummySta")])
+        objectives = ObjectiveRegistry(
+            [Objective("DUMMY_STA", "Dummy Static", "dummy", "DummySta")]
+        )
 
         def _run_code(self) -> str:
             return "print('noop')"
@@ -989,9 +999,7 @@ class TestBaseCalculator(unittest.TestCase):
         self.assertIsInstance(
             MLIPAdapter("MACE", static=[AlignnAdapter()]), MLIPAdapter
         )
-        self.assertIsInstance(
-            MLIPAdapter("MACE", static=[MatGLAdapter()]), MLIPAdapter
-        )
+        self.assertIsInstance(MLIPAdapter("MACE", static=[MatGLAdapter()]), MLIPAdapter)
 
     def test_mlip_static_rejects_mlip_adapters(self) -> None:
         """MLIPAdapter static pipe should reject MLIP-role adapters."""
@@ -1018,7 +1026,9 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
     # ── Minimal concrete subclass for hook / device tests ───────────────
     class _GuardAdapter(BaseCalculator):
         name = "_Guard"
-        objectives = ObjectiveRegistry([Objective("GUARD_X", "Guard test output", "guard", "Guard")])
+        objectives = ObjectiveRegistry(
+            [Objective("GUARD_X", "Guard test output", "guard", "Guard")]
+        )
         supported_os = ["linux", "macos", "windows"]
         supported_devices = ["cpu", "cuda"]
 
@@ -1216,8 +1226,6 @@ class TestObjectiveRegistry(unittest.TestCase):
 
     # ── Test 2: __init_subclass__ warning on non-conformant keys ─────────
 
-    
-
     # ── Test 2: ObjectiveRegistry.from_adapters() duplicate code handling ──
 
     def test_build_objective_registry_deduplication(self) -> None:
@@ -1225,15 +1233,23 @@ class TestObjectiveRegistry(unittest.TestCase):
 
         class _Dup1(BaseCalculator):
             name = "dup-1"
-            objectives = ObjectiveRegistry([
-                Objective("DUPCODE", "Formation Energy from adapter 1", "ef_dup1", "Dup1"),
-            ])
+            objectives = ObjectiveRegistry(
+                [
+                    Objective(
+                        "DUPCODE", "Formation Energy from adapter 1", "ef_dup1", "Dup1"
+                    ),
+                ]
+            )
 
         class _Dup2(BaseCalculator):
             name = "dup-2"
-            objectives = ObjectiveRegistry([
-                Objective("DUPCODE", "Formation Energy from adapter 2", "ef_dup2", "Dup2"),
-            ])
+            objectives = ObjectiveRegistry(
+                [
+                    Objective(
+                        "DUPCODE", "Formation Energy from adapter 2", "ef_dup2", "Dup2"
+                    ),
+                ]
+            )
 
         adapters = {"dup-1": _Dup1(), "dup-2": _Dup2()}
 
@@ -1305,9 +1321,16 @@ class TestObjectiveRegistry(unittest.TestCase):
 
         class _DummyStaticAdapter(BaseCalculator):
             name = "dummy-inf"
-            objectives = ObjectiveRegistry([
-                Objective("DUMMY_EF", "Dummy formation energy (eV/atom)", "dummy_ef", "Dummy"),
-            ])
+            objectives = ObjectiveRegistry(
+                [
+                    Objective(
+                        "DUMMY_EF",
+                        "Dummy formation energy (eV/atom)",
+                        "dummy_ef",
+                        "Dummy",
+                    ),
+                ]
+            )
 
         with patch(
             "crystall.adapters.mlips._load_mlips_config", return_value=fake_config
@@ -1324,8 +1347,14 @@ class TestObjectiveRegistry(unittest.TestCase):
             )
 
         # The piped objective must follow the FAKE_ML_DUMMY_EF naming convention
-        piped = [obj for obj in objectives.values() if "DUMMY_EF" in obj.code and "via" in obj.description]
-        self.assertEqual(len(piped), 1, "Expected exactly one piped objective for DUMMY_EF")
+        piped = [
+            obj
+            for obj in objectives.values()
+            if "DUMMY_EF" in obj.code and "via" in obj.description
+        ]
+        self.assertEqual(
+            len(piped), 1, "Expected exactly one piped objective for DUMMY_EF"
+        )
         self.assertTrue(
             piped[0].code.startswith("FAKE_ML_DUMMY_EF"),
             f"Piped code has unexpected prefix: {piped[0].code!r}",
@@ -1463,7 +1492,9 @@ class TestObjectiveRegistry(unittest.TestCase):
 
     def test_resolve_to_code_accepts_code(self) -> None:
         """define_objective passes a bare registered code through unchanged."""
-        reg = ObjectiveRegistry([Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")])
+        reg = ObjectiveRegistry(
+            [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
+        )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         self.assertEqual(cas.define_objective("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
 
@@ -1471,7 +1502,9 @@ class TestObjectiveRegistry(unittest.TestCase):
 
     def test_resolve_to_code_accepts_full_key(self) -> None:
         """define_objective extracts the bare code from a legacy 'CODE: description' key."""
-        reg = ObjectiveRegistry([Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")])
+        reg = ObjectiveRegistry(
+            [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
+        )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         self.assertEqual(
             cas.define_objective("ALIGNN_EF_MP: Formation energy (eV/atom)"),
@@ -1482,7 +1515,9 @@ class TestObjectiveRegistry(unittest.TestCase):
 
     def test_resolve_to_code_raises_on_unknown(self) -> None:
         """define_objective raises ValueError naming the bad code and a prefix-matched hint."""
-        reg = ObjectiveRegistry([Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")])
+        reg = ObjectiveRegistry(
+            [Objective("ALIGNN_EF_MP", "Formation energy", "mp_e_form", "ALIGNN")]
+        )
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         # 'ALIGNN_BG_MP' shares the 'ALIG' prefix with the only known code
         with self.assertRaises(ValueError) as ctx:
