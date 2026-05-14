@@ -385,18 +385,36 @@ class BaseCalculator:
     # ── Micro-env path helpers ──────────────────────────────────────────────
 
     def __init_subclass__(cls, **kwargs: object) -> None:  # noqa: D105
-        """Warn at class-creation time if a run_on_* override omits super().
+        """Warn at class-creation time when an override omits ``super()``.
 
-        This is a lightweight static check: it inspects the source text of the
-        overriding method and warns when the string ``super()`` is absent.
-        The check fires once per class definition (not per call), so there is
-        no runtime overhead on the hot path.
+        By default, direct overrides of :class:`BaseCalculator` methods are
+        expected to extend shared behavior rather than replace it. Pure
+        replacement hooks are listed in ``_NO_SUPER_DEFINITIONS`` and adapter-
+        local helper methods should use the ``_helper_*`` prefix.
+
+        This is a lightweight static check: it inspects the source text of each
+        direct override and warns when the string ``super()`` is absent. The
+        check fires once per class definition (not per call), so there is no
+        runtime overhead on the hot path.
         """
         super().__init_subclass__(**kwargs)
-        _GUARDED = ("run_on_structure", "run_on_directory")
-        for method_name in _GUARDED:
-            override = cls.__dict__.get(method_name)  # only direct overrides
-            if override is None:
+        _NO_SUPER_DEFINITIONS = (
+            "_run_code",
+            "_deserialize_result",
+            "_input_structure_format",
+            "_layer1_python_version",
+            "_layer2_dependencies",
+            "_layer3_setup_commands",
+        )
+        for method_name, override in cls.__dict__.items():
+            if method_name.startswith("_helper_"):
+                continue
+            if method_name in _NO_SUPER_DEFINITIONS:
+                continue
+            base_attr = BaseCalculator.__dict__.get(method_name)
+            if base_attr is None or not callable(base_attr):
+                continue
+            if not callable(override):
                 continue
             try:
                 src = inspect.getsource(override)
@@ -406,9 +424,9 @@ class BaseCalculator:
                 warnings.warn(
                     f"{cls.__name__}.{method_name} overrides BaseCalculator."
                     f"{method_name} without calling super(). "
-                    "Citations and shared base logic will not fire. "
-                    "Add `super().{method_name}(...)` or call "
-                    "`self._cite_at_runtime(objectives)` explicitly.".format(
+                    "Shared base behavior may be bypassed. Add "
+                    "`super().{method_name}(...)` unless this method is meant "
+                    "to be a pure replacement hook in `_NO_SUPER_DEFINITIONS`.".format(
                         method_name=method_name
                     ),
                     stacklevel=2,
