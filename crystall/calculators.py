@@ -298,19 +298,75 @@ class BaseCalculator:
     """Base class and micro-environment orchestrator for all calculator adapters.
 
     Subclasses override the hook methods to customise environment creation and
-    computation.  The lifecycle is split into two phases:
+    computation. The lifecycle is split into two phases:
 
     1. **Setup** — ``setup_env()`` creates an isolated venv via ``uv``,
        installs PyTorch, base dependencies, and model-specific packages.
     2. **Execution** — ``run_on_structure()`` / ``run_on_directory()`` dispatch
        a self-contained Python script into the micro-env via ``subprocess``.
 
-    Standalone usage::
+    Standalone usage, e.g.::
 
         adapter = MLIPAdapter("ORB")
         adapter.setup_env()                          # one-time install
         result  = adapter.run_on_structure("POSCAR") # single file
         results = adapter.run_on_directory("./dir")  # batch
+
+    The adapter contract is intentionally small and tiered to keep implementations
+    consistent, maintainable, and easy to extend.
+
+    REQUIRED adapter declarations
+    -----------------------------
+    CLASS ATTRIBUTES
+    name: str
+    calculator_type: Literal["static", "mlip"]
+    supported_os: list[str]
+    supported_devices: list[str]
+    objectives: ObjectiveRegistry
+
+    WORKER
+    _run_code() -> str
+        Fully self-contained subprocess script executed inside the adapter micro-env.
+
+    OPTIONAL hooks with defaults
+    ----------------------------
+    These may be inherited as-is or overridden completely. No ``super()`` required
+    unless explicitly noted.
+
+    STRUCTURE FORMAT
+    _input_structure_format() -> str        # default: "poscar"
+
+    RESULT POST-PROCESSING
+    _deserialize_result(result) -> dict     # default: identity
+
+    ENV SETUP
+    _layer1_python_version() -> str         # default: "3.11"
+    _layer2_dependencies() -> list[str]     # default: []
+    _layer3_setup_commands() -> list[str]   # default: []
+
+    OPTIONAL overrides that should preserve base behavior
+    -----------------------------------------------------
+    These hooks participate in shared citation, caching, batching, printing, and
+    dispatch plumbing. If overridden, they should complement the base implementation
+    rather than replace it by using ``super()`` calls where appropriate.
+
+    PUBLIC ENTRY POINTS
+    run_on_structure(file_path, objectives, **kwargs) -> dict
+    run_on_directory(path, objectives, batch, **kwargs) -> list[dict]
+
+    SHARED HOOKS
+    _preflight_checks(), _request_extras(), _results_json_path,
+    _is_done, _upsert_objectives_json, _maybe_print_results, etc.
+
+    INTERNAL PLUMBING
+    _dispatch_worker(...)
+        Core shared dispatch logic. Adapters should not override this unless the
+        base contract itself is being intentionally extended.
+
+    OPTIONAL ADAPTER-LOCAL HELPERS
+    ---------------------
+    Use ``_helper_*`` for adapter-specific utilities that are not part of the
+    shared contract.
     """
 
     name: str
@@ -594,6 +650,26 @@ class BaseCalculator:
         self._assert_os_supported()
         self._resolve_device()
 
+    def _preflight_checks(self) -> None:
+        """Run pre-installation checks.
+
+        Subclasses may override to extend preflight logic, but must call
+        ``super()._preflight_checks()`` first.
+        """
+        self._preflight_checks()
+
+    def _layer1_python_version(self) -> str:
+        """Python version for the micro-env venv (Layer 1)."""
+        return self.python_version()
+
+    def _layer2_dependencies(self) -> List[str]:
+        """Base framework packages installed into the micro-env (Layer 2)."""
+        return self.layer2_dependencies()
+
+    def _layer3_setup_commands(self) -> List[str]:
+        """Model-specific install commands (Layer 3)."""
+        return self.setup_commands()
+
     def python_version(self) -> str:
         """Python version for the micro-env venv (e.g. ``"3.11"``)."""
         return "3.11"
@@ -614,10 +690,6 @@ class BaseCalculator:
     def setup_commands(self) -> List[str]:
         """Model-specific install commands (e.g. ``["pip install 'orb-models~=0.6.0'"]``)."""
         return []
-
-    def format_vars(self) -> Dict[str, str]:
-        """Template variables for ``setup_commands()`` string formatting."""
-        return {}
 
     def _run_code(self) -> str:
         """Return a self-contained Python script executed inside the micro-env.
@@ -706,7 +778,7 @@ class BaseCalculator:
                     self._uv_bin(),
                     "venv",
                     "--python",
-                    self.python_version(),
+                    self._layer1_python_version(),
                     str(target),
                 ],
                 env=env,
@@ -717,12 +789,8 @@ class BaseCalculator:
             self._install_layer2(env)
 
             # Layer 3: Model-specific setup commands
-            fmt = self.format_vars()
-            for cmd in self.setup_commands():
-                formatted = cmd
-                for k, v in fmt.items():
-                    formatted = formatted.replace("{" + k + "}", str(v))
-                self._run_setup_command(formatted, env)
+            for cmd in self._layer3_setup_commands():
+                self._run_setup_command(cmd, env)
 
             sentinel = target / ".crystall_env_ready"
             sentinel.write_text("ok", encoding="utf-8")
@@ -757,7 +825,7 @@ class BaseCalculator:
         import platform
         import subprocess as sp
 
-        deps = self.layer2_dependencies()
+        deps = self._layer2_dependencies()
         if not deps:
             return
 
@@ -1025,9 +1093,8 @@ class BaseCalculator:
     def run_on_directory(
         self,
         path: str,
-        mode: Literal["serial", "parallel"] = "serial",
-        max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
+        batch: int | None = None,
         **kwargs,
     ) -> list[Dict[str, Any]]:
         """Run calculator over all structure files in a directory.
@@ -1037,8 +1104,6 @@ class BaseCalculator:
 
         Args:
             path: Directory containing structure files.
-            mode: Execution mode hint (reserved for future parallel dispatch).
-            max_workers: Max parallel workers (reserved for future use).
             objectives: Optional subset of objective names to compute/return.
 
         Returns:

@@ -201,7 +201,7 @@ class TestDeePAWSetupSchema(unittest.TestCase):
         self.assertIn('"$i"', dl_cmd)
         self.assertNotIn("'$part'", dl_cmd)
 
-    def test_format_vars_keys(self):
+    def test_setup_commands_are_preformatted(self):
         with (
             patch.object(self.adapter, "_env_path", return_value=Path("/env")),
             patch.object(self.adapter, "_downloads_dir", return_value=Path("/env/dl")),

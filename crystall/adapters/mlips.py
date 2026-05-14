@@ -633,8 +633,6 @@ class MLIPAdapter(BaseCalculator):
     def run_on_directory(
         self,
         path: str,
-        mode: str = "serial",
-        max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
         isif: int = 8,
         optimizer: str = "FIRE",
@@ -650,8 +648,6 @@ class MLIPAdapter(BaseCalculator):
 
         Args:
             path: Input directory containing structure files.
-            mode: Dispatch mode passed to BaseCalculator.run_on_directory.
-            max_workers: Worker count for parallel mode.
             objectives: Subset of objectives to compute.
             isif: Relaxation ISIF flag.
             optimizer: ASE optimizer name.

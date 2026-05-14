@@ -150,16 +150,12 @@ class AlignnAdapter(BaseCalculator):
     def run_on_directory(
         self,
         path: str,
-        mode: str = "serial",
-        max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> list[Dict[str, Any]]:
         """Run ALIGNN static calculation on all structures in a directory."""
         results = super().run_on_directory(
             path,
-            mode=mode,
-            max_workers=max_workers,
             objectives=objectives,
             **kwargs,
         )

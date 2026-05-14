@@ -117,8 +117,6 @@ class UPETDosAdapter(BaseCalculator):
     ) -> List[Dict[str, Any]]:
         results = super().run_on_directory(
             path,
-            mode=mode,
-            max_workers=max_workers,
             objectives=objectives,
             **kwargs,
         )

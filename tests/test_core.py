@@ -1045,7 +1045,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
                 patch("subprocess.run", return_value=MagicMock(returncode=0)),
                 patch.object(adapter, "_install_layer2"),
                 patch.object(adapter, "setup_commands", return_value=[]),
-                patch.object(adapter, "format_vars", return_value={}),
+                patch.object(adapter, "_layer3_setup_commands", return_value=[]),
                 patch("builtins.input") as mock_input,
             ):
                 try:
@@ -1332,8 +1332,8 @@ class TestObjectiveRegistry(unittest.TestCase):
         )
         self.assertIn("(via dummy-inf)", piped[0].description)
 
-    def test_mlip_format_vars_uses_custom_defaults(self) -> None:
-        """MLIPAdapter format_vars should source model and backend vars from custom."""
+    def test_mlip_build_format_vars_uses_custom_defaults(self) -> None:
+        """MLIPAdapter helper should source model and backend vars from custom."""
         from crystall.calculators import MLIPAdapter
 
         fake_config = {
@@ -1353,7 +1353,7 @@ class TestObjectiveRegistry(unittest.TestCase):
                 patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
             ):
-                fv = adapter.format_vars()
+                fv = adapter._helper_build_format_vars()
 
         self.assertEqual(
             fv,
@@ -1365,8 +1365,8 @@ class TestObjectiveRegistry(unittest.TestCase):
             },
         )
 
-    def test_mlip_format_vars_custom_overrides_replace_defaults(self) -> None:
-        """MLIPAdapter custom= should shallow-overwrite mlips.json custom defaults."""
+    def test_mlip_build_format_vars_custom_overrides_replace_defaults(self) -> None:
+        """MLIPAdapter helper should shallow-overwrite mlips.json custom defaults."""
         from crystall.calculators import MLIPAdapter
 
         fake_config = {
@@ -1390,7 +1390,7 @@ class TestObjectiveRegistry(unittest.TestCase):
                 patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
             ):
-                fv = adapter.format_vars()
+                fv = adapter._helper_build_format_vars()
 
         self.assertEqual(fv["model"], "fake-override")
         self.assertEqual(fv["head"], "override-head")
@@ -1398,8 +1398,8 @@ class TestObjectiveRegistry(unittest.TestCase):
         self.assertEqual(fv["device"], "cpu")
         self.assertEqual(fv["SFY_PATH"], "/envs/fake")
 
-    def test_mlip_format_vars_resolves_overridden_env_placeholders(self) -> None:
-        """MLIPAdapter format_vars should resolve env placeholders from overrides too."""
+    def test_mlip_build_format_vars_resolves_overridden_env_placeholders(self) -> None:
+        """MLIPAdapter helper should resolve env placeholders from overrides too."""
         from crystall.calculators import MLIPAdapter
 
         fake_config = {
@@ -1422,13 +1422,13 @@ class TestObjectiveRegistry(unittest.TestCase):
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
                 patch.dict("os.environ", {"FAKE_TOKEN": "secret-token"}, clear=False),
             ):
-                fv = adapter.format_vars()
+                fv = adapter._helper_build_format_vars()
 
         self.assertEqual(fv["token"], "secret-token")
         self.assertEqual(fv["model"], "fake-default")
 
-    def test_mlip_format_vars_ignores_device_and_sfy_path_overrides(self) -> None:
-        """MLIPAdapter format_vars must not allow custom overrides for device or SFY_PATH."""
+    def test_mlip_build_format_vars_ignores_device_and_sfy_path_overrides(self) -> None:
+        """MLIPAdapter helper must not allow custom overrides for device or SFY_PATH."""
         from crystall.calculators import MLIPAdapter
 
         fake_config = {
@@ -1453,7 +1453,7 @@ class TestObjectiveRegistry(unittest.TestCase):
                 patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
             ):
-                fv = adapter.format_vars()
+                fv = adapter._helper_build_format_vars()
 
         self.assertEqual(fv["device"], "cpu")
         self.assertEqual(fv["SFY_PATH"], "/envs/fake")

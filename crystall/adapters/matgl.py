@@ -200,8 +200,6 @@ class MatGLAdapter(BaseCalculator):
     def run_on_directory(
         self,
         path: str,
-        mode: str = "serial",
-        max_workers: int | None = None,
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
