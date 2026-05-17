@@ -965,9 +965,9 @@ class CrystALLSearch:
                     print(f"{Style.DIM}x {calc_name} not found.{Style.RESET_ALL}")
 
         # Update objectives with calculators found
-        self.__update_objectives(self.Calculator)
+        self._update_objectives(self.Calculator)
 
-    def __update_objectives(
+    def _update_objectives(
         self,
         calculator: Calculator,
         verbose: bool = True
@@ -1076,7 +1076,7 @@ class CrystALLSearch:
                 else:
                     raise
         print("Done! Models are ready to use.")
-        self.__update_objectives(self.Calculator, False)
+        self._update_objectives(self.Calculator, False)
     
     def setup_calculator(
         self, 
@@ -1506,7 +1506,7 @@ class CrystALLSearch:
         self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
@@ -1546,7 +1546,7 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
 
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
     def cluster_prototypes_DBSCAN(
             self,
@@ -1580,7 +1580,7 @@ class CrystALLSearch:
         self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         # Cluster the prototypes using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
@@ -1597,9 +1597,9 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
       
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
-    def __embed_features(
+    def _embed_features(
             self,
             same_composition: bool
     ) -> None:
@@ -1629,7 +1629,7 @@ class CrystALLSearch:
         tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
         self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
 
-    def __select_prototypes(
+    def _select_prototypes(
             self,
             clusters: dict
     ) -> None:
