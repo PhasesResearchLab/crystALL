@@ -849,7 +849,7 @@ def comp2comp_q(
     mpddQuery.update({'material.system': meanComposition.chemical_system})
     for e in comp_dict:
         key = 'material.compositionDictionary.' + e
-        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] - devs[e]) / 1000}})
+        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] + devs[e]) / 1000}})
     return mpddQuery
 
 def ordered_allowed_substitutions(
