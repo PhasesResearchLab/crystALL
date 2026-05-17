@@ -1215,9 +1215,10 @@ class CrystALLSearch:
 
         # Track which objectives (models) will be predicted by pySIPFENN
         for model in self.available_calculators.get('pySIPFENN', []):
-            stdout, sys.stdout = sys.stdout, io.StringIO()
-            self.Calculator.loadModels(network = model)
-            sys.stdout = stdout
+            if model not in self.Calculator.loadedModels:
+                stdout, sys.stdout = sys.stdout, io.StringIO()
+                self.Calculator.loadModels(network = model)
+                sys.stdout = stdout
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
 
