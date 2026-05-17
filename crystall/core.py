@@ -1013,7 +1013,7 @@ class CrystALLSearch:
                     # Fallback without colors if terminal cannot render them
                     print(f"- {calc_name}: {', '.join(sorted(obj_list))}")
 
-    def __check_objectives(
+    def check_objectives(
             self
     ) -> None:
         """
@@ -1503,7 +1503,7 @@ class CrystALLSearch:
             print(f"At least 5 prototypes are required to run `cluster_prototypes`. {len(self.prototypes)} found.")
             return
 
-        self.__check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
         self.__embed_features(same_composition)
@@ -1577,7 +1577,7 @@ class CrystALLSearch:
             print(f"At least 5 prototypes are required to run `cluster_prototypes`. {len(self.prototypes)} found.")
             return
 
-        self.__check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
         self.__embed_features(same_composition)
