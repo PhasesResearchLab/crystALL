@@ -935,6 +935,7 @@ class CrystALLSearch:
         self.available_calculators: Dict[str, List[str]] = {}
         self.predicted_objectives: List[str] = []
         self.ks2022: np.ndarray = None
+        self.prototype_path = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.top_candidates: List[Dict[str, Union[str, float]]] = []
