@@ -104,6 +104,51 @@ def load_adapters() -> Dict[str, Any]:
 
     return adapters
 
+
+def _aggregate_pipeline(
+        collection,
+        pipeline: List[Dict[str, Any]],
+        hint: Optional[Dict[str, int]] = None,
+        msgs: Optional[Sequence[str]] = None,
+        interval: float = 0.6
+    ) -> List[Dict[str, Any]]:
+    """
+    Run a MongoDB aggregate() call while displaying a yaspin spinner whose text
+    cycles through a short list of status messages.
+    """
+
+    if msgs is None:
+        msgs = (
+            'rɛplacing elɛments in thɛ prototypes',
+            'replacing ɛlemɛnts in the prototypɛs',
+            'rɛplacing ɛlɛments in the prototypes',
+            'replacing elemɛnts in thɛ prototypɛs',
+        )
+
+    aggregate_kwargs = {"allowDiskUse": True}
+    if hint is not None:
+        aggregate_kwargs["hint"] = hint
+
+    with yaspin(text=msgs[0]) as sp:
+        stop_evt = threading.Event()
+
+        def cycle() -> None:
+            i = 0
+            while not stop_evt.is_set():
+                sp.text = msgs[i % len(msgs)]
+                i += 1
+                time.sleep(interval)
+
+        t = threading.Thread(target=cycle, daemon=True)
+        t.start()
+        try:
+            result = list(collection.aggregate(pipeline, **aggregate_kwargs))
+        finally:
+            stop_evt.set()
+            t.join(timeout=2)
+
+    return result
+
 def run_local(
         target_formula: Union[str, Composition],
         prototype_path: str
@@ -312,27 +357,11 @@ def run_MPDD(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                msgs=('matching native candidates')
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -417,27 +446,11 @@ def run_MPDD(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                hint={'material.anonymizedFormula': 1},
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
             
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -567,27 +580,11 @@ def run_MPDD_devs(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                msgs=('matching native candidates')
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -672,36 +669,20 @@ def run_MPDD_devs(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                hint={
+                    'material.sortedFractionsDict.c1': 1,
+                    'material.sortedFractionsDict.c2': 1,
+                    'material.sortedFractionsDict.c3': 1,
+                    'material.sortedFractionsDict.c4': 1,
+                    'material.sortedFractionsDict.c5': 1,
+                    'material.sortedFractionsDict.c6': 1,
+                    'material.sortedFractionsDict.c7': 1,
+                    'material.sortedFractionsDict.c8': 1
+                },
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, hint={
-                'material.sortedFractionsDict.c1': 1,
-                'material.sortedFractionsDict.c2': 1,
-                'material.sortedFractionsDict.c3': 1,
-                'material.sortedFractionsDict.c4': 1,
-                'material.sortedFractionsDict.c5': 1,
-                'material.sortedFractionsDict.c6': 1,
-                'material.sortedFractionsDict.c7': 1,
-                'material.sortedFractionsDict.c8': 1
-            }, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
