@@ -145,6 +145,13 @@ class MLIPAdapter(BaseCalculator):
                     kind="scalar",
                 ),
                 Objective(
+                    code=f"{self._model_code}_RELAX_EF",
+                    description=f"{model_name} Relaxed Formation Energy [eV/atom]",
+                    dispatch_key=(("model", "ase_relax"),),
+                    backend=model_name,
+                    kind="scalar",
+                ),
+                Objective(
                     code=f"{self._model_code}_RELAX_F",
                     description=f"{model_name} Relaxed RMS Force [eV/A]",
                     dispatch_key=(("model", "ase_relax"),),
@@ -355,7 +362,11 @@ class MLIPAdapter(BaseCalculator):
         ]
 
     def setup_commands(self) -> List[str]:
-        return self._config.get("setup", [])
+        cmds = list(self._config.get("setup", []))
+        src = Path(__file__).parent / "matbench.json"
+        dst = self._env_path() / "matbench.json"
+        cmds.append(f"python -c \"import shutil; shutil.copy2(r'{src}', r'{dst}')\"")
+        return cmds
 
     def _helper_build_format_vars(self) -> Dict[str, str]:
         merged_custom = {
@@ -450,7 +461,9 @@ class MLIPAdapter(BaseCalculator):
             if os.path.isfile(saved_path):
                 parsed = self._run_static_pipe_single(saved_path, parsed)
                 _upsert_objectives_json(
-                    self._results_json_path(abs_path), filename, parsed.get("objectives", {})
+                    self._results_json_path(abs_path),
+                    filename,
+                    parsed.get("objectives", {}),
                 )
             else:
                 warnings.warn(
@@ -475,6 +488,7 @@ class MLIPAdapter(BaseCalculator):
                 "traj_dir": getattr(self, "_current_output_dir", ""),
                 "traj_prefix": getattr(self, "_current_output_stem_prefix", ""),
                 "persist_traj": getattr(self, "_current_persist_traj", False),
+                "matbench_path": str(self._env_path() / "matbench.json"),
             }
         )
         return extras
@@ -587,7 +601,9 @@ class MLIPAdapter(BaseCalculator):
             )
             for res in all_mlip_results:
                 _upsert_objectives_json(
-                    self._results_json_path(abs_path), res["name"], res.get("objectives", {})
+                    self._results_json_path(abs_path),
+                    res["name"],
+                    res.get("objectives", {}),
                 )
 
         final_results = self._deserialize_results(all_mlip_results)
@@ -722,6 +738,65 @@ _STRUCTURE_FORMATS = {
 def _pending_kind(traj_path):
     return "resume" if os.path.isfile(traj_path) else "fresh"
 
+
+def _compute_elemental_reference(calc, poscar_str):
+    '''Run a single-point energy calculation for one elemental reference structure.
+
+    No relaxation is performed. Returns energy in eV/atom.
+    '''
+    import io as _io
+    from ase.io import read as _ase_read
+    atoms = _ase_read(_io.StringIO(poscar_str), format="vasp")
+    atoms.calc = calc
+    energy = atoms.get_potential_energy()
+    return float(energy / len(atoms))
+
+
+def _get_reference_energy(atoms, model_code, matbench_path, calc):
+    '''Return the composition-weighted elemental reference energy [eV/atom].
+
+    For each element in the structure's chemical system:
+    - If the model_code sub-key exists in matbench.json, reuse the stored value.
+    - If absent, run a single-point calculation, persist the result immediately,
+      then use it.
+
+    Returns None if matbench.json cannot be read or any element entry is missing.
+    '''
+    if not matbench_path or not os.path.isfile(matbench_path):
+        return None
+
+    with open(matbench_path) as _f:
+        matbench = json.load(_f)
+
+    from collections import Counter
+    composition = Counter(atoms.get_chemical_symbols())
+    n_atoms = len(atoms)
+
+    ref_energy = 0.0
+    for element, count in composition.items():
+        entry = matbench.get(element)
+        if entry is None:
+            return None
+
+        if model_code not in entry:
+            poscar_str = entry.get("poscar")
+            if not poscar_str:
+                return None
+            try:
+                e_per_atom = _compute_elemental_reference(calc, poscar_str)
+            except Exception as _exc:
+                print(f"[MLIPAdapter] Reference calc failed for {element}: {_exc}")
+                return None
+            entry[model_code] = round(e_per_atom, 6)
+            # Persist immediately so partial results survive a crash
+            with open(matbench_path, "w") as _f:
+                json.dump(matbench, _f, indent=2)
+
+        ref_energy += entry[model_code] * (count / n_atoms)
+
+    return ref_energy
+
+
 def main():
     req_path = sys.argv[1]
     res_path = sys.argv[2]
@@ -747,10 +822,12 @@ def main():
         entry.get("code") for entry in spec if isinstance(entry.get("code"), str)
     }
     code_relax_e = f"{model_code}_RELAX_E"
+    code_relax_ef = f"{model_code}_RELAX_EF"
     code_relax_f = f"{model_code}_RELAX_F"
     code_relax_stress = f"{model_code}_RELAX_STRESS"
     code_relax_vol = f"{model_code}_RELAX_VOL"
     code_relax_struct = f"{model_code}_RELAX_STRUCT"
+    matbench_path = req.get("matbench_path", "")
     run_relax = True
     if groups:
         run_relax = any(
@@ -907,6 +984,16 @@ def main():
             try:
                 energy = atoms.get_potential_energy()
                 props[code_relax_e] = to_float_4(energy / n_atoms)
+            except Exception:
+                pass
+
+        # Formation energy per atom
+        if code_relax_ef in requested_codes:
+            try:
+                energy = atoms.get_potential_energy()
+                ref = _get_reference_energy(atoms, model_code, matbench_path, calc)
+                if ref is not None:
+                    props[code_relax_ef] = to_float_4(energy / n_atoms - ref)
             except Exception:
                 pass
 
