@@ -187,6 +187,50 @@ def _write_query_sidecar(out_dir: str, **fields: Any) -> None:
     with open(sidecar, 'w') as f:
         YAML(typ='safe', pure=True).dump(dict(sorted(fields.items())), f)
 
+def _aggregate_pipeline(
+        collection,
+        pipeline: List[Dict[str, Any]],
+        hint: Optional[Dict[str, int]] = None,
+        msgs: Optional[Sequence[str]] = None,
+        interval: float = 0.6
+    ) -> List[Dict[str, Any]]:
+    """
+    Run a MongoDB aggregate() call while displaying a yaspin spinner whose text
+    cycles through a short list of status messages.
+    """
+
+    if msgs is None:
+        msgs = (
+            'rɛplacing elɛments in thɛ prototypes',
+            'replacing ɛlemɛnts in the prototypɛs',
+            'rɛplacing ɛlɛments in the prototypes',
+            'replacing elemɛnts in thɛ prototypɛs',
+        )
+
+    aggregate_kwargs = {"allowDiskUse": True}
+    if hint is not None:
+        aggregate_kwargs["hint"] = hint
+
+    with yaspin(text=msgs[0]) as sp:
+        stop_evt = threading.Event()
+
+        def cycle() -> None:
+            i = 0
+            while not stop_evt.is_set():
+                sp.text = msgs[i % len(msgs)]
+                i += 1
+                time.sleep(interval)
+
+        t = threading.Thread(target=cycle, daemon=True)
+        t.start()
+        try:
+            result = list(collection.aggregate(pipeline, **aggregate_kwargs))
+        finally:
+            stop_evt.set()
+            t.join(timeout=2)
+
+    return result
+
 def run_local(
         target_formula: Union[str, Composition],
         prototype_path: str
@@ -415,27 +459,11 @@ def run_MPDD(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                msgs=('matching native candidates')
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -531,27 +559,11 @@ def run_MPDD(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                hint={'material.anonymizedFormula': 1},
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
             
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -706,27 +718,11 @@ def run_MPDD_devs(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                msgs=('matching native candidates')
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -827,36 +823,20 @@ def run_MPDD_devs(
                 }}
             ]
 
-            _msgs = (
-                'rɛplacing elɛments in thɛ prototypes',
-                'replacing ɛlemɛnts in the prototypɛs',
-                'rɛplacing ɛlɛments in the prototypes',
-                'replacing elemɛnts in thɛ prototypɛs',
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                hint={
+                    'material.sortedFractionsDict.c1': 1,
+                    'material.sortedFractionsDict.c2': 1,
+                    'material.sortedFractionsDict.c3': 1,
+                    'material.sortedFractionsDict.c4': 1,
+                    'material.sortedFractionsDict.c5': 1,
+                    'material.sortedFractionsDict.c6': 1,
+                    'material.sortedFractionsDict.c7': 1,
+                    'material.sortedFractionsDict.c8': 1
+                },
             )
-            with yaspin(text=_msgs[0]) as sp:
-                _stop_evt = threading.Event()
-                def _cycle():
-                    i = 0
-                    while not _stop_evt.is_set():
-                        sp.text = _msgs[i % len(_msgs)]
-                        i += 1
-                        time.sleep(0.6)
-                _t = threading.Thread(target=_cycle, daemon=True)
-                _t.start()
-                try:
-                    facet_out = list(MPDD[col].aggregate(pipeline, hint={
-                'material.sortedFractionsDict.c1': 1,
-                'material.sortedFractionsDict.c2': 1,
-                'material.sortedFractionsDict.c3': 1,
-                'material.sortedFractionsDict.c4': 1,
-                'material.sortedFractionsDict.c5': 1,
-                'material.sortedFractionsDict.c6': 1,
-                'material.sortedFractionsDict.c7': 1,
-                'material.sortedFractionsDict.c8': 1
-            }, allowDiskUse=True))
-                finally:
-                    _stop_evt.set()
-                    _t.join(timeout=2)
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
             aggregated_data = facet.get("data", [])
@@ -1004,7 +984,7 @@ def comp2comp_q(
     mpddQuery.update({'material.system': meanComposition.chemical_system})
     for e in comp_dict:
         key = 'material.compositionDictionary.' + e
-        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] - devs[e]) / 1000}})
+        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] + devs[e]) / 1000}})
     return mpddQuery
 
 def ordered_allowed_substitutions(
@@ -1090,6 +1070,7 @@ class CrystALLSearch:
         self.available_calculators: Dict[str, List[str]] = {}
         self.predicted_objectives: List[str] = []
         self.ks2022: np.ndarray = None
+        self.prototype_path = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.top_candidates: List[Dict[str, Union[str, float]]] = []
@@ -1138,9 +1119,9 @@ class CrystALLSearch:
                     print(f"{Style.DIM}x {calc_name} not found.{Style.RESET_ALL}")
 
         # Update objectives with calculators found
-        self.__update_objectives(self.Calculator)
+        self._update_objectives(self.Calculator)
 
-    def __update_objectives(
+    def _update_objectives(
         self,
         calculator: Calculator,
         verbose: bool = True
@@ -1186,7 +1167,7 @@ class CrystALLSearch:
                     # Fallback without colors if terminal cannot render them
                     print(f"- {calc_name}: {', '.join(sorted(obj_list))}")
 
-    def __check_objectives(
+    def check_objectives(
             self
     ) -> None:
         """
@@ -1249,7 +1230,7 @@ class CrystALLSearch:
                 else:
                     raise
         print("Done! Models are ready to use.")
-        self.__update_objectives(self.Calculator, False)
+        self._update_objectives(self.Calculator, False)
     
     def setup_calculator(
         self, 
@@ -1371,9 +1352,10 @@ class CrystALLSearch:
 
         # Track which objectives (models) will be predicted by pySIPFENN
         for model in self.available_calculators.get('pySIPFENN', []):
-            stdout, sys.stdout = sys.stdout, io.StringIO()
-            self.Calculator.loadModels(network = model)
-            sys.stdout = stdout
+            if model not in self.Calculator.loadedModels:
+                stdout, sys.stdout = sys.stdout, io.StringIO()
+                self.Calculator.loadModels(network = model)
+                sys.stdout = stdout
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
 
@@ -1677,10 +1659,10 @@ class CrystALLSearch:
             print(f"At least 5 prototypes are required to run `cluster_prototypes`. {len(self.prototypes)} found.")
             return
 
-        self.__check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
@@ -1720,7 +1702,7 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
 
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
     def cluster_prototypes_DBSCAN(
             self,
@@ -1751,10 +1733,10 @@ class CrystALLSearch:
             print(f"At least 5 prototypes are required to run `cluster_prototypes`. {len(self.prototypes)} found.")
             return
 
-        self.__check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         # Cluster the prototypes using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
@@ -1771,9 +1753,9 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
       
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
-    def __embed_features(
+    def _embed_features(
             self,
             same_composition: bool
     ) -> None:
@@ -1803,7 +1785,7 @@ class CrystALLSearch:
         tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
         self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
 
-    def __select_prototypes(
+    def _select_prototypes(
             self,
             clusters: dict
     ) -> None:

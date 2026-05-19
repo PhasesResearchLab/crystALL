@@ -29,7 +29,7 @@ jobs:
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.11.0
         with:
-          mongodb-version: '6.0'
+          mongodb-version: '8.0'
     
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -63,7 +63,18 @@ jobs:
           PYTORCH_NUM_THREADS: 1
           CHGNET_DEVICE: cpu
         run: |
-          pytest -s --durations=0
+          if [ "${{ matrix.python-version }}" = "3.11" ]; then
+            pytest -s --durations=0 --cov=crystall --cov-report=xml;
+          else
+            pytest -s --durations=0;
+          fi
+
+      - name: Upload coverage report
+        if: ${{ matrix.python-version == '3.11' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml-${{ github.run_id }}-${{ matrix.python-version }}
+          path: coverage.xml
 
       - name: Delay next job
         run: sleep 15
