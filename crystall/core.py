@@ -119,6 +119,45 @@ def _other_targets_tag(other_targets: Optional[Dict[str, Any]]) -> str:
     digest = hashlib.md5(payload.encode()).hexdigest()[:8]
     return f'-q{digest}'
 
+def _normalize_other_targets(
+        target_formula: Union[str, Composition],
+        other_targets: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+    """Drop entries from `other_targets` whose values are implied by `target_formula`.
+
+    Keeps the output-directory hash stable across filters that are semantically
+    equivalent given the formula (e.g. `nComponents=2` for an A2B5 target). Values
+    that don't match — typos, contradictions, Mongo operator forms — pass through
+    unchanged; Mongo handles them, and a contradicting filter just returns zero
+    results.
+    """
+    if not other_targets:
+        return {}
+
+    composition = (target_formula if isinstance(target_formula, Composition)
+                   else Composition(target_formula))
+    target_elements = sorted(e.symbol for e in composition.elements)
+
+    def is_redundant(key: str, value: Any) -> bool:
+        if key == 'material.nComponents':
+            return value == len(target_elements)
+        if key == 'material.elements':
+            return isinstance(value, list) and sorted(value) == target_elements
+        if key == 'material.system':
+            return value == composition.chemical_system
+        if key == 'material.anonymizedFormula':
+            return value == composition.anonymized_formula
+        if key == 'material.reducedFormula':
+            return value == composition.reduced_formula
+        if key == 'material.formula':
+            try:
+                return Composition(value) == composition
+            except (ValueError, TypeError):
+                return False
+        return False
+
+    return {k: v for k, v in other_targets.items() if not is_redundant(k, v)}
+
 def _write_query_sidecar(out_dir: str, **fields: Any) -> None:
     """Write a `<out_dir>_query.yaml` sidecar (metadata file) next to the output directory recording the run's parameters.
 
@@ -315,11 +354,7 @@ def run_MPDD(
 
     other_targets = other_targets or {}
     assert isinstance(other_targets, dict), 'other_targets must be a dict'
-    _reserved = {'material.reducedFormula', 'material.anonymizedFormula'}
-    if _reserved & other_targets.keys():
-        raise ValueError(
-            f'other_targets cannot contain {_reserved}; those are set automatically based on target_formula.'
-        )
+    other_targets = _normalize_other_targets(composition, other_targets)
 
     if target_prototypes == 'native':
 
@@ -593,6 +628,7 @@ def run_MPDD_devs(
 
     other_targets = other_targets or {}
     assert isinstance(other_targets, dict), 'other_targets must be a dict'
+    other_targets = _normalize_other_targets(composition, other_targets)
 
     print('\nSearching for structure prototypes for: ' + formula_str)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
