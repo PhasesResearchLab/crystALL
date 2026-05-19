@@ -6,8 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "crystall"
 version = "0.6.0"
 authors = [
-  { name="Adam Krajewski", email="adam@phaseslab.org" },
   { name="Ricardo Amaral", email="rna5137@psu.edu" },
+  { name="Adam Krajewski", email="adam@phaseslab.org" },
+  { name="Jonathan Siegel", email="jwsiegel@tamu.edu" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

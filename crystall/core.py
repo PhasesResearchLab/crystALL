@@ -128,6 +128,7 @@ class CrystALLSearch:
             str, Any
         ] = {}  # code -> ObjectiveEntry, built after adapters load
         self.ks2022: np.ndarray = None
+        self.prototype_path = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.top_candidates: List[Dict[str, Union[str, float]]] = []
@@ -286,7 +287,7 @@ class CrystALLSearch:
             f"Objective code '{code}' not found in available objectives.{hint}"
         )
 
-    def _check_objectives(self) -> None:
+    def check_objectives(self) -> None:
         """
         Check available objectives with predictions.
 
@@ -818,9 +819,10 @@ class CrystALLSearch:
 
         # Track which objectives (models) will be predicted by pySIPFENN
         for model in self.available_calculators.get("pySIPFENN", []):
-            stdout, sys.stdout = sys.stdout, io.StringIO()
-            self.Calculator.loadModels(network=model)
-            sys.stdout = stdout
+            if model not in self.Calculator.loadedModels:
+                stdout, sys.stdout = sys.stdout, io.StringIO()
+                self.Calculator.loadModels(network=model)
+                sys.stdout = stdout
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
 
@@ -1223,7 +1225,7 @@ class CrystALLSearch:
             )
             return
 
-        self._check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
         self._embed_features(same_composition)
@@ -1313,7 +1315,7 @@ class CrystALLSearch:
             )
             return
 
-        self._check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
         self._embed_features(same_composition)

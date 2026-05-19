@@ -1,0 +1,22 @@
+# Skip test and documentation artifacts
+docs/_build
+*coverage*
+
+# Python compiled files and cache
+**/__pycache__
+**/.pytest_cache
+*.pyc
+*.egg-info
+
+# Test and temporary files
+**/*-prototypes*
+**/*-candidates*
+
+# General
+.DS_Store
+.vscode
+
+# Some extras for user convenience. Uncomment as needed.
+#*.POSCAR
+#*.CIF
+#*.xyz
