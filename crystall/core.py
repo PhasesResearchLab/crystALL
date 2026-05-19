@@ -122,14 +122,22 @@ def _other_targets_tag(other_targets: Optional[Dict[str, Any]]) -> str:
 def _normalize_other_targets(
         target_formula: Union[str, Composition],
         other_targets: Optional[Dict[str, Any]],
+        query_mode: Literal['exact-composition', 'composition-range',
+                            'anonymized-formula', 'fraction-range'],
     ) -> Dict[str, Any]:
-    """Drop entries from `other_targets` whose values are implied by `target_formula`.
+    """Drop entries from `other_targets` whose values are implied by `target_formula`
+    given the `query_mode` (which describes what the implicit MPDD query matches).
 
-    Keeps the output-directory hash stable across filters that are semantically
-    equivalent given the formula (e.g. `nComponents=2` for an A2B5 target). Values
-    that don't match — typos, contradictions, Mongo operator forms — pass through
-    unchanged; Mongo handles them, and a contradicting filter just returns zero
-    results.
+    - 'exact-composition' — matches reducedFormula. Implies nComponents, elements,
+      system, formula, reducedFormula, anonymizedFormula.
+    - 'composition-range' — matches compositionDictionary ± devs. Elements pinned,
+      counts vary. Implies nComponents, elements, system.
+    - 'anonymized-formula' — matches anonymizedFormula. Implies nComponents,
+      anonymizedFormula.
+    - 'fraction-range' — matches sortedFractionsDict ± devs. Only nComponents.
+
+    Values that don't match — typos, contradictions, Mongo operator forms — pass
+    through unchanged; Mongo handles them.
     """
     if not other_targets:
         return {}
@@ -138,7 +146,18 @@ def _normalize_other_targets(
                    else Composition(target_formula))
     target_elements = sorted(e.symbol for e in composition.elements)
 
+    redundant_keys = {'material.nComponents'}
+    if query_mode == 'exact-composition':
+        redundant_keys |= {'material.elements', 'material.system', 'material.formula',
+                           'material.reducedFormula', 'material.anonymizedFormula'}
+    elif query_mode == 'composition-range':
+        redundant_keys |= {'material.elements', 'material.system'}
+    elif query_mode == 'anonymized-formula':
+        redundant_keys |= {'material.anonymizedFormula'}
+
     def is_redundant(key: str, value: Any) -> bool:
+        if key not in redundant_keys:
+            return False
         if key == 'material.nComponents':
             return value == len(target_elements)
         if key == 'material.elements':
@@ -354,7 +373,10 @@ def run_MPDD(
 
     other_targets = other_targets or {}
     assert isinstance(other_targets, dict), 'other_targets must be a dict'
-    other_targets = _normalize_other_targets(composition, other_targets)
+    other_targets = _normalize_other_targets(
+        composition, other_targets,
+        'exact-composition' if target_prototypes == 'native' else 'anonymized-formula',
+    )
 
     if target_prototypes == 'native':
 
@@ -628,7 +650,10 @@ def run_MPDD_devs(
 
     other_targets = other_targets or {}
     assert isinstance(other_targets, dict), 'other_targets must be a dict'
-    other_targets = _normalize_other_targets(composition, other_targets)
+    other_targets = _normalize_other_targets(
+        composition, other_targets,
+        'composition-range' if target_prototypes == 'native' else 'fraction-range',
+    )
 
     print('\nSearching for structure prototypes for: ' + formula_str)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
