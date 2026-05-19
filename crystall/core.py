@@ -106,16 +106,23 @@ def load_adapters() -> Dict[str, Any]:
 
     return adapters
 
-def _other_targets_tag(other_targets: Optional[Dict[str, Any]]) -> str:
-    """Return a deterministic short suffix encoding `other_targets`, or '' when empty/None.
+def _query_tag(formula_str: str, source_str: str, other_targets: Optional[Dict[str, Any]]) -> str:
+    """Return a deterministic short suffix uniquely identifying the prototype-search
+    problem, or '' when `other_targets` is empty/None.
 
-    Used to disambiguate output directories produced for different filter dicts so reruns
-    with the same filter update in place while reruns with a different filter land in a
-    distinct folder.
+    When `other_targets` is provided, the digest encodes the target formula (and
+    devs, when present, via `formula_str`), the source database + collections
+    (via `source_str`), and the filter dict — so the tag distinguishes runs that
+    differ in any of these. When `other_targets` is empty, no tag is appended:
+    such runs are already unambiguously named by `formula_str` and `source_str`.
     """
     if not other_targets:
         return ''
-    payload = json.dumps(other_targets, sort_keys=True, default=str)
+    payload = json.dumps({
+        'formula': formula_str,
+        'source': source_str,
+        'other_targets': other_targets,
+    }, sort_keys=True, default=str)
     digest = hashlib.md5(payload.encode()).hexdigest()[:8]
     return f'-q{digest}'
 
@@ -424,7 +431,7 @@ def run_MPDD(
 
     if target_prototypes == 'native':
 
-        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes(native)"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes(native)"
 
         try:
             os.mkdir(out_dir)
@@ -521,7 +528,7 @@ def run_MPDD(
         else:
             print('Target composition indicates discrete element substitution.\n')
 
-        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes"
         print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
 
         try:
@@ -681,7 +688,7 @@ def run_MPDD_devs(
                 f'other_targets cannot contain keys produced by the composition query: {sorted(nativeQuery.keys() & other_targets.keys())}'
             )
 
-        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes(native)"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes(native)"
 
         try:
             os.mkdir(out_dir)
@@ -780,7 +787,7 @@ def run_MPDD_devs(
 
         # ********************************* Substitution elements combination ********************************************
 
-        out_dir = f"{formula_str}-{source_str}{_other_targets_tag(other_targets)}-prototypes"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes"
         print('Final Prototype Directory: ' + out_dir)
 
         try:
