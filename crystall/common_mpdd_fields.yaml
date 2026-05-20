@@ -1,0 +1,56 @@
+# Common MPDD field paths users may pass in `other_targets`.
+#
+# Used by crystALL for typo suggestions when a user passes an unrecognized
+# field name (e.g. `material.reducedmassAll` → "did you mean
+# `material.reducedMassAll`?"). Not a comprehensive schema — listing only the
+# top fields most likely to appear in user filters.
+#
+# To add a field: append the dotted path to the list.
+# To remove a field: delete the line.
+
+fields:
+  # metadata.*
+  - metadata.parentDatabase
+  - metadata.parentDatabaseID
+  - metadata.parentDatabaseURL
+  - metadata.affiliation
+  - metadata.name
+  - metadata.comment
+
+  # material.* — formula and composition
+  - material.formula
+  - material.compositionDictionary
+  - material.anonymizedFormula
+  - material.reducedFormula
+  - material.system
+  - material.nComponents
+  - material.elements
+  - material.nSites
+
+  # material.* — symmetry
+  - material.crystalSystem
+  - material.spaceGroup
+  - material.spaceGroupN
+  - material.pointGroup
+
+  # material.* — physical properties
+  - material.density
+  - material.volume
+  - material.atomicVolume
+  - material.averageElectronegativity
+  - material.meanMass
+  - material.reducedMass
+  - material.reducedMassAll
+
+  # material.* — structure IDs
+  - material.structID
+  - material.volNormStructID
+  - material.coarseStructID
+
+  # material.* — dimensionality
+  - material.dimensionality
+  - material.dimensionalityAgreement
+
+  # properties.* — pySIPFENN predictions
+  - properties.EF_SIPFENN_NN30
+  - properties.STAB_SIPFENN_NN30
