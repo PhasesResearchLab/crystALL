@@ -687,9 +687,6 @@ class TestCrystALLSearch(unittest.TestCase):
                                 "Ni26Ru8-local-prototypes",
                             ]:
                                 for path in glob.glob(pattern):
-                                    # The glob also matches `_query.yaml`
-                                    # sidecar files written next to filtered
-                                    # output directories — handle both.
                                     if os.path.isdir(path):
                                         shutil.rmtree(path)
                                     elif os.path.isfile(path):
