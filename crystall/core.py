@@ -8,6 +8,7 @@ import json
 import csv
 import time
 import hashlib
+import difflib
 from ruamel.yaml import YAML
 import numpy as np
 import pandas as pd
@@ -126,6 +127,13 @@ def _query_tag(formula_str: str, source_str: str, other_targets: Optional[Dict[s
     digest = hashlib.md5(payload.encode()).hexdigest()[:8]
     return f'-q{digest}'
 
+_KNOWN_OPERATORS = frozenset({
+    '$eq', '$ne', '$gt', '$gte', '$lt', '$lte',
+    '$in', '$nin', '$exists', '$regex', '$options', '$type',
+    '$and', '$or', '$not', '$nor',
+    '$all', '$elemMatch', '$size', '$mod',
+})
+
 def _load_known_fields() -> frozenset:
     """Load common MPDD field paths from `common_mpdd_fields.yaml` plus dynamically
     derived `material.compositionDictionary.<element>` leaves (one per pymatgen
@@ -143,6 +151,51 @@ def _load_known_fields() -> frozenset:
     return frozenset(fields)
 
 _KNOWN_FIELDS = _load_known_fields()
+
+def _suggest_field_typos(other_targets: Optional[Dict[str, Any]]) -> None:
+    """Warn when a key in `other_targets`, or a MongoDB operator inside one of
+    its values, looks like a typo of a known field or operator.
+
+    Compares each unknown key to the set of common MPDD fields (and operators,
+    for `$`-prefixed keys inside operator-form values) via `difflib`. Only fires
+    when there is a close match — silent otherwise.
+    """
+    if not other_targets:
+        return
+    for key, value in other_targets.items():
+        # Field-name typo check
+        if key not in _KNOWN_FIELDS:
+            suggestion = difflib.get_close_matches(key, _KNOWN_FIELDS, n=1, cutoff=0.75)
+            if suggestion:
+                warnings.warn(
+                    f"other_targets key {key!r} is not a common MPDD field; "
+                    f"did you mean {suggestion[0]!r}?"
+                )
+        # Operator-name typo check (only when value is operator-form)
+        if isinstance(value, dict) and any(k.startswith('$') for k in value):
+            for op_key in value:
+                if op_key in _KNOWN_OPERATORS:
+                    continue
+                suggestion = difflib.get_close_matches(op_key, _KNOWN_OPERATORS, n=1, cutoff=0.75)
+                if suggestion:
+                    warnings.warn(
+                        f"other_targets[{key!r}] uses {op_key!r}, which is not a "
+                        f"known MongoDB operator; did you mean {suggestion[0]!r}?"
+                    )
+
+def _warn_unrecognized_fields_on_empty(other_targets: Optional[Dict[str, Any]]) -> None:
+    """Warn when a query returned zero results AND `other_targets` contains
+    fields not on the known MPDD field list — possibly typos the pre-query
+    fuzzy-match missed (because they had no close match).
+    """
+    if not other_targets:
+        return
+    unrecognized = [k for k in other_targets if k not in _KNOWN_FIELDS]
+    if unrecognized:
+        warnings.warn(
+            f"No prototypes found, and other_targets contains uncommon MPDD "
+            f"fields: {unrecognized}. Please double-check the field names."
+        )
 
 def _normalize_other_targets(
         target_formula: Union[str, Composition],
