@@ -553,6 +553,46 @@ class TestTopLevelFunctions(unittest.TestCase):
             _suggest_field_typos({"material.compositionDictionary": {"Mn": 0.27, "Al": 0.73}})
             self.assertEqual(len(w), 0)
 
+    def test_warn_unrecognized_fields(self) -> None:
+        """_warn_unrecognized_fields warns when any key is not in _KNOWN_FIELDS,
+        listing only the unrecognized keys; silent when everything is known."""
+        from crystall.core import _warn_unrecognized_fields
+
+        # Empty: silent
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_unrecognized_fields({})
+            self.assertEqual(len(w), 0)
+
+        # All recognized: silent
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_unrecognized_fields({
+                "material.nComponents": 2,
+                "material.dimensionality": 2,
+            })
+            self.assertEqual(len(w), 0)
+
+        # Mix: warning lists ONLY the unrecognized keys
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_unrecognized_fields({
+                "material.nComponents": 2,
+                "totally.madeUpField": 5,
+            })
+            self.assertEqual(len(w), 1)
+            msg = str(w[0].message)
+            self.assertIn("totally.madeUpField", msg)
+            self.assertNotIn("material.nComponents", msg)
+
+        # All unrecognized: warning lists all of them
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_unrecognized_fields({"fake.one": 1, "fake.two": 2})
+            self.assertEqual(len(w), 1)
+            msg = str(w[0].message)
+            self.assertIn("fake.one", msg)
+            self.assertIn("fake.two", msg)
 
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
