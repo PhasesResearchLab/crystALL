@@ -181,7 +181,7 @@ def _suggest_field_typos(other_targets: Dict[str, Any]) -> None:
                         f"known MongoDB operator; did you mean {suggestion[0]!r}?"
                     )
 
-def _warn_unrecognized_fields_on_empty(other_targets: Dict[str, Any]) -> None:
+def _warn_unrecognized_fields(other_targets: Dict[str, Any]) -> None:
     """Warn when a query returned zero results AND `other_targets` contains
     fields not on the known MPDD field list — possibly typos the pre-query
     fuzzy-match missed (because they had no close match).
@@ -548,7 +548,7 @@ def run_MPDD(
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
             if total_groups == 0:
-                _warn_unrecognized_fields_on_empty(other_targets)
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -651,7 +651,7 @@ def run_MPDD(
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
             if total_groups == 0:
-                _warn_unrecognized_fields_on_empty(other_targets)
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -812,7 +812,7 @@ def run_MPDD_devs(
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
             if total_groups == 0:
-                _warn_unrecognized_fields_on_empty(other_targets)
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -928,7 +928,7 @@ def run_MPDD_devs(
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
             if total_groups == 0:
-                _warn_unrecognized_fields_on_empty(other_targets)
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
