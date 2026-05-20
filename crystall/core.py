@@ -184,14 +184,14 @@ def _normalize_other_targets(
 
     return {k: v for k, v in other_targets.items() if not is_redundant(k, v)}
 
-def _write_query_sidecar(out_dir: str, **fields: Any) -> None:
-    """Write a `<out_dir>_query.yaml` sidecar (metadata file) next to the output directory recording the run's parameters.
+def _write_query_yaml(out_dir: str, **fields: Any) -> None:
+    """Write a `query.yaml` metadata file inside `out_dir` recording the run's parameters.
 
-    Lets a human (or future code) recover the exact inputs that produced a folder, even
-    when the directory name only encodes them via a short hash.
+    Lets a human (or future code) recover the exact inputs that produced a folder,
+    even when the directory name only encodes them via a short hash.
     """
-    sidecar = f'{out_dir}_query.yaml'
-    with open(sidecar, 'w') as f:
+    path = os.path.join(out_dir, 'query.yaml')
+    with open(path, 'w') as f:
         YAML(typ='safe', pure=True).dump(dict(sorted(fields.items())), f)
 
 def _aggregate_pipeline(
@@ -440,7 +440,7 @@ def run_MPDD(
             print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
 
         if other_targets:
-            _write_query_sidecar(
+            _write_query_yaml(
                 out_dir,
                 target_formula=formula_str,
                 target_prototypes='native',
@@ -538,7 +538,7 @@ def run_MPDD(
             print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
         if other_targets:
-            _write_query_sidecar(
+            _write_query_yaml(
                 out_dir,
                 target_formula=formula_str,
                 target_prototypes='non-native',
@@ -697,7 +697,7 @@ def run_MPDD_devs(
             print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
 
         if other_targets:
-            _write_query_sidecar(
+            _write_query_yaml(
                 out_dir,
                 target_formula=formula_str,
                 target_prototypes='native',
@@ -797,7 +797,7 @@ def run_MPDD_devs(
             print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
 
         if other_targets:
-            _write_query_sidecar(
+            _write_query_yaml(
                 out_dir,
                 target_formula=formula_str,
                 target_prototypes='non-native',
