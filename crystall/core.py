@@ -126,6 +126,24 @@ def _query_tag(formula_str: str, source_str: str, other_targets: Optional[Dict[s
     digest = hashlib.md5(payload.encode()).hexdigest()[:8]
     return f'-q{digest}'
 
+def _load_known_fields() -> frozenset:
+    """Load common MPDD field paths from `common_mpdd_fields.yaml` plus dynamically
+    derived `material.compositionDictionary.<element>` leaves (one per pymatgen
+    Element). Used as the candidate list for typo suggestions on user-supplied
+    `other_targets` keys.
+    """
+    fields: set = set()
+    try:
+        with importlib.resources.files("crystall").joinpath("common_mpdd_fields.yaml").open("r") as f:
+            data = YAML(typ='safe', pure=True).load(f)
+        fields.update(data.get('fields', []) or [])
+    except (FileNotFoundError, ModuleNotFoundError) as e:
+        warnings.warn(f"Could not load common_mpdd_fields.yaml; typo suggestions disabled: {e}")
+    fields.update(f'material.compositionDictionary.{e.symbol}' for e in Element)
+    return frozenset(fields)
+
+_KNOWN_FIELDS = _load_known_fields()
+
 def _normalize_other_targets(
         target_formula: Union[str, Composition],
         other_targets: Optional[Dict[str, Any]],
@@ -428,6 +446,7 @@ def run_MPDD(
         composition, other_targets,
         'exact-composition' if target_prototypes == 'native' else 'anonymized-formula',
     )
+    _suggest_field_typos(other_targets)
 
     if target_prototypes == 'native':
 
@@ -479,6 +498,8 @@ def run_MPDD(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields_on_empty(other_targets)
 
             for entry in aggregated_data:
 
@@ -580,6 +601,8 @@ def run_MPDD(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields_on_empty(other_targets)
 
             for entry in aggregated_data:
 
@@ -673,6 +696,7 @@ def run_MPDD_devs(
         composition, other_targets,
         'composition-range' if target_prototypes == 'native' else 'fraction-range',
     )
+    _suggest_field_typos(other_targets)
 
     print('\nSearching for structure prototypes for: ' + formula_str)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
@@ -738,6 +762,8 @@ def run_MPDD_devs(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields_on_empty(other_targets)
 
             for entry in aggregated_data:
 
@@ -852,6 +878,8 @@ def run_MPDD_devs(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields_on_empty(other_targets)
 
             for entry in aggregated_data:
 
