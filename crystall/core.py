@@ -152,7 +152,7 @@ def _load_known_fields() -> frozenset:
 
 _KNOWN_FIELDS = _load_known_fields()
 
-def _suggest_field_typos(other_targets: Optional[Dict[str, Any]]) -> None:
+def _suggest_field_typos(other_targets: Dict[str, Any]) -> None:
     """Warn when a key in `other_targets`, or a MongoDB operator inside one of
     its values, looks like a typo of a known field or operator.
 
@@ -160,8 +160,6 @@ def _suggest_field_typos(other_targets: Optional[Dict[str, Any]]) -> None:
     for `$`-prefixed keys inside operator-form values) via `difflib`. Only fires
     when there is a close match — silent otherwise.
     """
-    if not other_targets:
-        return
     for key, value in other_targets.items():
         # Field-name typo check
         if key not in _KNOWN_FIELDS:
@@ -183,13 +181,11 @@ def _suggest_field_typos(other_targets: Optional[Dict[str, Any]]) -> None:
                         f"known MongoDB operator; did you mean {suggestion[0]!r}?"
                     )
 
-def _warn_unrecognized_fields_on_empty(other_targets: Optional[Dict[str, Any]]) -> None:
+def _warn_unrecognized_fields_on_empty(other_targets: Dict[str, Any]) -> None:
     """Warn when a query returned zero results AND `other_targets` contains
     fields not on the known MPDD field list — possibly typos the pre-query
     fuzzy-match missed (because they had no close match).
     """
-    if not other_targets:
-        return
     unrecognized = [k for k in other_targets if k not in _KNOWN_FIELDS]
     if unrecognized:
         warnings.warn(
