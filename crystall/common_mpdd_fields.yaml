@@ -10,47 +10,70 @@
 
 fields:
   # metadata.*
+  - metadata.name
+  - metadata.created
+  - metadata.affiliation
+  - metadata.comment
   - metadata.parentDatabase
   - metadata.parentDatabaseID
   - metadata.parentDatabaseURL
-  - metadata.affiliation
-  - metadata.name
-  - metadata.comment
+  - metadata.lastModified
 
-  # material.* — formula and composition
+  # material.*
   - material.formula
   - material.compositionDictionary
   - material.anonymizedFormula
   - material.reducedFormula
   - material.system
   - material.nComponents
-  - material.elements
-  - material.nSites
-
-  # material.* — symmetry
+  - material.mgJSON
+  - material.POSCAR
+  - material.averageElectronegativity
   - material.crystalSystem
+  - material.density
+  - material.nSites
+  - material.pointGroup
   - material.spaceGroup
   - material.spaceGroupN
-  - material.pointGroup
-
-  # material.* — physical properties
-  - material.density
-  - material.volume
+  - material.sortedFractionsDict
+  - material.sortedFractionsDict.c1
+  - material.sortedFractionsDict.c2
+  - material.sortedFractionsDict.c3
+  - material.sortedFractionsDict.c4
+  - material.sortedFractionsDict.c5
+  - material.sortedFractionsDict.c6
+  - material.sortedFractionsDict.c7
+  - material.sortedFractionsDict.c8
+  - material.sortedFractionsDict.c9
+  - material.sortedFractionsDict.c10
   - material.atomicVolume
-  - material.averageElectronegativity
   - material.meanMass
+  - material.volume
+  - material.elements
   - material.reducedMass
   - material.reducedMassAll
-
-  # material.* — structure IDs
+  - material.coarseStructID
   - material.structID
   - material.volNormStructID
-  - material.coarseStructID
-
-  # material.* — dimensionality
   - material.dimensionality
   - material.dimensionalityAgreement
+  - material.dimensionalityRaw
+  - material.dimensionalityRaw.larsenLow
+  - material.dimensionalityRaw.larsenMedium
+  - material.dimensionalityRaw.larsenHigh
+  - material.dimensionalityRaw.cheonLow
+  - material.dimensionalityRaw.cheonMedium
+  - material.dimensionalityRaw.cheonHigh
 
-  # properties.* — pySIPFENN predictions
+  # properties.*
+  - properties.FormationEnergy_SIPFENN_Krajewski2020_LightModel
+  - properties.FormationEnergy_SIPFENN_Krajewski2020_NovelMaterialsModel
+  - properties.FormationEnergy_SIPFENN_Krajewski2020_StandardMaterialsModel
+  - properties.Stability_SIPFENN_AMK2020_NMM
   - properties.EF_SIPFENN_NN30
   - properties.STAB_SIPFENN_NN30
+  - properties.GFT_SIPFENN_NMM+Bartel2018
+
+  # descriptors.*
+  - descriptors.KS2022
+  - descriptors.Ward2017
