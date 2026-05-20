@@ -253,29 +253,201 @@ class TestTopLevelFunctions(unittest.TestCase):
         for tpl in subs:
             self.assertEqual(len(tpl), len(set(tpl)))
 
-    def test_other_targets_tag(self) -> None:
-        """_other_targets_tag must be empty for None/{}, deterministic, order-independent, and collision-resistant."""
-        from crystall.core import _other_targets_tag
+    def test_query_tag(self) -> None:
+        """_query_tag must be empty for None/{} other_targets, deterministic, order-independent,
+        and sensitive to formula_str, source_str, and other_targets contents."""
+        from crystall.core import _query_tag
 
-        # Empty / None → no tag
-        self.assertEqual(_other_targets_tag(None), "")
-        self.assertEqual(_other_targets_tag({}), "")
+        formula = "Ni26Ru8"
+        source = "MPDD(curated)"
 
-        # Non-empty → starts with '-q' and is 8 chars total ('-q' + 6 hex)
-        t1 = _other_targets_tag({"material.dimensionality": 2})
+        # Empty / None other_targets → no tag (regardless of formula/source)
+        self.assertEqual(_query_tag(formula, source, None), "")
+        self.assertEqual(_query_tag(formula, source, {}), "")
+        self.assertEqual(_query_tag("OtherFormula", "MPDD(other)", None), "")
+
+        # Non-empty → starts with '-q' followed by 8 hex chars
+        t1 = _query_tag(formula, source, {"material.dimensionality": 2})
         self.assertTrue(t1.startswith("-q"))
+        self.assertEqual(len(t1), 10)  # '-q' + 8 hex
 
-        # Determinism: same input always produces the same tag
-        self.assertEqual(t1, _other_targets_tag({"material.dimensionality": 2}))
+        # Determinism: same inputs always produce the same tag
+        self.assertEqual(
+            t1, _query_tag(formula, source, {"material.dimensionality": 2})
+        )
 
         # Order independence: dict insertion order must not affect the tag
         self.assertEqual(
-            _other_targets_tag({"material.dimensionality": 2, "material.spaceGroup": 191}),
-            _other_targets_tag({"material.spaceGroup": 191, "material.dimensionality": 2}),
+            _query_tag(formula, source, {"material.dimensionality": 2, "material.spaceGroup": 191}),
+            _query_tag(formula, source, {"material.spaceGroup": 191, "material.dimensionality": 2}),
         )
 
-        # Different inputs → different tags
-        self.assertNotEqual(t1, _other_targets_tag({"material.dimensionality": 3}))
+        # Different other_targets → different tag
+        self.assertNotEqual(
+            t1, _query_tag(formula, source, {"material.dimensionality": 3})
+        )
+
+        # Different formula_str → different tag (problem identity)
+        self.assertNotEqual(
+            t1, _query_tag("DifferentFormula", source, {"material.dimensionality": 2})
+        )
+
+        # Different source_str → different tag (problem identity)
+        self.assertNotEqual(
+            t1, _query_tag(formula, "MPDD(experimental)", {"material.dimensionality": 2})
+        )
+
+    def test_normalize_other_targets(self) -> None:
+        """_normalize_other_targets drops composition-implied entries per query_mode,
+        passes everything else through (including typos, operator forms, unrelated keys)."""
+        from crystall.core import _normalize_other_targets
+
+        target = "Mn4Al11"  # 2 elements; chemical_system "Al-Mn"; anon formula "A4B11"
+
+        # Empty / None → empty dict
+        self.assertEqual(_normalize_other_targets(target, None, "exact-composition"), {})
+        self.assertEqual(_normalize_other_targets(target, {}, "exact-composition"), {})
+
+        # Unrelated keys always pass through
+        unrelated = {"material.dimensionality": 2, "properties.STAB_SIPFENN_NN30": 0}
+        for mode in ("exact-composition", "composition-range",
+                     "anonymized-formula", "fraction-range"):
+            with self.subTest(mode=mode):
+                self.assertEqual(
+                    _normalize_other_targets(target, unrelated, mode), unrelated
+                )
+
+        # nComponents is universally redundant — dropped in all 4 modes when matching
+        for mode in ("exact-composition", "composition-range",
+                     "anonymized-formula", "fraction-range"):
+            with self.subTest(mode=mode, key="material.nComponents (matches)"):
+                self.assertEqual(
+                    _normalize_other_targets(target, {"material.nComponents": 2}, mode),
+                    {},
+                )
+
+        # Non-matching nComponents passes through (no contradiction-detection in minimal version)
+        self.assertEqual(
+            _normalize_other_targets(target, {"material.nComponents": 3}, "exact-composition"),
+            {"material.nComponents": 3},
+        )
+
+        # exact-composition: 6 fields are redundant when matching
+        exact_all_matching = {
+            "material.nComponents": 2,
+            "material.elements": ["Al", "Mn"],
+            "material.system": "Al-Mn",
+            "material.formula": "Mn4Al11",
+            "material.reducedFormula": "Mn4Al11",
+            "material.anonymizedFormula": "A4B11",
+        }
+        self.assertEqual(
+            _normalize_other_targets(target, exact_all_matching, "exact-composition"), {}
+        )
+
+        # composition-range: only nComponents/elements/system are redundant;
+        # formula/reducedFormula/anonymizedFormula are NOT (counts vary within devs)
+        cr_input = {
+            "material.nComponents": 2,
+            "material.elements": ["Al", "Mn"],
+            "material.system": "Al-Mn",
+            "material.formula": "Mn4Al11",          # NOT redundant in this mode
+            "material.reducedFormula": "Mn4Al11",   # NOT redundant in this mode
+            "material.anonymizedFormula": "A4B11",  # NOT redundant in this mode
+        }
+        self.assertEqual(
+            _normalize_other_targets(target, cr_input, "composition-range"),
+            {
+                "material.formula": "Mn4Al11",
+                "material.reducedFormula": "Mn4Al11",
+                "material.anonymizedFormula": "A4B11",
+            },
+        )
+
+        # anonymized-formula: only nComponents and anonymizedFormula are redundant
+        af_input = {
+            "material.nComponents": 2,
+            "material.anonymizedFormula": "A4B11",
+            "material.elements": ["Al", "Mn"],      # NOT redundant — elements get substituted
+            "material.system": "Al-Mn",             # NOT redundant
+        }
+        self.assertEqual(
+            _normalize_other_targets(target, af_input, "anonymized-formula"),
+            {"material.elements": ["Al", "Mn"], "material.system": "Al-Mn"},
+        )
+
+        # fraction-range: only nComponents is redundant
+        fr_input = {
+            "material.nComponents": 2,
+            "material.anonymizedFormula": "A4B11",  # NOT redundant (anon varies within devs)
+            "material.elements": ["Al", "Mn"],
+            "material.system": "Al-Mn",
+        }
+        self.assertEqual(
+            _normalize_other_targets(target, fr_input, "fraction-range"),
+            {
+                "material.anonymizedFormula": "A4B11",
+                "material.elements": ["Al", "Mn"],
+                "material.system": "Al-Mn",
+            },
+        )
+
+        # Formula format tolerance: differing whitespace/order still recognized as redundant
+        # (pymatgen returns "Al11 Mn4" but a user might write "Mn4Al11" or "Mn4 Al11")
+        for written in ("Mn4Al11", "Mn4 Al11", "Al11Mn4", "Al11 Mn4"):
+            with self.subTest(formula_written_as=written):
+                self.assertEqual(
+                    _normalize_other_targets(
+                        target, {"material.formula": written}, "exact-composition"
+                    ),
+                    {},
+                )
+
+        # Elements list order doesn't matter (user might write unsorted)
+        for written in (["Al", "Mn"], ["Mn", "Al"]):
+            with self.subTest(elements_written_as=written):
+                self.assertEqual(
+                    _normalize_other_targets(
+                        target, {"material.elements": written}, "exact-composition"
+                    ),
+                    {},
+                )
+
+        # Operator-form values pass through unchanged (not interpreted)
+        operator_inputs = [
+            {"material.nComponents": {"$gte": 2}},
+            {"material.nComponents": {"$in": [2, 3]}},
+            {"material.anonymizedFormula": {"$ne": "AB"}},
+            {"material.elements": {"$exists": True}},
+        ]
+        for op_in in operator_inputs:
+            with self.subTest(operator_form=op_in):
+                self.assertEqual(
+                    _normalize_other_targets(target, op_in, "exact-composition"),
+                    op_in,
+                )
+
+        # Mismatched values pass through (no error, no drop)
+        mismatches = {
+            "material.nComponents": 5,
+            "material.elements": ["Fe", "O"],
+            "material.system": "Fe-O",
+            "material.anonymizedFormula": "AB2",
+            "material.reducedFormula": "FeO2",
+            "material.formula": "Fe2O3",
+        }
+        self.assertEqual(
+            _normalize_other_targets(target, mismatches, "exact-composition"),
+            mismatches,
+        )
+
+        # Composition object as target_formula (alternative input type)
+        self.assertEqual(
+            _normalize_other_targets(
+                Composition("Mn4Al11"), {"material.nComponents": 2}, "exact-composition"
+            ),
+            {},
+        )
 
     def test_write_query_sidecar(self) -> None:
         """_write_query_sidecar writes a YAML sidecar next to (not inside) the output directory."""
