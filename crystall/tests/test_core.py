@@ -869,7 +869,7 @@ class TestCrystALLSearch(unittest.TestCase):
             self.cas.generate_MPDD(
                 target_prototypes="native",
                 devs={"Ni": 10, "Ru": 10},
-                other_targets={"material.system": "Ni-Ru"},
+                other_targets={"material.system": "Fe-O"},
             )
 
     @pytest.mark.order(3)
