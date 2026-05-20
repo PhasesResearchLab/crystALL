@@ -500,6 +500,59 @@ class TestTopLevelFunctions(unittest.TestCase):
         for symbol in ("H", "He", "C", "Fe", "Al"):
             self.assertIn(f"material.compositionDictionary.{symbol}", fields)
 
+    def test_suggest_field_typos(self) -> None:
+        """_suggest_field_typos warns on close-match field and operator typos,
+        silent on exact matches, no-close-match keys, and payload dicts."""
+        from crystall.core import _suggest_field_typos
+
+        # Empty other_targets: silent
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({})
+            self.assertEqual(len(w), 0)
+
+        # Exact-match field: silent
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({"material.nComponents": 2})
+            self.assertEqual(len(w), 0)
+
+        # Close-match field typo: warns, mentions the offending key + the suggestion
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({"material.reducedmassAll": 5})
+            self.assertEqual(len(w), 1)
+            msg = str(w[0].message)
+            self.assertIn("material.reducedmassAll", msg)
+            self.assertIn("material.reducedMassAll", msg)
+
+        # No close match anywhere: silent (handled by the post-query check, not here)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({"totally.madeUpField": 1})
+            self.assertEqual(len(w), 0)
+
+        # Operator typo inside operator-form value: warns with the operator suggestion
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({"material.density": {"$exsits": True}})
+            self.assertEqual(len(w), 1)
+            msg = str(w[0].message)
+            self.assertIn("$exsits", msg)
+            self.assertIn("$exists", msg)
+
+        # Exact operator: silent
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({"material.density": {"$gte": 5}})
+            self.assertEqual(len(w), 0)
+
+        # Payload dict (no $ keys) is not treated as operator form: silent
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _suggest_field_typos({"material.compositionDictionary": {"Mn": 0.27, "Al": 0.73}})
+            self.assertEqual(len(w), 0)
+
 
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
