@@ -449,14 +449,14 @@ class TestTopLevelFunctions(unittest.TestCase):
             {},
         )
 
-    def test_write_query_sidecar(self) -> None:
-        """_write_query_sidecar writes a YAML sidecar next to (not inside) the output directory."""
-        from crystall.core import _write_query_sidecar
+    def test_write_query_yaml(self) -> None:
+        """_write_query_yaml writes a YAML metadata file inside the output directory."""
+        from crystall.core import _write_query_yaml
 
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = os.path.join(tmp, "Ni26Ru8-MPDD(curated)-prototypes(native)")
             os.mkdir(out_dir)
-            _write_query_sidecar(
+            _write_query_yaml(
                 out_dir,
                 target_formula="Ni26Ru8",
                 target_prototypes="native",
@@ -464,13 +464,13 @@ class TestTopLevelFunctions(unittest.TestCase):
                 other_targets={"material.dimensionality": 2},
             )
 
-            # Sidecar lives as a sibling of the output directory, NOT inside it
-            sidecar = out_dir + "_query.yaml"
-            self.assertTrue(os.path.isfile(sidecar))
-            self.assertFalse(os.path.exists(os.path.join(out_dir, "_query.yaml")))
+            # YAML lives inside the output directory, NOT as a sibling
+            yaml_path = os.path.join(out_dir, "query.yaml")
+            self.assertTrue(os.path.isfile(yaml_path))
+            self.assertFalse(os.path.exists(out_dir + "_query.yaml"))
 
             # Contents are valid YAML and include the passed fields
-            with open(sidecar) as f:
+            with open(yaml_path) as f:
                 data = YAML(typ='safe', pure=True).load(f)
             self.assertEqual(data["target_formula"], "Ni26Ru8")
             self.assertEqual(data["target_prototypes"], "native")
@@ -479,8 +479,8 @@ class TestTopLevelFunctions(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
-        # Sweep all Ni22Ru8 / Ni26Ru8 prototype directories AND the
-        # `_query.yaml` sidecar files emitted next to filtered outputs.
+        # Sweep all Ni22Ru8 / Ni26Ru8 prototype directories. The query.yaml
+        # metadata file now lives inside each directory, so rmtree handles it.
         for pattern in [
             "Ni22Ru8*prototypes*",
             "Ni26Ru8*prototypes*",
