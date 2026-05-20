@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Dict, List, Any, Sequence, Literal
 import logging
 from pymatgen.electronic_structure.dos import CompleteDos
+import os
+import warnings
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -112,6 +114,7 @@ class UPETDosAdapter(BaseCalculator):
             **kwargs,
         )
         parsed = self._deserialize_result(res)
+        self._save_artifact_objectives(parsed, str(file_path))
 
         self._maybe_print_results(parsed)
         return parsed
@@ -128,8 +131,37 @@ class UPETDosAdapter(BaseCalculator):
             **kwargs,
         )
         parsed_results = self._deserialize_results(results)
+        abs_path = os.path.abspath(path)
+        artifacts_dir = os.path.dirname(abs_path)
+        for parsed in parsed_results:
+            source_path = os.path.join(artifacts_dir, parsed.get("name", ""))
+            if parsed.get("name"):
+                self._save_artifact_objectives(parsed, source_path)
         self._maybe_print_results(parsed_results)
         return parsed_results
+
+    def _save_artifact_objectives(
+        self, result: Dict[str, Any], source_path: str
+    ) -> None:
+        if not self.save_artifacts:
+            return
+        objectives = result.get("objectives", {})
+        dos = objectives.get("UPETDOS_DOS")
+        if not isinstance(dos, CompleteDos):
+            return
+        out_dir = os.path.dirname(os.path.abspath(source_path))
+        stem = os.path.splitext(os.path.basename(source_path))[0] or os.path.basename(
+            source_path
+        )
+        out_path = os.path.join(out_dir, f"{stem}_UPETDOS_DOS.pdf")
+        try:
+            from pymatgen.electronic_structure.plotter import DosPlotter
+
+            plotter = DosPlotter()
+            plotter.add_dos("Total DOS", dos)
+            plotter.save_plot(out_path, img_format="pdf")
+        except Exception as exc:
+            warnings.warn(f"[UPETDosAdapter] Could not write DOS for {stem}: {exc}")
 
 
 _UPETDOS_WORKER_SCRIPT = """\

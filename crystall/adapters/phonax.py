@@ -15,6 +15,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Sequence
+import warnings
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -335,6 +336,7 @@ class PhonaxAdapter(BaseCalculator):
         )
 
         parsed = self._deserialize_result(result, struct_dict=struct_dict)
+        self._save_artifact_objectives(parsed, file_path_abs)
 
         self._maybe_print_results(parsed)
         return parsed
@@ -368,8 +370,65 @@ class PhonaxAdapter(BaseCalculator):
                 self._deserialize_result(res, struct_dict=struct_dict)
             )
 
+        artifacts_dir = os.path.dirname(os.path.abspath(path))
+        for parsed in parsed_results:
+            source_path = os.path.join(artifacts_dir, parsed.get("name", ""))
+            if parsed.get("name"):
+                self._save_artifact_objectives(parsed, source_path)
+
         self._maybe_print_results(parsed_results)
         return parsed_results
+
+    def _save_artifact_objectives(
+        self, result: Dict[str, Any], source_path: str
+    ) -> None:
+        if not self.save_artifacts:
+            return
+        objectives = result.get("objectives", {})
+        out_dir = os.path.dirname(os.path.abspath(source_path))
+        stem = os.path.splitext(os.path.basename(source_path))[0] or os.path.basename(
+            source_path
+        )
+
+        try:
+            from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
+            from pymatgen.phonon.dos import CompletePhononDos
+            from pymatgen.phonon.plotter import PhononBSPlotter, PhononDosPlotter
+        except Exception as exc:
+            warnings.warn(
+                f"[PhonaxAdapter] Could not import phonon plotters: {exc}"
+            )
+            return
+
+        for code, obj in objectives.items():
+            out_path = os.path.join(out_dir, f"{stem}_{code}.pdf")
+            if "_PBS_" in code:
+                if not isinstance(obj, PhononBandStructureSymmLine):
+                    warnings.warn(
+                        f"[PhonaxAdapter] Skipping {code} for {stem}: invalid type"
+                    )
+                    continue
+                try:
+                    plotter = PhononBSPlotter(obj)
+                    plotter.save_plot(out_path, img_format="pdf")
+                except Exception as exc:
+                    warnings.warn(
+                        f"[PhonaxAdapter] Could not write {code} for {stem}: {exc}"
+                    )
+            elif "_PDOS_" in code:
+                if not isinstance(obj, CompletePhononDos):
+                    warnings.warn(
+                        f"[PhonaxAdapter] Skipping {code} for {stem}: invalid type"
+                    )
+                    continue
+                try:
+                    plotter = PhononDosPlotter()
+                    plotter.add_dos("Total", obj)
+                    plotter.save_plot(out_path, img_format="pdf")
+                except Exception as exc:
+                    warnings.warn(
+                        f"[PhonaxAdapter] Could not write {code} for {stem}: {exc}"
+                    )
 
 
 _PHONAX_WORKER_SCRIPT = """\

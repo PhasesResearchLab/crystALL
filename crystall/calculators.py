@@ -389,6 +389,7 @@ class BaseCalculator:
     CLASS ATTRIBUTES
     name: str
     calculator_type: Literal["static", "mlip"]
+    save_artifacts: bool
     supported_os: list[str]
     supported_devices: list[str]
     objectives: ObjectiveRegistry
@@ -838,13 +839,24 @@ class BaseCalculator:
     def _request_extras(self) -> dict:
         """Additional keys merged into the request JSON sent to the worker.
 
-        Base implementation propagates save_artifacts and marker keys to workers.
+        Base implementation propagates marker keys to workers.
         Subclasses must call super()._request_extras() and update the result.
         """
         return {
-            "save_artifacts": self.save_artifacts,
             "marker_keys": {"structure": "__crystall_pymatgen_structure__"},
         }
+
+    def _save_artifact_objectives(
+        self,
+        result: Dict[str, Any],
+        source_path: str,
+    ) -> None:
+        """Persist artifact objectives to disk for a single result.
+
+        Called by adapter overrides after deserialization. Base implementation
+        is a no-op; subclasses override to write files.
+        """
+        return None
 
     def _input_structure_format(self) -> str:
         """Format the worker script natively reads.

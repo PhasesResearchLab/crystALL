@@ -16,6 +16,8 @@ from __future__ import annotations
 import platform
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Sequence
+import os
+import warnings
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -180,8 +182,11 @@ class MatGLAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
+        abs_path = os.path.abspath(file_path)
         result = super().run_on_structure(file_path, objectives=objectives, **kwargs)
-        return self._deserialize_result(result)
+        parsed = self._deserialize_result(result)
+        self._save_artifact_objectives(parsed, abs_path)
+        return parsed
 
     def run_on_directory(
         self,
@@ -189,8 +194,46 @@ class MatGLAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
+        abs_path = os.path.abspath(path)
+        artifacts_dir = os.path.dirname(abs_path)
         results = super().run_on_directory(path, objectives=objectives, **kwargs)
-        return self._deserialize_results(results)
+        parsed_results = []
+        for res in results:
+            parsed = self._deserialize_result(res)
+            source_path = os.path.join(artifacts_dir, res.get("name", ""))
+            if res.get("name"):
+                self._save_artifact_objectives(parsed, source_path)
+            parsed_results.append(parsed)
+        return parsed_results
+
+    def _save_artifact_objectives(
+        self, result: Dict[str, Any], source_path: str
+    ) -> None:
+        if not self.save_artifacts:
+            return
+        objectives = result.get("objectives", {})
+        out_dir = os.path.dirname(os.path.abspath(source_path))
+        stem = os.path.splitext(os.path.basename(source_path))[0] or os.path.basename(
+            source_path
+        )
+        for code in ("MATGL_STRUCT_MAGMOMS_CHGNET", "MATGL_STRUCT_CHARGES_QET"):
+            obj = objectives.get(code)
+            try:
+                from pymatgen.core import Structure
+            except Exception as exc:
+                warnings.warn(
+                    f"[MatGLAdapter] Could not import Structure to save artifacts: {exc}"
+                )
+                return
+            if not isinstance(obj, Structure):
+                continue
+            out_path = os.path.join(out_dir, f"{stem}_{code}.mcif")
+            try:
+                obj.to(fmt="mcif", filename=out_path)
+            except Exception as exc:
+                warnings.warn(
+                    f"[MatGLAdapter] Could not write {code} for {stem}: {exc}"
+                )
 
     def _run_code(self) -> str:
         return _MATGL_WORKER_SCRIPT
@@ -327,7 +370,7 @@ def main():
 
                     if "MATGL_STRUCT_CHARGES_QET" in codes:
                         s = structure.copy()
-                        s.add_site_property("charge", charges.tolist())
+                        s.add_oxidation_state_by_site(charges.tolist())
                         props["MATGL_STRUCT_CHARGES_QET"] = {
                             structure_marker_key: s.as_dict()
                         }

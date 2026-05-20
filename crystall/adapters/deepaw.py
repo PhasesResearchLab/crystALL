@@ -12,6 +12,7 @@ import os
 import subprocess as sp
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Any
+import warnings
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -181,6 +182,34 @@ class DeePAWAdapter(BaseCalculator):
         )
         return extras
 
+    def _save_artifact_objectives(
+        self, result: Dict[str, Any], source_path: str
+    ) -> None:
+        if not self.save_artifacts:
+            return
+        objectives = result.get("objectives", {})
+        chgcar = objectives.get("DEEPAW_RHO")
+        try:
+            from pymatgen.io.vasp.outputs import Chgcar
+        except Exception as exc:
+            warnings.warn(
+                f"[DeePAWAdapter] Could not import Chgcar to save artifacts: {exc}"
+            )
+            return
+        if not isinstance(chgcar, Chgcar):
+            return
+        out_dir = os.path.dirname(os.path.abspath(source_path))
+        stem = os.path.splitext(os.path.basename(source_path))[0] or os.path.basename(
+            source_path
+        )
+        out_path = os.path.join(out_dir, f"{stem}_DEEPAW_RHO.vasp")
+        try:
+            chgcar.write_file(out_path)
+        except Exception as exc:
+            warnings.warn(
+                f"[DeePAWAdapter] Could not write CHGCAR for {stem}: {exc}"
+            )
+
     # ── Execution ────────────────────────────────────────────────────────
 
     def run_on_structure(
@@ -191,25 +220,22 @@ class DeePAWAdapter(BaseCalculator):
     ) -> Dict[str, Any]:
         """Run DeePAW static calculation on a single structure file.
 
-        The predicted CHGCAR is saved alongside the input file as
-        ``DeePAW_<stem>.vasp`` (same directory as the input).
+        When ``save_artifacts=True``, the predicted CHGCAR is written to the
+        same directory as the input file as ``{stem}_DEEPAW_RHO.vasp``.
         """
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
 
         abs_path = os.path.abspath(file_path)
-        output_dir = os.path.dirname(abs_path)
-        output_stem_prefix = f"{self.name}_"
 
         result = super().run_on_structure(
             file_path,
             objectives=objectives,
-            output_dir=output_dir,
-            output_stem_prefix=output_stem_prefix,
             **kwargs,
         )
 
         parsed = self._deserialize_result(result)
+        self._save_artifact_objectives(parsed, abs_path)
 
         self._maybe_print_results(parsed)
         return parsed
@@ -222,29 +248,29 @@ class DeePAWAdapter(BaseCalculator):
     ) -> list[Dict[str, Any]]:
         """Run DeePAW static calculation on all structures in a directory.
 
-        Predicted CHGCARs are saved to a sibling directory named
-        ``DeePAW_<input_dir_name>/`` with original filenames (no prefix).
+        When ``save_artifacts=True``, predicted CHGCARs are written to the
+        parent of the input directory (same location as ``objectives.json``)
+        as ``{stem}_DEEPAW_RHO.vasp``.
         """
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
 
         abs_path = os.path.abspath(path)
-        input_dir_name = os.path.basename(abs_path)
-        default_output_dir = os.path.join(
-            os.path.dirname(abs_path),
-            f"{self.name}_{input_dir_name}",
-        )
-        output_dir = kwargs.pop("output_dir", default_output_dir)
+        artifacts_dir = os.path.dirname(abs_path)
 
         results = super().run_on_directory(
             path,
             objectives=objectives,
-            output_dir=output_dir,
-            output_stem_prefix="",
             **kwargs,
         )
 
-        parsed_results = [self._deserialize_result(r) for r in results]
+        parsed_results = []
+        for res in results:
+            parsed = self._deserialize_result(res)
+            source_path = os.path.join(artifacts_dir, res.get("name", ""))
+            if res.get("name"):
+                self._save_artifact_objectives(parsed, source_path)
+            parsed_results.append(parsed)
 
         self._maybe_print_results(parsed_results)
         return parsed_results
@@ -312,9 +338,9 @@ _DEEPAW_WORKER_SCRIPT = """\
 import sys
 import os
 import json
-import tempfile
-import shutil
-import subprocess as sp
+ import tempfile
+ import shutil
+ import subprocess as sp
 
 
 def main():
@@ -486,29 +512,19 @@ with open(output_file, "w") as f:
                 results.append({"name": filename, "error": "output CHGCAR not found"})
                 continue
 
-            try:
-                with open(output_chgcar, "r") as chgf:
-                    raw_chgcar = chgf.read()
+             try:
+                 with open(output_chgcar, "r") as chgf:
+                     raw_chgcar = chgf.read()
 
-                # ── Save CHGCAR to the requested output directory ──────────
-                output_dir = req.get("output_dir")
-                output_stem_prefix = req.get("output_stem_prefix", "")
-                if output_dir:
-                    os.makedirs(output_dir, exist_ok=True)
-                    in_stem = os.path.splitext(filename)[0] or filename
-                    out_filename = f"{output_stem_prefix}{in_stem}.vasp"
-                    saved_path = os.path.join(output_dir, out_filename)
-                    shutil.copy2(output_chgcar, saved_path)
-
-                props = {
-                    "DEEPAW_RHO": {
-                        chgcar_marker: raw_chgcar
-                    }
-                }
-                results.append({"name": filename, "objectives": props})
-            except Exception as e:
-                print(f"[DeePAW] Failed to read {output_chgcar}: {e}")
-                results.append({"name": filename, "error": str(e)})
+                 props = {
+                     "DEEPAW_RHO": {
+                         chgcar_marker: raw_chgcar
+                     }
+                 }
+                 results.append({"name": filename, "objectives": props})
+             except Exception as e:
+                 print(f"[DeePAW] Failed to read {output_chgcar}: {e}")
+                 results.append({"name": filename, "error": str(e)})
 
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
