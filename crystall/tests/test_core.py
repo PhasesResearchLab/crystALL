@@ -477,6 +477,30 @@ class TestTopLevelFunctions(unittest.TestCase):
             self.assertEqual(data["limit"], 10)
             self.assertEqual(data["other_targets"], {"material.dimensionality": 2})
 
+    def test_load_known_fields(self) -> None:
+        """_load_known_fields returns a frozenset of YAML-listed paths plus
+        dynamically-derived material.compositionDictionary.<symbol> leaves."""
+        from crystall.core import _load_known_fields
+
+        fields = _load_known_fields()
+        self.assertIsInstance(fields, frozenset)
+
+        # A handful of paths sourced from common_mpdd_fields.yaml
+        for path in (
+            "material.nComponents",
+            "material.elements",
+            "material.reducedFormula",
+            "material.system",
+            "metadata.parentDatabase",
+            "properties.EF_SIPFENN_NN30",
+        ):
+            self.assertIn(path, fields)
+
+        # compositionDictionary leaves are added per-element at load time
+        for symbol in ("H", "He", "C", "Fe", "Al"):
+            self.assertIn(f"material.compositionDictionary.{symbol}", fields)
+
+
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
         # Sweep all Ni22Ru8 / Ni26Ru8 prototype directories. The query.yaml
