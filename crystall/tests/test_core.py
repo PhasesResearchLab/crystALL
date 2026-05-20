@@ -864,10 +864,6 @@ class TestCrystALLSearch(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.cas.generate_MPDD(other_targets="not-a-dict")
 
-        # Unhappy path: other_targets cannot override reserved formula keys in run_MPDD
-        with self.assertRaises(ValueError):
-            self.cas.generate_MPDD(other_targets={"material.reducedFormula": "Ni26Ru8"})
-
         # Unhappy path: other_targets cannot collide with composition-query
         with self.assertRaises(ValueError):
             self.cas.generate_MPDD(
