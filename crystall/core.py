@@ -251,6 +251,10 @@ def _normalize_other_targets(
 
     return {k: v for k, v in other_targets.items() if not is_redundant(k, v)}
 
+_OUTPUT_METADATA_FILES = frozenset({'query.yaml'})
+"""Filenames crystALL writes alongside generated prototypes that are NOT structure
+files. Downstream code iterating a prototype directory should skip these."""
+
 def _write_query_yaml(out_dir: str, **fields: Any) -> None:
     """Write a `query.yaml` metadata file inside `out_dir` recording the run's parameters.
 
@@ -1392,7 +1396,7 @@ class CrystALLSearch:
             self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
         else:
             self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
-        inputFiles = natsorted(os.listdir(self.prototype_path))
+        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if f not in _OUTPUT_METADATA_FILES]
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
     def generate_local(
@@ -1412,7 +1416,7 @@ class CrystALLSearch:
         self.prototype_path = prototype_path if prototype_path is not None else self.prototype_path
         assert self.prototype_path, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
         self.prototype_path = run_local(self.target_formula, self.prototype_path)
-        inputFiles = natsorted(os.listdir(self.prototype_path))
+        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if f not in _OUTPUT_METADATA_FILES]
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(
