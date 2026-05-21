@@ -182,9 +182,8 @@ def _suggest_field_typos(other_targets: Dict[str, Any]) -> None:
                     )
 
 def _warn_unrecognized_fields(other_targets: Dict[str, Any]) -> None:
-    """Warn when a query returned zero results AND `other_targets` contains
-    fields not on the known MPDD field list — possibly typos the pre-query
-    fuzzy-match missed (because they had no close match).
+    """Warn when `other_targets` contains fields not on the known MPDD field list.
+    Useful for cases where a query returns no prototypes, to help the user debug `other_targets`
     """
     unrecognized = [k for k in other_targets if k not in _KNOWN_FIELDS]
     if unrecognized:
