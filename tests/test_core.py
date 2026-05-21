@@ -517,7 +517,7 @@ class TestCrystALLSearch(unittest.TestCase):
             objectives = ["mismatch_prop"]
 
             def run_on_directory(
-                self, path, mode="serial", max_workers=None, objectives=None
+                self, path, mode="serial", max_workers=None, objectives=None, **kwargs
             ):
                 return [
                     {"name": "nonexistent.POSCAR", "objectives": {"mismatch_prop": 1.0}}
@@ -533,7 +533,7 @@ class TestCrystALLSearch(unittest.TestCase):
             objectives = ["ext_prop"]
 
             def run_on_directory(
-                self, path, mode="serial", max_workers=None, objectives=None
+                self, path, mode="serial", max_workers=None, objectives=None, **kwargs
             ):
                 # return only a single matching result to trigger the warning path
                 if len(self_test.cas.prototypes) > 0:

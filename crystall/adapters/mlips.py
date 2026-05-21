@@ -119,7 +119,9 @@ class MLIPAdapter(BaseCalculator):
         device: Optional[str] = None,
         static: Optional[List[BaseCalculator]] = None,
         custom: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         config = _load_mlips_config()
         if model_name not in config:
             raise ValueError(
@@ -231,22 +233,6 @@ class MLIPAdapter(BaseCalculator):
                     )
                 )
         return ObjectiveRegistry(all_objectives)
-
-    def setup_env(self) -> None:
-        """Create and install the micro-environment (idempotent).
-
-        If static adapters are configured, their environments are also ensured
-        prior to the main MLIP environment.
-        """
-        if self._static_adapters:
-            print()
-            print("=" * 51)
-            self._print_banner("Initializing Piped Adapters", "")
-            print("=" * 51)
-            for adapter in self._static_adapters:
-                adapter.setup_env()
-
-        super().setup_env()
 
     # ── Micro-env path ──────────────────────────────────────────────────────
 
@@ -384,7 +370,7 @@ class MLIPAdapter(BaseCalculator):
         return fmt
 
     def _setup_preflight(self) -> None:
-        """Extend base preflight checks with env-var validation.
+        """Extend base preflight checks with env-var validation and piped adapters setup.
 
         Calls :meth:`_helper_build_format_vars` eagerly so that any missing required
         environment variables (e.g. ``HF_TOKEN``) raise an :exc:`OSError`
@@ -393,6 +379,14 @@ class MLIPAdapter(BaseCalculator):
         """
         super()._setup_preflight()
         self._helper_build_format_vars()
+
+        if self._static_adapters:
+            print()
+            print("=" * 51)
+            self._print_banner("Initializing Piped Adapters", "")
+            print("=" * 51)
+            for adapter in self._static_adapters:
+                adapter.setup_env()
 
     def run_on_structure(
         self,

@@ -441,16 +441,13 @@ class BaseCalculator:
 
     name: str
     objectives: ObjectiveRegistry = ObjectiveRegistry([])
-    """Registry of computable objectives for this adapter.
-
-    Subclasses declare this as a class-level :class:`ObjectiveRegistry` instance
-    that is the single source of truth for objective codes, descriptions,
-    dispatch keys, and citation backends.
-    """
     calculator_type: Literal["mlip", "static"] = "static"
-    save_artifacts: bool = True
     supported_os: List[str] = ["windows", "macos", "linux"]
     supported_devices: List[str] = ["cpu", "cuda"]
+
+    def __init__(self, save_artifacts: bool = True, **kwargs: Any) -> None:
+        """Initialize base calculator."""
+        self.save_artifacts = save_artifacts
 
     # ── Micro-env path helpers ──────────────────────────────────────────────
 
@@ -892,14 +889,14 @@ class BaseCalculator:
         import shutil
         import subprocess as sp
 
-        self._print_init_section()
         self._setup_preflight()
+        self._print_init_section()
 
         target = self._env_path()
         if self.is_env_ready():
             return
 
-        if sys.stdin.isatty():
+        if sys.stdin.isatty() and os.environ.get("CRYSTALL_NON_INTERACTIVE") != "1":
             _response = input(
                 f"{Fore.RED}"
                 "\nWarning: Installing calculator models can require significant disk space "
