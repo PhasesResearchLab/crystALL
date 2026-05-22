@@ -105,9 +105,6 @@ class MatGLAdapter(BaseCalculator):
     def _input_structure_format(self) -> str:
         return "*"
 
-    def _env_path(self) -> Path:
-        return self._env_root() / "matgl"
-
     def _layer2_dependencies(self) -> List[str]:
         system = platform.system().lower()
         if system == "linux":

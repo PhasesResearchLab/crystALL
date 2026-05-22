@@ -56,9 +56,6 @@ class UPETDosAdapter(BaseCalculator):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-    def _env_path(self) -> Path:
-        return self._env_root() / "upetdos"
-
     def _input_structure_format(self) -> str:
         return "*"
 

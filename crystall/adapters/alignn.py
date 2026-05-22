@@ -101,10 +101,6 @@ class AlignnAdapter(BaseCalculator):
 
     # ── Micro-env path ──────────────────────────────────────────────────────
 
-    def _env_path(self) -> Path:
-        """ALIGNN lives directly under ``<env_root>/alignn/``."""
-        return self._env_root() / "alignn"
-
     # ── Hook overrides ──────────────────────────────────────────────────────
 
     def _layer3_setup_commands(self) -> List[str]:

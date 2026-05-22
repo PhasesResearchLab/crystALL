@@ -103,10 +103,6 @@ class DeePAWAdapter(BaseCalculator):
 
     # ── Micro-env path helpers ─────────────────────────────────────────
 
-    def _env_path(self) -> Path:
-        """DeePAW lives under ``<env_root>/deepaw/``."""
-        return self._env_root() / "deepaw"
-
     def _downloads_dir(self) -> Path:
         """Directory for split archive parts during installation."""
         return self._env_path() / "downloads"

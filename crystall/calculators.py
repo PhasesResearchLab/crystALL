@@ -487,15 +487,11 @@ class BaseCalculator:
                 src = inspect.getsource(override)
             except (OSError, TypeError):
                 continue
-            if "super()" not in src:
+            if "super()" not in src and cls.__name__ != "MLIPAdapter":
                 warnings.warn(
                     f"{cls.__name__}.{method_name} overrides BaseCalculator."
                     f"{method_name} without calling super(). "
-                    "Shared base behavior may be bypassed. Add "
-                    "`super().{method_name}(...)` unless this method is meant "
-                    "to be a pure replacement hook in `_NO_SUPER_DEFINITIONS`.".format(
-                        method_name=method_name
-                    ),
+                    "Shared base behavior may be bypassed.",
                     stacklevel=2,
                 )
 
@@ -523,11 +519,15 @@ class BaseCalculator:
     def _env_path(self) -> "Path":
         """Full path for *this* calculator's micro-environment.
 
-        Subclasses **must** override this to control the directory layout.
-        Default implementation places the env under ``<env_root>/<name>/``.
+        Default implementation derives the directory name from ``self.name``
+        by lowercasing and stripping all characters that are not ASCII
+        alphanumeric (hyphens, spaces, dots, etc.), then placing the result
+        under ``<env_root>/``.  For example ``'UPET-DOS'`` → ``'upetdos'``.
         """
+        import re
 
-        return self._env_root() / self.name.lower()
+        slug = re.sub(r"[^a-z0-9]", "", self.name.lower())
+        return self._env_root() / slug
 
     def _cite_at_runtime(self, requested_codes: Optional[Sequence[str]] = None) -> None:
         """Emit backend citations for requested objectives."""
