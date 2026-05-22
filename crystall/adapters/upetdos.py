@@ -59,16 +59,13 @@ class UPETDosAdapter(BaseCalculator):
     def _env_path(self) -> Path:
         return self._env_root() / "upetdos"
 
-    def python_version(self) -> str:
-        return "3.11"
-
     def _input_structure_format(self) -> str:
         return "*"
 
-    def layer2_dependencies(self) -> List[str]:
+    def _layer2_dependencies(self) -> List[str]:
         return ["torch==2.10.0"]
 
-    def setup_commands(self) -> List[str]:
+    def _layer3_setup_commands(self) -> List[str]:
         return [
             "pip install upet",
             "pip install ase",
@@ -143,6 +140,7 @@ class UPETDosAdapter(BaseCalculator):
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
         objectives = result.get("objectives", {})

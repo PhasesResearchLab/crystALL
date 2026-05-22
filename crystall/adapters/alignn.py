@@ -5,7 +5,6 @@ by :class:`~crystall.calculators.BaseCalculator`.  The micro-env is created unde
 ``<env_root>/alignn/``.
 """
 
-import subprocess as sp
 from pathlib import Path
 from typing import Sequence, Any, List, Literal, Dict
 
@@ -70,7 +69,9 @@ class AlignnAdapter(BaseCalculator):
             Objective(
                 code="ALIGNN_EXFOL_JV",
                 description="ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
-                dispatch_key=(("model", "ALIGNN-JARVIS Exfoliation Energy [meV/atom]"),),
+                dispatch_key=(
+                    ("model", "ALIGNN-JARVIS Exfoliation Energy [meV/atom]"),
+                ),
                 backend="ALIGNN",
             ),
             Objective(
@@ -82,7 +83,9 @@ class AlignnAdapter(BaseCalculator):
             Objective(
                 code="ALIGNN_EF_ALEX",
                 description="ALIGNN-Alexandria Formation Energy [eV/atom]",
-                dispatch_key=(("model", "ALIGNN-Alexandria Formation Energy [eV/atom]"),),
+                dispatch_key=(
+                    ("model", "ALIGNN-Alexandria Formation Energy [eV/atom]"),
+                ),
                 backend="ALIGNN",
             ),
             Objective(
@@ -104,30 +107,10 @@ class AlignnAdapter(BaseCalculator):
 
     # ── Hook overrides ──────────────────────────────────────────────────────
 
-    def python_version(self) -> str:
-        return "3.11"
-
-    def layer2_dependencies(self) -> List[str]:
-        return ["torch==2.3.0", "torchdata==0.9.0"]
-
-    def _install_layer2(self, env: dict) -> None:
-        """Install DGL-compatible torch stack (CPU only, no CUDA index)."""
-        deps = self.layer2_dependencies()
-        if not deps:
-            return
-        micro_py = str(self._micro_python())
-        sp.run(
-            [self._uv_bin(), "pip", "install", *deps, "--python", micro_py],
-            env=env,
-            check=True,
-        )
-        print("✅ Layer 2: PyTorch 2.3.0 + torchdata 0.9.0 (ALIGNN compatible)")
-
-    def setup_commands(self) -> List[str]:
+    def _layer3_setup_commands(self) -> List[str]:
         return [
+            "pip install 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html",
             "pip install 'mpdd-alignn>=1.0.6'",
-            "pip install 'dgl>=2.2.0'",
-            "pip install 'pyyaml>=6.0'",
         ]
 
     # ── Execution ───────────────────────────────────────────────────────────

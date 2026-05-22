@@ -262,8 +262,8 @@ class MLIPAdapter(BaseCalculator):
             f"{Style.RESET_ALL}"
         )
 
-    def python_version(self) -> str:
-        return self._config.get("python_version", "3.11")
+    def _layer1_python_version(self) -> str:
+        return self._config.get("python_version", super()._layer1_python_version())
 
     def _input_structure_format(self) -> str:
         return "*"
@@ -339,7 +339,7 @@ class MLIPAdapter(BaseCalculator):
             raise EnvironmentError("\n".join(lines))
         return resolved
 
-    def layer2_dependencies(self) -> List[str]:
+    def _layer2_dependencies(self) -> List[str]:
         return [
             "torch==2.9.1",
             "torch-geometric==2.7.0",
@@ -347,12 +347,20 @@ class MLIPAdapter(BaseCalculator):
             "setuptools",
         ]
 
-    def setup_commands(self) -> List[str]:
+    def _layer3_setup_commands(self) -> List[str]:
+        """Return setup commands with config values and format variables substituted.
+
+        Builds the raw command list from *mlips.json* ``setup`` entries plus
+        the matbench.json copy step, then expands ``{SFY_PATH}``, ``{device}``
+        and any custom keys defined in *mlips.json* before the commands are
+        passed to the shell.
+        """
         cmds = list(self._config.get("setup", []))
-        src = Path(__file__).parent / "matbench.json"
+        src = Path(__file__).resolve().parent.parent / "matbench.json"
         dst = self._env_path() / "matbench.json"
         cmds.append(f"python -c \"import shutil; shutil.copy2(r'{src}', r'{dst}')\"")
-        return cmds
+        fmt = self._helper_build_format_vars()
+        return [cmd.format(**fmt) for cmd in cmds]
 
     def _helper_build_format_vars(self) -> Dict[str, str]:
         merged_custom = {
@@ -1064,7 +1072,7 @@ def main():
             except Exception as _rm_err:
                 import sys as _sys
                 _sys.stderr.write(
-                    f"[crystALL worker] WARNING: could not delete trajectory file '{traj_path}': {_rm_err}\n"
+                    f"[crystALL worker] WARNING: could not delete trajectory file " + str(traj_path) + ": " + str(_rm_err) + "\\n"
                 )
 
         results.append({"name": filename, "objectives": props})

@@ -744,36 +744,36 @@ class BaseCalculator:
         self._preflight_checks()
 
     def _layer1_python_version(self) -> str:
-        """Python version for the micro-env venv (Layer 1)."""
-        return self.python_version()
+        """Python version for the micro-env venv (Layer 1).
 
-    def _layer2_dependencies(self) -> List[str]:
-        """Base framework packages installed into the micro-env (Layer 2)."""
-        return self.layer2_dependencies()
-
-    def _layer3_setup_commands(self) -> List[str]:
-        """Model-specific install commands (Layer 3)."""
-        return self.setup_commands()
-
-    def python_version(self) -> str:
-        """Python version for the micro-env venv (e.g. ``"3.11"``)."""
+        Pure replacement hook: override in subclasses to specify the Python
+        version.
+        """
         return "3.11"
 
-    def layer2_dependencies(self) -> List[str]:
+    def _layer2_dependencies(self) -> List[str]:
         """Base framework packages installed into the micro-env (Layer 2).
 
-        Override in subclasses to specify the packages that form the
-        foundation for model-specific installs.  Examples:
+        Pure replacement hook: override in subclasses to return the list of
+        packages that form the foundation for model-specific installs.
+
+        Examples:
 
         - ``MLIPAdapter`` → ``["torch==2.9.1", "torch-geometric==2.7.0",
           "ase>=3.27.0", "setuptools"]``
-        - ``AlignnAdapter`` → ``["torch==2.3.0", "torchdata==0.9.0"]``
         - Adapters that need no base packages → ``[]``
         """
         return []
 
-    def setup_commands(self) -> List[str]:
-        """Model-specific install commands (e.g. ``["pip install 'orb-models~=0.6.0'"]``)."""
+    def _layer3_setup_commands(self) -> List[str]:
+        """Model-specific install commands (Layer 3).
+
+        Pure replacement hook: override in subclasses to return the list of
+        shell/pip commands that install the model package and any supporting
+        assets.
+
+        Example: ``["pip install 'orb-models~=0.6.0'"]``
+        """
         return []
 
     def _run_code(self) -> str:

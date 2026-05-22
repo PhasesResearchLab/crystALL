@@ -117,9 +117,6 @@ class DeePAWAdapter(BaseCalculator):
 
     # ── Hook overrides ───────────────────────────────────────────────────
 
-    def layer2_dependencies(self) -> List[str]:
-        return []
-
     def _input_structure_format(self) -> str:
         return "*"
 
@@ -136,7 +133,7 @@ class DeePAWAdapter(BaseCalculator):
         self._assert_gpu_runtime_supported()
         self._resolve_singularity_binary()
 
-    def setup_commands(self) -> List[str]:
+    def _layer3_setup_commands(self) -> List[str]:
         """Layer-3 shell commands that download and build the DeePAW container."""
         env_path = str(self._env_path())
         downloads_dir = str(self._downloads_dir())
@@ -185,6 +182,7 @@ class DeePAWAdapter(BaseCalculator):
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
         objectives = result.get("objectives", {})
@@ -206,9 +204,7 @@ class DeePAWAdapter(BaseCalculator):
         try:
             chgcar.write_file(out_path)
         except Exception as exc:
-            warnings.warn(
-                f"[DeePAWAdapter] Could not write CHGCAR for {stem}: {exc}"
-            )
+            warnings.warn(f"[DeePAWAdapter] Could not write CHGCAR for {stem}: {exc}")
 
     # ── Execution ────────────────────────────────────────────────────────
 
@@ -328,8 +324,7 @@ class DeePAWAdapter(BaseCalculator):
         return {
             **result,
             "objectives": {
-                k: cls._deserialize_worker_value(v)
-                for k, v in props.items()
+                k: cls._deserialize_worker_value(v) for k, v in props.items()
             },
         }
 

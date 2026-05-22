@@ -163,7 +163,7 @@ class PhonaxAdapter(BaseCalculator):
         self._bz_mesh = bz_mesh
         self._dos_sigma = dos_sigma
 
-    def layer2_dependencies(self) -> List[str]:
+    def _layer2_dependencies(self) -> List[str]:
         # jax/jaxlib are pulled in transitively by phonax itself. We pin the
         # core JAX ecosystem dependencies here to versions known to work
         # cleanly with the serialised model weights and our runtime shims.
@@ -178,7 +178,7 @@ class PhonaxAdapter(BaseCalculator):
             "tqdm",
         ]
 
-    def setup_commands(self) -> List[str]:
+    def _layer3_setup_commands(self) -> List[str]:
         """Download and stage the Phonax model archive.
 
         Following the Phonax quick-start guide, this uses pure shell commands
@@ -382,6 +382,7 @@ class PhonaxAdapter(BaseCalculator):
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
         objectives = result.get("objectives", {})

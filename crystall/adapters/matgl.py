@@ -108,10 +108,7 @@ class MatGLAdapter(BaseCalculator):
     def _env_path(self) -> Path:
         return self._env_root() / "matgl"
 
-    def python_version(self) -> str:
-        return "3.11"
-
-    def layer2_dependencies(self) -> List[str]:
+    def _layer2_dependencies(self) -> List[str]:
         system = platform.system().lower()
         if system == "linux":
             return ["numpy<2.0", "torchdata<=0.8.0", "torch==2.4.0"]
@@ -121,7 +118,7 @@ class MatGLAdapter(BaseCalculator):
             return ["numpy<2.0", "torchdata<=0.8.0", "torch==2.3.0"]
         return ["numpy<2.0", "torchdata<=0.8.0", "torch<=2.7.0"]
 
-    def setup_commands(self) -> List[str]:
+    def _layer3_setup_commands(self) -> List[str]:
         system = platform.system().lower()
         if system == "linux":
             dgl_req = "dgl<=2.4.0"
@@ -164,8 +161,7 @@ class MatGLAdapter(BaseCalculator):
         if isinstance(props, dict):
             updated = dict(result)
             updated["objectives"] = {
-                k: cls._deserialize_worker_value(v)
-                for k, v in props.items()
+                k: cls._deserialize_worker_value(v) for k, v in props.items()
             }
             return updated
         return result
@@ -209,6 +205,7 @@ class MatGLAdapter(BaseCalculator):
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
         objectives = result.get("objectives", {})
