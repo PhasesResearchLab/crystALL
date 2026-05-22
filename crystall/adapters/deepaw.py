@@ -121,15 +121,13 @@ class DeePAWAdapter(BaseCalculator):
         return "*"
 
     def _setup_preflight(self) -> None:
-        """DeePAW-specific preflight: verify GPU runtime and singularity.
+        """DeePAW-specific preflight: verify GPU runtime and Singularity/Apptainer.
 
-        Overrides the base preflight to resolve the device as 'cuda' (the only
-        supported device) instead of the base default of 'cpu'.  Also runs the
-        more specific GPU-runtime check once, avoiding a duplicate nvidia-smi
-        invocation that would otherwise occur if the base class ran it first.
+        Extends base preflight (OS check + device check against ``supported_devices``,
+        which for DeePAW is ``['cuda']``) with the more specific GPU-runtime probe
+        and Singularity binary resolution.
         """
-        self._assert_os_supported()
-        self._resolve_device("cuda")
+        super()._setup_preflight()
         self._assert_gpu_runtime_supported()
         self._resolve_singularity_binary()
 

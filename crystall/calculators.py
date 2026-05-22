@@ -425,7 +425,7 @@ class BaseCalculator:
     run_on_directory(path, objectives, batch, **kwargs) -> list[dict]
 
     SHARED HOOKS
-    _preflight_checks(), _request_extras(), _results_json_path,
+    _setup_preflight(), _request_extras(), _results_json_path,
     _is_done, _upsert_objectives_json, _maybe_print_results, etc.
 
     INTERNAL PLUMBING
@@ -702,14 +702,12 @@ class BaseCalculator:
         except (FileNotFoundError, sp.TimeoutExpired):
             return False
 
-    def _resolve_device(self, device: str = "cpu") -> str:
-        """Validate and return the requested device, caching the result.
+    def _assert_device_supported(self, device: str) -> None:
+        """Raise if device is not supported or if 'cuda' is unavailable on the host.
 
         Raises ValueError if device is not in supported_devices.
         Raises RuntimeError if 'cuda' is requested but unavailable on the host.
         """
-        if getattr(self, "_resolved_device", None) is not None:
-            return self._resolved_device  # type: ignore[return-value]
         if device not in self.supported_devices:
             raise ValueError(
                 f"[{self.name}] device='{device}' is not supported. "
@@ -720,8 +718,6 @@ class BaseCalculator:
                 f"[{self.name}] device='cuda' requested but CUDA is not available "
                 "on this system (nvidia-smi not found or returned non-zero)."
             )
-        self._resolved_device: str = device
-        return device
 
     # ── Overridable hooks ───────────────────────────────────────────────────
 
@@ -729,19 +725,21 @@ class BaseCalculator:
         """Pre-installation checks run before setup_env creates the micro-env.
 
         Called at the very start of setup_env, before the cached-env
-        short-circuit.  Subclasses can override this to add adapter-specific
-        pre-checks without overriding setup_env itself.
+        short-circuit.  Subclasses should call ``super()._setup_preflight()``
+        first to inherit the OS and device checks, then add their own.
+
+        Device selection: reads ``self._device_override`` if defined (any
+        subclass may set this attribute to a concrete device string); otherwise
+        defaults to ``'cpu'`` if that is in ``supported_devices``, or falls
+        back to ``supported_devices[0]`` as a last resort.
         """
         self._assert_os_supported()
-        self._resolve_device()
-
-    def _preflight_checks(self) -> None:
-        """Run pre-installation checks.
-
-        Subclasses may override to extend preflight logic, but must call
-        ``super()._preflight_checks()`` first.
-        """
-        self._preflight_checks()
+        device = getattr(self, "_device_override", None)
+        if device is None:
+            device = (
+                "cpu" if "cpu" in self.supported_devices else self.supported_devices[0]
+            )
+        self._assert_device_supported(device)
 
     def _layer1_python_version(self) -> str:
         """Python version for the micro-env venv (Layer 1).

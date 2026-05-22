@@ -1125,23 +1125,22 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         )
         self.assertIn("cache_check", call_log)
 
-    # ── 4. _resolve_device('cuda') raises when CUDA unavailable ──────────
-    def test_resolve_device_cuda_raises_when_unavailable(self):
-        """_resolve_device must raise RuntimeError for 'cuda' when the system has no GPU."""
+    # ── 4. _assert_device_supported('cuda') raises when CUDA unavailable ──
+    def test_assert_device_supported_cuda_raises_when_unavailable(self):
+        """_assert_device_supported must raise RuntimeError for 'cuda' when the system has no GPU."""
         from unittest.mock import patch
 
         adapter = self._GuardAdapter()
         with patch.object(type(adapter), "_cuda_available_system", return_value=False):
             with self.assertRaises(RuntimeError) as ctx:
-                adapter._resolve_device("cuda")
+                adapter._assert_device_supported("cuda")
         self.assertIn("cuda", str(ctx.exception).lower())
 
-    # ── 5. _resolve_device('cpu') always succeeds ────────────────────────
-    def test_resolve_device_cpu_always_succeeds(self):
-        """_resolve_device must accept 'cpu' unconditionally."""
+    # ── 5. _assert_device_supported('cpu') always succeeds ───────────────
+    def test_assert_device_supported_cpu_always_succeeds(self):
+        """_assert_device_supported must accept 'cpu' without raising."""
         adapter = self._GuardAdapter()
-        result = adapter._resolve_device("cpu")
-        self.assertEqual(result, "cpu")
+        adapter._assert_device_supported("cpu")  # must not raise
 
     # ── 6. MLIPAdapter does not override setup_env ───────────────────────
     def test_mlip_adapter_does_not_override_setup_env(self):
@@ -1400,7 +1399,6 @@ class TestObjectiveRegistry(unittest.TestCase):
         ):
             adapter = MLIPAdapter("FAKE-ML")
             with (
-                patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
             ):
                 fv = adapter._helper_build_format_vars()
@@ -1437,7 +1435,6 @@ class TestObjectiveRegistry(unittest.TestCase):
                 custom={"model": "fake-override", "head": "override-head"},
             )
             with (
-                patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
             ):
                 fv = adapter._helper_build_format_vars()
@@ -1468,7 +1465,6 @@ class TestObjectiveRegistry(unittest.TestCase):
                 custom={"token": "${FAKE_TOKEN} test token guidance"},
             )
             with (
-                patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
                 patch.dict("os.environ", {"FAKE_TOKEN": "secret-token"}, clear=False),
             ):
@@ -1500,7 +1496,6 @@ class TestObjectiveRegistry(unittest.TestCase):
                 },
             )
             with (
-                patch.object(adapter, "_resolve_device", return_value="cpu"),
                 patch.object(adapter, "_env_path", return_value=Path("/envs/fake")),
             ):
                 fv = adapter._helper_build_format_vars()

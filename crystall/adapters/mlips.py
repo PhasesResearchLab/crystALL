@@ -130,8 +130,7 @@ class MLIPAdapter(BaseCalculator):
             )
         self._model_name = model_name
         self._config = config[model_name]
-        self._device_override = device.lower() if isinstance(device, str) else None
-        self._resolved_device: Optional[str] = None
+        self._device_override = device.lower() if isinstance(device, str) else "cpu"
         self._static_adapters: List[BaseCalculator] = []
         self._custom_overrides: Dict[str, Any] = custom or {}
 
@@ -243,7 +242,7 @@ class MLIPAdapter(BaseCalculator):
     # ── Hook overrides ──────────────────────────────────────────────────────
 
     def _init_section_content(self) -> str:
-        device = self._device_override or self._config.get("device", "cpu")
+        device = self._device_override
         return (
             f"Model: {Fore.MAGENTA}{self._model_name}{Style.RESET_ALL}\n"
             f"Device: {Fore.MAGENTA}{device}{Style.RESET_ALL}\n\n"
@@ -268,27 +267,6 @@ class MLIPAdapter(BaseCalculator):
     def _input_structure_format(self) -> str:
         return "*"
 
-    def _resolve_device(self) -> str:
-        if self._resolved_device:
-            return self._resolved_device
-
-        candidate = self._device_override if self._device_override else "cpu"
-
-        allowed = self.supported_devices
-        if allowed and candidate not in allowed:
-            raise ValueError(
-                f"[{self.name}] device='{candidate}' is not supported. "
-                f"Allowed values: {allowed}."
-            )
-
-        if candidate == "cuda" and not self._cuda_available_system():
-            raise RuntimeError(
-                f"[{self.name}] device='cuda' requested but CUDA is not available "
-                "on this system (nvidia-smi not found or returned non-zero)."
-            )
-
-        self._resolved_device = candidate
-        return candidate
 
     def _cuda_available_in_micro_env(self) -> bool:
         import subprocess as sp
@@ -368,7 +346,7 @@ class MLIPAdapter(BaseCalculator):
             **self._custom_overrides,
         }
         fmt = {
-            "device": self._resolve_device(),
+            "device": self._device_override,
             "SFY_PATH": str(self._env_path()),
         }
         for k, v in merged_custom.items():
@@ -424,7 +402,6 @@ class MLIPAdapter(BaseCalculator):
             print("=" * 51)
 
         self._assert_os_supported()
-        self._resolve_device()
 
         abs_path = os.path.abspath(file_path)
         output_dir = os.path.dirname(abs_path)
@@ -570,7 +547,6 @@ class MLIPAdapter(BaseCalculator):
             print("=" * 51)
 
         self._assert_os_supported()
-        self._resolve_device()
 
         abs_path = os.path.abspath(path)
         input_dir_name = os.path.basename(abs_path)
