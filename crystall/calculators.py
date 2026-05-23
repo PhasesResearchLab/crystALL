@@ -571,8 +571,10 @@ class BaseCalculator:
         """
         out_dir = "the original" if isinstance(result, dict) else "a sibling"
         return (
+            f"{Fore.BLUE}"
             f"Results are saved to {out_dir} input directory. "
-            "Check out for `objectives.json` and `<artifact>` files.\n"
+            f"Check out for `objectives.json` and `<artifact>` files.\n"
+            f"{Style.RESET_ALL}"
         )
 
     def _print_init_section(self) -> None:
@@ -647,7 +649,6 @@ class BaseCalculator:
         if isinstance(result, list):
             for item in result:
                 _print_single(item)
-                print()
         else:
             _print_single(result)
 
