@@ -931,6 +931,7 @@ def main():
 
         # ── Run relaxation ──────────────────────────────────────────
         try:
+            os.makedirs(traj_dir, exist_ok=True)
             from ase.io.trajectory import Trajectory as _TrajWriter
             _traj_writer = _TrajWriter(traj_path, "a", atoms)
             opt = Optimizer(target)
