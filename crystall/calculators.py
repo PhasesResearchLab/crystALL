@@ -563,13 +563,17 @@ class BaseCalculator:
         """
         return ""
 
-    def _results_note(self) -> str:
+    def _results_note(self, result: Any) -> str:
         """Return an optional trailing note for the results section banner.
 
         Override in subclasses to add adapter-specific output guidance,
         e.g. where saved files can be found.
         """
-        return ""
+        out_dir = "the original" if isinstance(result, dict) else "a sibling"
+        return (
+            f"Results are saved to {out_dir} input directory. "
+            "Check out for `objectives.json` and `<artifact>` files.\n"
+        )
 
     def _print_init_section(self) -> None:
         """Print the initialization (Section 1) banner.
@@ -618,16 +622,34 @@ class BaseCalculator:
         ``self._print_results_section(result)`` at the end of their override,
         after all post-processing is complete.
         """
+
+        def _format_value(value: Any) -> str:
+            if value is None or isinstance(value, (bool, int, float, str)):
+                return str(value)
+            return f"<{type(value).__qualname__}>"
+
+        def _print_single(res: Dict[str, Any]) -> None:
+            name = res.get("name", "<unknown>")
+            objectives = res.get("objectives", {})
+            print(f"Structure: {name}")
+            for key, value in objectives.items():
+                print(f"  • {key}: {_format_value(value)}")
+
         title = "Results Completed"
         print()
         print("=" * 51)
         self._print_banner(title, "")
         print("=" * 51)
-        note = self._results_note()
+        note = self._results_note(result)
         if note:
             print(f"{note}")
 
-        pprint.pprint(result)
+        if isinstance(result, list):
+            for item in result:
+                _print_single(item)
+                print()
+        else:
+            _print_single(result)
 
     def _micro_python(self) -> "Path":
         """OS-agnostic path to the Python interpreter inside the micro-env."""

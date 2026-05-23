@@ -253,20 +253,11 @@ class MLIPAdapter(BaseCalculator):
     def _run_content(self, target: str) -> str:
         return f"Running relaxation on {Fore.BLUE}{target}{Style.RESET_ALL}\n"
 
-    def _results_note(self) -> str:
-        return (
-            f"{Fore.BLUE}"
-            "Check the original structure directory and its siblings "
-            "for the saved relaxed structure files.\n"
-            f"{Style.RESET_ALL}"
-        )
-
     def _layer1_python_version(self) -> str:
         return self._config.get("python_version", super()._layer1_python_version())
 
     def _input_structure_format(self) -> str:
         return "*"
-
 
     def _cuda_available_in_micro_env(self) -> bool:
         import subprocess as sp

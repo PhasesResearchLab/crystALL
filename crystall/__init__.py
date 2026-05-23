@@ -5,7 +5,7 @@ from duecredit.io import TextOutput, get_text_rendering
 from duecredit.collector import CollectorSummary
 import os
 import sys
-from colorama import Back, Style
+from colorama import Back, Fore, Style
 
 # ── DueCredit output formatter ───────────────────────────────────────────────
 _DUECREDIT_PREFIX = (
@@ -74,7 +74,7 @@ def _configure_duecredit_output() -> None:
 
     def _patched_dump(self, **kwargs):
         collector = self._DueSwitch__collectors[True]
-        print(f"\n{Back.WHITE}")
+        print(f"\n{Back.WHITE}{Fore.BLACK}")
         output = DuecreditTextOutput(fd=sys.stdout, collector=collector)
         output.dump(path_prefix="crystall")
         print(f"{Style.RESET_ALL}")
