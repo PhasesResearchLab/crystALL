@@ -1316,7 +1316,25 @@ class BaseCalculator:
             stderr_text = "".join(stderr_chunks)
 
             if returncode != 0:
+                import signal
+
                 detail = stderr_text.strip() if stderr_text else "(no stderr captured)"
+                if returncode < 0:
+                    sig = -returncode
+                    try:
+                        sig_name = signal.Signals(sig).name
+                    except ValueError:
+                        sig_name = str(sig)
+                    if sig == signal.SIGKILL:
+                        detail = (
+                            f"The worker was killed by SIGKILL (signal {sig}). "
+                            f"This almost certainly means the process ran out of memory (OOM). "
+                            f"Try increasing memory or using a different calculator.\n{detail}"
+                        )
+                    raise RuntimeError(
+                        f"Worker script for '{self.name}' failed with signal "
+                        f"{sig_name} ({sig}).\n{detail}"
+                    )
                 raise RuntimeError(
                     f"Worker script for '{self.name}' failed with exit code "
                     f"{returncode}.\n{detail}"
