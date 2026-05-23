@@ -1265,7 +1265,7 @@ class BaseCalculator:
             sys.stderr.flush()
 
             proc = sp.Popen(
-                [str(self._micro_python()), code_path, req_path, res_path],
+                [str(self._micro_python()), "-u", code_path, req_path, res_path],
                 env=env_vars,
                 text=True,
                 stdout=sp.PIPE,
