@@ -1327,17 +1327,16 @@ class BaseCalculator:
                         sig_name = str(sig)
                     if sig == signal.SIGKILL:
                         detail = (
-                            f"The worker was killed by SIGKILL (signal {sig}). "
                             f"This almost certainly means the process ran out of memory (OOM). "
                             f"Try increasing memory or using a different calculator.\n{detail}"
                         )
                     raise RuntimeError(
                         f"Worker script for '{self.name}' failed with signal "
-                        f"{sig_name} ({sig}).\n{detail}"
+                        f"{sig_name} ({sig}).\n\n{detail}"
                     )
                 raise RuntimeError(
                     f"Worker script for '{self.name}' failed with exit code "
-                    f"{returncode}.\n{detail}"
+                    f"{returncode}.\n\n{detail}"
                 )
 
             with open(res_path) as f:

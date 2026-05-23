@@ -74,7 +74,7 @@ def _configure_duecredit_output() -> None:
 
     def _patched_dump(self, **kwargs):
         collector = self._DueSwitch__collectors[True]
-        print(f"\n{Back.WHITE}{Fore.BLACK}")
+        print(f"{Back.WHITE}{Fore.BLACK}")
         output = DuecreditTextOutput(fd=sys.stdout, collector=collector)
         output.dump(path_prefix="crystall")
         print(f"{Style.RESET_ALL}")
