@@ -1318,7 +1318,11 @@ class BaseCalculator:
             if returncode != 0:
                 import signal
 
-                detail = stderr_text.strip() if stderr_text else "(no stderr captured)"
+                detail = (
+                    stderr_text.strip()
+                    if stderr_text
+                    else "Details: No stderr captured"
+                )
                 if returncode < 0:
                     sig = -returncode
                     try:
@@ -1327,8 +1331,8 @@ class BaseCalculator:
                         sig_name = str(sig)
                     if sig == signal.SIGKILL:
                         detail = (
-                            f"This almost certainly means the process ran out of memory (OOM). "
-                            f"Try increasing memory or using a different calculator.\n{detail}"
+                            "Details: This almost certainly means the process ran out of memory (OOM). "
+                            "Try increasing memory or using a different calculator."
                         )
                     raise RuntimeError(
                         f"Worker script for '{self.name}' failed with signal "
