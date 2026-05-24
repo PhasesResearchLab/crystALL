@@ -520,15 +520,26 @@ class CrystALLSearch:
         """
 
         try:
-            from crystall.optimade import list_optimade_providers
+            from optimade.utils import get_providers as _optimade_get_providers
         except ImportError as e:
             raise ImportError(
-                "setup_OPTIMADE requires the 'optimade[http_client]' package. "
-                "Install it with: pip install 'optimade[http_client]'"
+                "setup_OPTIMADE requires the 'optimade' package. "
+                "Install it with: pip install optimade"
             ) from e
 
         try:
-            provider_status = list_optimade_providers(check_reachable=check_reachable)
+            _raw_providers = _optimade_get_providers()
+            provider_status = [
+                {
+                    "id": p["id"],
+                    "name": p.get("name", p["id"]),
+                    "description": p.get("description", ""),
+                    "base_url": p["base_url"].rstrip("/"),
+                    "reachable": None,
+                }
+                for p in _raw_providers
+                if p.get("base_url")
+            ]
         except Exception as e:
             if self._optimade_provider_registry:
                 provider_status = [
