@@ -12,8 +12,6 @@ exclusively inside the embedded worker script.
 from __future__ import annotations
 
 import os
-import tempfile
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Sequence
 import warnings
 
@@ -158,15 +156,28 @@ class PhonaxAdapter(BaseCalculator):
         dos_sigma: float = 2.0,
         **kwargs,
     ):
+        """Initialize the PhonaxAdapter.
+
+        Args:
+            npoints: Number of k-points along the high-symmetry band path.
+            bz_mesh: Uniform BZ mesh density as (nx, ny, nz) tuple for DOS.
+            dos_sigma: Gaussian broadening width for DOS in THz.
+            **kwargs: Additional keyword arguments passed to the base class.
+        """
         super().__init__(**kwargs)
         self._npoints = npoints
         self._bz_mesh = bz_mesh
         self._dos_sigma = dos_sigma
 
     def _layer2_dependencies(self) -> List[str]:
-        # jax/jaxlib are pulled in transitively by phonax itself. We pin the
-        # core JAX ecosystem dependencies here to versions known to work
-        # cleanly with the serialised model weights and our runtime shims.
+        """Define the secondary environment dependencies.
+
+        Returns:
+            A list of package specifications required by the micro-environment.
+        """
+        # jax/jaxlib are pulled in transitively by phonax itself. The core JAX
+        # ecosystem dependencies are pinned here to versions known to work
+        # cleanly with the serialised model weights and the runtime shims.
         return [
             "jax[cpu]<=0.4.35",
             "e3nn-jax<=0.21.0",
@@ -198,6 +209,11 @@ class PhonaxAdapter(BaseCalculator):
         ]
 
     def _request_extras(self) -> dict:
+        """Construct the extra parameters for the calculation request.
+
+        Returns:
+            A dictionary containing calculation parameters and paths.
+        """
         extras = super()._request_extras()
         extras.update(
             {
@@ -210,12 +226,26 @@ class PhonaxAdapter(BaseCalculator):
         return extras
 
     def _run_code(self) -> str:
+        """Provide the worker Python script code.
+
+        Returns:
+            The embedded Python worker script source code.
+        """
         return _PHONAX_WORKER_SCRIPT
 
     @staticmethod
     def _band_structure_from_payload(
         payload: dict, structure: "Structure"
     ) -> "PhononBandStructureSymmLine":
+        """Reconstruct a PhononBandStructureSymmLine from worker payload.
+
+        Args:
+            payload: The dictionary containing the raw frequency and q-point data.
+            structure: The pymatgen Structure object.
+
+        Returns:
+            The reconstructed phonon band structure object.
+        """
         from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
         from pymatgen.core import Lattice
         import numpy as np
@@ -248,6 +278,15 @@ class PhonaxAdapter(BaseCalculator):
     def _dos_from_payload(
         payload: dict, structure: "Structure" | None
     ) -> "CompletePhononDos" | dict:
+        """Reconstruct a CompletePhononDos object from worker payload.
+
+        Args:
+            payload: The dictionary containing the raw frequency and DOS data.
+            structure: The pymatgen Structure object, or None if unavailable.
+
+        Returns:
+            A CompletePhononDos object, or a fallback dictionary if the structure is None.
+        """
         from pymatgen.phonon.dos import PhononDos, CompletePhononDos
         import numpy as np
 
@@ -276,7 +315,15 @@ class PhonaxAdapter(BaseCalculator):
     def _deserialize_result(
         cls, result: Dict[str, Any], struct_dict: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
-        """Convert raw worker payload into pymatgen objects keyed by objective code."""
+        """Convert raw worker payload into pymatgen objects keyed by objective code.
+
+        Args:
+            result: The dictionary containing the raw worker outputs.
+            struct_dict: The optional pymatgen Structure dictionary.
+
+        Returns:
+            A dictionary of parsed results, replacing raw data with objects.
+        """
         if not isinstance(result, dict):
             return result
         props = result.get("objectives")
@@ -316,7 +363,16 @@ class PhonaxAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Run Phonax phonon static calculation on a single structure file."""
+        """Run Phonax phonon static calculation on a single structure file.
+
+        Args:
+            file_path: Absolute or relative path to the structure file.
+            objectives: Optional sequence of objective codes to compute.
+            **kwargs: Additional keyword arguments passed to the base run method.
+
+        Returns:
+            A dictionary containing the parsed and structured results.
+        """
         file_path_abs = os.path.abspath(file_path)
 
         from pymatgen.core import Structure
@@ -347,6 +403,16 @@ class PhonaxAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> list[Dict[str, Any]]:
+        """Run Phonax phonon static calculation on a directory of structures.
+
+        Args:
+            path: Absolute or relative path to the directory.
+            objectives: Optional sequence of objective codes to compute.
+            **kwargs: Additional keyword arguments passed to the base run method.
+
+        Returns:
+            A list of result dictionaries for each processed structure.
+        """
         results = super().run_on_directory(
             path,
             objectives=objectives,
@@ -382,6 +448,12 @@ class PhonaxAdapter(BaseCalculator):
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        """Generate and save visual artifacts for calculated objectives.
+
+        Args:
+            result: The parsed result dictionary containing objectives.
+            source_path: The file path of the source structure.
+        """
         super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
@@ -396,9 +468,7 @@ class PhonaxAdapter(BaseCalculator):
             from pymatgen.phonon.dos import CompletePhononDos
             from pymatgen.phonon.plotter import PhononBSPlotter, PhononDosPlotter
         except Exception as exc:
-            warnings.warn(
-                f"[PhonaxAdapter] Could not import phonon plotters: {exc}"
-            )
+            warnings.warn(f"[PhonaxAdapter] Could not import phonon plotters: {exc}")
             return
 
         for code, obj in objectives.items():

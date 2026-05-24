@@ -24,6 +24,7 @@ from pymongo.database import Database
 from pymatgen.core import Structure, Composition, Element
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
+# ── Format Detection ──────────────────────────────────────────────────────────
 
 _STRUCTURE_FORMATS: dict[str, list[str]] = {
     # key   = structure file format
@@ -41,7 +42,12 @@ def _read_structure_format(
 ) -> Union[Tuple[str, str], None]:
     """Determine structure format, preferring file_format override if provided.
 
-    Returns (pymatgen_format, write_extension) or None if not recognized.
+    Args:
+        filepath: Path to the structure file.
+        file_format: Optional file format override.
+
+    Returns:
+        A tuple of (pymatgen_format, write_extension) or None if the format is not recognized.
     """
     if file_format:
         alias = file_format.lower().lstrip(".")
@@ -83,6 +89,9 @@ def _write_structure_format(
     structure.to(fmt=fmt, filename=os.path.join(out_dir, sanitized + ext))
 
 
+# ── Substitution Helpers ──────────────────────────────────────────────────────
+
+
 def _substitute_candidate(
     name_root: str,
     structure_dict: dict,
@@ -91,6 +100,19 @@ def _substitute_candidate(
     out_dir: str,
     file_format: str = "poscar",
 ) -> int:
+    """Substitute candidate structure with given elements and write the result.
+
+    Args:
+        name_root: Base name of the structure.
+        structure_dict: Pymatgen structure serialized as a dictionary.
+        substitutions: List of element substitutions (either dictionaries or element lists).
+        sELtarget: Target elements list.
+        out_dir: Directory where the output will be saved.
+        file_format: Output format override. Defaults to "poscar".
+
+    Returns:
+        The number of written structures.
+    """
     st_orig = Structure.from_dict(structure_dict)
     count = 0
     p = 0
@@ -195,6 +217,9 @@ def _generate_from_structures(
     return total_written
 
 
+# ── Local Search ──────────────────────────────────────────────────────────────
+
+
 def run_local(
     target_formula: Union[str, Composition],
     prototype_path: str,
@@ -216,14 +241,12 @@ def run_local(
         ValueError: If the target formula is not a string or pymatgen Composition object.
         AssertionError: If the prototype path is not a valid directory.
     """
-
     assert os.path.isdir(prototype_path), "Prototype path must be a valid directory"
 
     print(f"\nSearching for structure prototypes for: {target_formula}")
     print("Structure prototype dataset: " + prototype_path)
 
     if isinstance(target_formula, str):
-        # Formula to pymatgen Composition
         composition = Composition(target_formula)
     elif isinstance(target_formula, Composition):
         composition = target_formula
@@ -350,6 +373,9 @@ def run_local(
     return out_dir
 
 
+# ── MPDD Database Search ──────────────────────────────────────────────────────
+
+
 def run_MPDD(
     target_formula: Union[str, Composition],
     MPDD: Database,
@@ -391,7 +417,6 @@ def run_MPDD(
     )
 
     if isinstance(target_formula, str):
-        # Formula to pymatgen Composition
         composition = Composition(target_formula)
     elif isinstance(target_formula, Composition):
         composition = target_formula
@@ -667,7 +692,7 @@ def run_MPDD_devs(
     Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
 
     Args:
-        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
+        target_formula: The target formula as a string or pymatgen Composition object.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
@@ -679,13 +704,16 @@ def run_MPDD_devs(
 
     Returns:
         Path to the directory containing the generated prototypes.
+
+    Raises:
+        ValueError: If the target formula is not a string or pymatgen Composition object.
+        AssertionError: If no collections are specified or if MPDD is not a pymongo Database object.
     """
 
     assert len(collections) > 0, "At least one collection must be specified"
     assert isinstance(MPDD, Database), "MPDD must be a pymongo Database object"
 
     if isinstance(target_formula, str):
-        # Formula to pymatgen Composition
         composition = Composition(target_formula)
     elif isinstance(target_formula, Composition):
         composition = target_formula
@@ -976,6 +1004,9 @@ def run_MPDD_devs(
         return out_dir
 
 
+# ── Combinatorial and Query Helpers ────────────────────────────────────────────
+
+
 def sorted_elements_list(comp: Composition) -> List[List[str]]:
     """
     Return elements grouped by their occurrence in the formula, starting from the least common.
@@ -1121,6 +1152,9 @@ def ordered_allowed_substitutions(
     return allAllowedSubstitutions
 
 
+# ── OPTIMADE Search ───────────────────────────────────────────────────────────
+
+
 def run_optimade(
     target_formula: Union[str, Composition],
     base_urls: list[str],
@@ -1145,6 +1179,9 @@ def run_optimade(
 
     Returns:
         Path to the directory containing the generated prototypes.
+
+    Raises:
+        ImportError: If the 'optimade[http_client]' package is not installed.
     """
     try:
         from optimade.client import OptimadeClient

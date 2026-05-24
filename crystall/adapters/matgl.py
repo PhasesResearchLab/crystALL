@@ -14,7 +14,6 @@ a unified worker script inside that environment.
 from __future__ import annotations
 
 import platform
-from pathlib import Path
 from typing import Any, Dict, List, Literal, Sequence
 import os
 import warnings
@@ -35,7 +34,11 @@ class MatGLAdapter(BaseCalculator):
     calculator_type: Literal["mlip", "static"] = "static"
 
     def __init__(self, **kwargs):
-        """Initialize MatGL adapter."""
+        """Initialize the MatGL adapter.
+
+        Args:
+            **kwargs: Keyword arguments passed to the base class.
+        """
         super().__init__(**kwargs)
 
     objectives: ObjectiveRegistry = ObjectiveRegistry(
@@ -102,10 +105,22 @@ class MatGLAdapter(BaseCalculator):
         "cuda",
     ]  # platform-specific DGL/torch wheels; no device lock
 
+    # ── Environment Helpers ───────────────────────────────────────────────────
+
     def _input_structure_format(self) -> str:
+        """Get the expected input structure format pattern.
+
+        Returns:
+            str: The format pattern.
+        """
         return "*"
 
     def _layer2_dependencies(self) -> List[str]:
+        """Get the pip dependencies required for layer 2 of the micro-environment.
+
+        Returns:
+            List[str]: List of dependency strings.
+        """
         system = platform.system().lower()
         if system == "linux":
             return ["numpy<2.0", "torchdata<=0.8.0", "torch==2.4.0"]
@@ -116,6 +131,11 @@ class MatGLAdapter(BaseCalculator):
         return ["numpy<2.0", "torchdata<=0.8.0", "torch<=2.7.0"]
 
     def _layer3_setup_commands(self) -> List[str]:
+        """Get the setup commands required for layer 3 of the micro-environment.
+
+        Returns:
+            List[str]: List of shell commands.
+        """
         system = platform.system().lower()
         if system == "linux":
             dgl_req = "dgl<=2.4.0"
@@ -133,8 +153,21 @@ class MatGLAdapter(BaseCalculator):
             "pip install 'pymatgen>=2024.0'",
         ]
 
+    # ── Deserialization ───────────────────────────────────────────────────────
+
     @classmethod
     def _deserialize_worker_value(cls, value: Any) -> Any:
+        """Recursively deserialize custom worker output values.
+
+        Converts serialized structure dictionaries back into pymatgen Structure
+        objects if they contain the structure marker key.
+
+        Args:
+            value: The value to deserialize.
+
+        Returns:
+            Any: The deserialized value.
+        """
         if isinstance(value, dict):
             if _STRUCTURE_MARKER_KEY in value:
                 payload = value.get(_STRUCTURE_MARKER_KEY)
@@ -152,6 +185,14 @@ class MatGLAdapter(BaseCalculator):
 
     @classmethod
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Deserialize objectives in a single structure result dictionary.
+
+        Args:
+            result: The raw result dictionary from the worker.
+
+        Returns:
+            Dict[str, Any]: The result dictionary with deserialized objectives.
+        """
         if not isinstance(result, dict):
             return result
         props = result.get("objectives")
@@ -167,7 +208,17 @@ class MatGLAdapter(BaseCalculator):
     def _deserialize_results(
         cls, results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
+        """Deserialize objectives across a list of structure result dictionaries.
+
+        Args:
+            results: List of raw result dictionaries.
+
+        Returns:
+            List[Dict[str, Any]]: List of deserialized result dictionaries.
+        """
         return [cls._deserialize_result(r) for r in results]
+
+    # ── Execution Interface ───────────────────────────────────────────────────
 
     def run_on_structure(
         self,
@@ -175,6 +226,16 @@ class MatGLAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
+        """Execute calculations on a single structure file.
+
+        Args:
+            file_path: Path to the structure file.
+            objectives: Optional sequence of objective codes to run.
+            **kwargs: Additional keyword arguments passed to the parent run.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing calculation results.
+        """
         abs_path = os.path.abspath(file_path)
         result = super().run_on_structure(file_path, objectives=objectives, **kwargs)
         parsed = self._deserialize_result(result)
@@ -187,6 +248,16 @@ class MatGLAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
+        """Execute calculations on all structure files in a directory.
+
+        Args:
+            path: Path to the directory containing structure files.
+            objectives: Optional sequence of objective codes to run.
+            **kwargs: Additional keyword arguments passed to the parent run.
+
+        Returns:
+            List[Dict[str, Any]]: List of result dictionaries for each file.
+        """
         abs_path = os.path.abspath(path)
         artifacts_dir = os.path.dirname(abs_path)
         results = super().run_on_directory(path, objectives=objectives, **kwargs)
@@ -199,9 +270,17 @@ class MatGLAdapter(BaseCalculator):
             parsed_results.append(parsed)
         return parsed_results
 
+    # ── Serialization ─────────────────────────────────────────────────────────
+
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        """Save artifact objectives to disk if save_artifacts is enabled.
+
+        Args:
+            result: Deserialized result dictionary.
+            source_path: Path to the source structure file.
+        """
         super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
@@ -230,8 +309,15 @@ class MatGLAdapter(BaseCalculator):
                 )
 
     def _run_code(self) -> str:
+        """Get the Python code to run in the micro-environment.
+
+        Returns:
+            str: The worker script source code.
+        """
         return _MATGL_WORKER_SCRIPT
 
+
+# ── Embedded Worker Script ────────────────────────────────────────────────────
 
 _MATGL_WORKER_SCRIPT = """\
 import json

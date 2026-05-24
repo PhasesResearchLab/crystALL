@@ -16,7 +16,15 @@ _DUECREDIT_PREFIX = (
 class DuecreditTextOutput(TextOutput):
     """TextOutput variant that emits only the References section."""
 
-    def dump(self, tags=None, path_prefix: str | None = None) -> None:
+    def dump(
+        self, tags: list[str] | None = None, path_prefix: str | None = None
+    ) -> None:
+        """Dump the collated citations using the custom layout.
+
+        Args:
+            tags: Optional list of tags to filter citations.
+            path_prefix: Optional module/package path prefix to filter.
+        """
         packages, modules, objects = self._get_collated_citations(tags)
         pmo = {**packages, **modules, **objects}
         if path_prefix is not None:
@@ -51,6 +59,14 @@ class DuecreditTextOutput(TextOutput):
         self.fd.write("\n")
 
     def _extract_doi(self, cit) -> str | None:
+        """Extract the DOI from a citation entry's raw BibTeX entry.
+
+        Args:
+            cit: The citation object.
+
+        Returns:
+            The extracted DOI string if found, otherwise None.
+        """
         entry = cit.entry
         if hasattr(entry, "_rawentry") and isinstance(entry._rawentry, str):
             raw = entry._rawentry
@@ -66,7 +82,7 @@ class DuecreditTextOutput(TextOutput):
 def _configure_duecredit_output() -> None:
     """Patch DueSwitch.dump to emit only the crystALL references block.
 
-    Called once at package import.  Replaces the verbose default DueCredit
+    Called once at package import. Replaces the verbose default DueCredit
     report with :class:`DuecreditTextOutput`, which prints only the
     ``References`` section prefixed by the crystALL courtesy banner.
     """
@@ -88,7 +104,7 @@ def _cite_crystall_package() -> None:
     """Emit the crystALL package-level DueCredit citation.
 
     Uses the DOI declared in pyproject.toml and exposed as ``__doi__``
-    by ``crystall.core``.  Called once at package import so the citation
+    by ``crystall.core``. Called once at package import so the citation
     is registered regardless of which sub-module the user accesses.
     """
     from crystall.core import __bibtex__

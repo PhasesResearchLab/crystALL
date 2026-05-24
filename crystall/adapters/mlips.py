@@ -9,7 +9,7 @@ relaxed structures::
 
     matgl = MatGLAdapter()
     alignn = AlignnAdapter()
-        adapter = MLIPAdapter("MACE", custom={"model": "mh-1"}, static=[matgl, alignn])
+    adapter = MLIPAdapter("MACE", custom={"model": "mh-1"}, static=[matgl, alignn])
 
 Piped objectives appear in results with code-prefixed keys::
 
@@ -48,6 +48,12 @@ def _sanitize_model_code(name: str) -> str:
     uppercases the result, and strips leading/trailing underscores.
     Consecutive underscores are collapsed.
     E.g. 'ORB-v2' -> 'ORB_V2', 'CHGNet' -> 'CHGNET', 'MACE-MP-0' -> 'MACE_MP_0'.
+
+    Args:
+        name: The arbitrary model name to sanitize.
+
+    Returns:
+        The sanitized objective code prefix.
     """
     sanitized = re.sub(r"[^A-Za-z0-9]", "_", name).upper().strip("_")
     return re.sub(r"_+", "_", sanitized)
@@ -55,11 +61,15 @@ def _sanitize_model_code(name: str) -> str:
 
 from crystall.prototypes import _STRUCTURE_FORMATS, _read_structure_format
 
-# ── Configuration helpers ───────────────────────────────────────────────────
+# ── Configuration Helpers ─────────────────────────────────────────────────────
 
 
 def _load_mlips_config() -> dict:
-    """Load the MLIP configuration from ``mlips.json``."""
+    """Load the MLIP configuration from ``mlips.json``.
+
+    Returns:
+        dict: The parsed configuration dictionary.
+    """
     json_path = Path(__file__).parent / "mlips.json"
     if not json_path.exists():
         return {}
@@ -72,12 +82,15 @@ def discover_mlip_adapters() -> Dict[str, "MLIPAdapter"]:
 
     Called by :func:`crystall.core.load_adapters` to register MLIP
     adapters alongside entry-point-based adapters.
+
+    Returns:
+        Dict[str, MLIPAdapter]: A dictionary mapping model names to their instantiated adapters.
     """
     config = _load_mlips_config()
     return {key: MLIPAdapter(model_name=key) for key in config}
 
 
-# ── Adapter class ───────────────────────────────────────────────────────────
+# ── Adapter Class ─────────────────────────────────────────────────────────────
 
 
 class MLIPAdapter(BaseCalculator):
@@ -99,6 +112,11 @@ class MLIPAdapter(BaseCalculator):
 
     @property
     def supported_os(self) -> List[str]:
+        """Get the list of supported operating systems for this model.
+
+        Returns:
+            List[str]: List of supported OS names in lowercase.
+        """
         return [
             str(x).lower()
             for x in self._config.get("os", ["windows", "macos", "linux"])
@@ -106,6 +124,11 @@ class MLIPAdapter(BaseCalculator):
 
     @property
     def supported_devices(self) -> List[str]:
+        """Get the list of supported device backends for this model.
+
+        Returns:
+            List[str]: List of supported devices (e.g. 'cpu', 'cuda') in lowercase.
+        """
         allowed = self._config.get("device", ["cpu", "cuda"])
         if isinstance(allowed, list):
             values = allowed
@@ -121,6 +144,18 @@ class MLIPAdapter(BaseCalculator):
         custom: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
+        """Initialize the MLIPAdapter instance.
+
+        Args:
+            model_name: The name of the MLIP model to load (e.g. 'MACE', 'ORB').
+            device: Optional hardware device target ('cpu', 'cuda').
+            static: Optional list of static adapters to pipe onto relaxed structures.
+            custom: Optional dictionary of custom config overrides.
+            **kwargs: Additional parameters forwarded to the base class.
+
+        Raises:
+            ValueError: If model_name is not configured in mlips.json.
+        """
         super().__init__(**kwargs)
         config = _load_mlips_config()
         if model_name not in config:
@@ -186,10 +221,18 @@ class MLIPAdapter(BaseCalculator):
         if static:
             self._resolve_static(static)
 
-    # ── Static piping ──────────────────────────────────────────────────────
+    # ── Static Piping ─────────────────────────────────────────────────────────
 
     def _resolve_static(self, adapters: List[BaseCalculator]) -> None:
-        """Validate and store static adapter instances."""
+        """Validate and store static adapter instances.
+
+        Args:
+            adapters: List of static adapter instances to pipe.
+
+        Raises:
+            TypeError: If any entry is not a BaseCalculator, or if the
+                calculator_type is not 'static'.
+        """
         for adapter in adapters:
             if not isinstance(adapter, BaseCalculator):
                 raise TypeError(
@@ -216,6 +259,9 @@ class MLIPAdapter(BaseCalculator):
         ``(via <AdapterName>)`` suffix on the description, e.g.::
 
             ORB_V2_ALIGNN_EF_MP  — ALIGNN-MP Formation Energy [eV/atom] (via ALIGNN)
+
+        Returns:
+            ObjectiveRegistry: The combined objective registry.
         """
         all_objectives: List[Objective] = list(self._own_objectives.values())
         for adapter in self._static_adapters:
@@ -233,15 +279,24 @@ class MLIPAdapter(BaseCalculator):
                 )
         return ObjectiveRegistry(all_objectives)
 
-    # ── Micro-env path ──────────────────────────────────────────────────────
+    # ── Micro-env Path ────────────────────────────────────────────────────────
 
     def _env_path(self) -> Path:
-        """MLIPs live under ``<env_root>/mlip_envs/<name>/``."""
+        """MLIPs live under ``<env_root>/mlip_envs/<name>/``.
+
+        Returns:
+            Path: The absolute path to the micro-environment directory.
+        """
         return self._env_root() / "mlip_envs" / self.name.lower()
 
-    # ── Hook overrides ──────────────────────────────────────────────────────
+    # ── Hook Overrides ────────────────────────────────────────────────────────
 
     def _init_section_content(self) -> str:
+        """Get the section header output to print during setup.
+
+        Returns:
+            str: The formatted section content string.
+        """
         device = self._device_override
         return (
             f"Model: {Fore.MAGENTA}{self._model_name}{Style.RESET_ALL}\n"
@@ -251,15 +306,38 @@ class MLIPAdapter(BaseCalculator):
         )
 
     def _run_content(self, target: str) -> str:
+        """Get the message to print before running calculations.
+
+        Args:
+            target: The name/path of the target structure or directory.
+
+        Returns:
+            str: The formatted output string.
+        """
         return f"Running relaxation on {Fore.BLUE}{target}{Style.RESET_ALL}\n"
 
     def _layer1_python_version(self) -> str:
+        """Get the python version requirement for layer 1.
+
+        Returns:
+            str: The python version string.
+        """
         return self._config.get("python_version", super()._layer1_python_version())
 
     def _input_structure_format(self) -> str:
+        """Get the input structure file format.
+
+        Returns:
+            str: The format string (e.g. '*').
+        """
         return "*"
 
     def _cuda_available_in_micro_env(self) -> bool:
+        """Check if CUDA is available within the micro-environment.
+
+        Returns:
+            bool: True if CUDA is available, False otherwise.
+        """
         import subprocess as sp
 
         if not self.is_env_ready():
@@ -292,6 +370,17 @@ class MLIPAdapter(BaseCalculator):
         any model initialisation is attempted.
 
         Plain (non-placeholder) values are returned unchanged.
+
+        Args:
+            key: The custom configuration key.
+            value: The configuration value string, possibly with placeholder.
+            model_name: The name of the MLIP model.
+
+        Returns:
+            str: The resolved string value.
+
+        Raises:
+            EnvironmentError: If a required environment variable is not set.
         """
         match = _ENV_VAR_RE.match(value)
         if not match:
@@ -309,6 +398,11 @@ class MLIPAdapter(BaseCalculator):
         return resolved
 
     def _layer2_dependencies(self) -> List[str]:
+        """Get the list of Layer 2 package dependencies.
+
+        Returns:
+            List[str]: List of package dependencies to install.
+        """
         return [
             "torch==2.9.1",
             "torch-geometric==2.7.0",
@@ -323,6 +417,9 @@ class MLIPAdapter(BaseCalculator):
         the matbench.json copy step, then expands ``{SFY_PATH}``, ``{device}``
         and any custom keys defined in *mlips.json* before the commands are
         passed to the shell.
+
+        Returns:
+            List[str]: List of setup command strings.
         """
         cmds = list(self._config.get("setup", []))
         src = Path(__file__).resolve().parent.parent / "matbench.json"
@@ -332,6 +429,11 @@ class MLIPAdapter(BaseCalculator):
         return [cmd.format(**fmt) for cmd in cmds]
 
     def _helper_build_format_vars(self) -> Dict[str, str]:
+        """Build format variables including custom override resolutions.
+
+        Returns:
+            Dict[str, str]: A dictionary mapping format strings to resolved values.
+        """
         merged_custom = {
             **self._config.get("custom", {}),
             **self._custom_overrides,
@@ -353,6 +455,9 @@ class MLIPAdapter(BaseCalculator):
         environment variables (e.g. ``HF_TOKEN``) raise an :exc:`OSError`
         immediately — before the venv is created or any download begins —
         consistent with the OS and device checks already performed here.
+
+        Raises:
+            OSError: If a preflight check fails.
         """
         super()._setup_preflight()
         self._helper_build_format_vars()
@@ -385,6 +490,9 @@ class MLIPAdapter(BaseCalculator):
             objectives: Subset of objectives to compute.
             persist_traj: Whether to persist the ASE trajectory file after relaxation.
             **kwargs: Additional kwargs forwarded to the worker request.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing calculation results.
         """
         if self._static_adapters:
             print()
@@ -445,7 +553,11 @@ class MLIPAdapter(BaseCalculator):
         return parsed
 
     def _request_extras(self) -> dict:
-        """Include save_artifacts (base), calculator code, format vars, model code."""
+        """Include save_artifacts (base), calculator code, format vars, and model code.
+
+        Returns:
+            dict: A dictionary of extra parameters to include in the request.
+        """
         extras = super()._request_extras()  # {"save_artifacts": self.save_artifacts}
         format_vars = self._helper_build_format_vars()
         extras.update(
@@ -463,8 +575,18 @@ class MLIPAdapter(BaseCalculator):
         )
         return extras
 
+    # ── Deserialization ───────────────────────────────────────────────────────
+
     @staticmethod
     def _deserialize_worker_value(value: Any) -> Any:
+        """Recursively deserialize custom worker output values.
+
+        Args:
+            value: The value to deserialize.
+
+        Returns:
+            Any: The deserialized value.
+        """
         if isinstance(value, dict):
             if _STRUCTURE_MARKER_KEY in value:
                 payload = value.get(_STRUCTURE_MARKER_KEY)
@@ -486,6 +608,14 @@ class MLIPAdapter(BaseCalculator):
 
     @classmethod
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Deserialize objectives in a single structure result dictionary.
+
+        Args:
+            result: The raw result dictionary.
+
+        Returns:
+            Dict[str, Any]: The deserialized result dictionary.
+        """
         if not isinstance(result, dict):
             return result
         props = result.get("objectives")
@@ -501,9 +631,17 @@ class MLIPAdapter(BaseCalculator):
     def _deserialize_results(
         cls, results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
+        """Deserialize objectives across a list of structure result dictionaries.
+
+        Args:
+            results: List of raw result dictionaries.
+
+        Returns:
+            List[Dict[str, Any]]: List of deserialized result dictionaries.
+        """
         return [cls._deserialize_result(r) for r in results]
 
-    # ── Execution ───────────────────────────────────────────────────────────
+    # ── Execution Interface ───────────────────────────────────────────────────
 
     def run_on_directory(
         self,
@@ -528,9 +666,10 @@ class MLIPAdapter(BaseCalculator):
             optimizer: ASE optimizer name.
             fmax: Force convergence threshold.
             persist_traj: Whether to persist the ASE trajectory file after relaxation.
-            results_dir: Optional explicit path for the output directory.
-                Defaults to ``{parent_of_path}/{model_name}_{input_dir_basename}``.
             **kwargs: Additional kwargs forwarded to the worker request.
+
+        Returns:
+            List[Dict[str, Any]]: A list of result dictionaries for each file.
         """
         if self._static_adapters:
             print("=" * 51)
@@ -632,9 +771,16 @@ class MLIPAdapter(BaseCalculator):
         """Execute piped static adapters on relaxed structures.
 
         Each adapter runs ``run_on_directory`` on *relaxed_dir*, and its
-        results are merged into *mlip_results* with code-prefixed keys::
+        results are merged into *mlip_results* with code-prefixed keys:
+        ``{mlip_code}_{static_code}``.
 
-            "{mlip_code}_{static_code}"
+        Args:
+            relaxed_dir: Directory containing the relaxed structure files.
+            mlip_results: List of result dictionaries from the MLIP calculations.
+            save_artifacts: Whether to save artifacts from the static calculators.
+
+        Returns:
+            List[Dict[str, Any]]: List of merged result dictionaries.
         """
         by_name: Dict[str, Dict[str, Any]] = {r["name"]: r for r in mlip_results}
 
@@ -681,7 +827,7 @@ class MLIPAdapter(BaseCalculator):
         return _MLIP_WORKER_SCRIPT
 
 
-# ── Embedded micro-env script ──────────────────────────────────────────────
+# ── Embedded Worker Script ────────────────────────────────────────────────────
 # This script is written to a temp file and executed by the micro-env's
 # Python interpreter.  It must be entirely self-contained (no crystall
 # imports, no pymatgen).

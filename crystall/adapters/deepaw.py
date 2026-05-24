@@ -1,7 +1,7 @@
 """DeePAW calculator adapter with micro-environment and Singularity container support.
 
 Runs DeePAW static calculation inside an isolated micro-environment managed by
-:class:`~crystall.calculators.BaseCalculator`.  The container image is
+:class:`~crystall.calculators.BaseCalculator`. The container image is
 built from a Zenodo-sourced archive and then invoked at runtime via
 Singularity/Apptainer with GPU passthrough.
 
@@ -51,7 +51,7 @@ class DeePAWAdapter(BaseCalculator):
     supported_devices: List[str] = ["cuda"]
 
     def __init__(self, nx: int = 10, ny: int = 10, nz: int = 10, **kwargs):
-        """Initialise the adapter.
+        """Initialize the adapter.
 
         Args:
             nx: Number of grid points along the first lattice vector.
@@ -64,10 +64,14 @@ class DeePAWAdapter(BaseCalculator):
         self._ny = ny
         self._nz = nz
 
-    # ── OS / runtime guards ─────────────────────────────────────────────
+    # ── Runtime Guards ────────────────────────────────────────────────────────
 
     def _assert_gpu_runtime_supported(self) -> None:
-        """Raise RuntimeError if NVIDIA GPU runtime is unavailable."""
+        """Verify that the NVIDIA GPU runtime is available.
+
+        Raises:
+            RuntimeError: If NVIDIA GPU runtime version/device is not found.
+        """
         if Path("/proc/driver/nvidia/version").exists():
             return
         try:
@@ -88,7 +92,14 @@ class DeePAWAdapter(BaseCalculator):
         )
 
     def _resolve_singularity_binary(self) -> str:
-        """Resolve singularity or apptainer binary path."""
+        """Resolve the path to the Singularity or Apptainer binary.
+
+        Returns:
+            The resolved binary name (singularity or apptainer).
+
+        Raises:
+            RuntimeError: If neither binary is found in the PATH.
+        """
         for binary in ("singularity", "apptainer"):
             if (Path("/usr/bin") / binary).exists():
                 return binary
@@ -101,34 +112,44 @@ class DeePAWAdapter(BaseCalculator):
             "Neither 'singularity' nor 'apptainer' found in PATH."
         )
 
-    # ── Micro-env path helpers ─────────────────────────────────────────
+    # ── Environment Helpers ───────────────────────────────────────────────────
 
     def _downloads_dir(self) -> Path:
-        """Directory for split archive parts during installation."""
+        """Get the directory path for split archive downloads.
+
+        Returns:
+            The downloads directory Path.
+        """
         return self._env_path() / "downloads"
 
     def _container_path(self) -> Path:
-        """Path to the final Singularity container image."""
+        """Get the path to the compiled Singularity container image file.
+
+        Returns:
+            The container SIF file Path.
+        """
         return self._env_path() / "deepaw-cpp-v1.sif"
 
-    # ── Hook overrides ───────────────────────────────────────────────────
+    # ── Setup Hooks ───────────────────────────────────────────────────────────
 
     def _input_structure_format(self) -> str:
         return "*"
 
     def _setup_preflight(self) -> None:
-        """DeePAW-specific preflight: verify GPU runtime and Singularity/Apptainer.
+        """Run DeePAW-specific preflight checks.
 
-        Extends base preflight (OS check + device check against ``supported_devices``,
-        which for DeePAW is ``['cuda']``) with the more specific GPU-runtime probe
-        and Singularity binary resolution.
+        Verifies OS support, GPU runtime availability, and presence of Singularity/Apptainer.
         """
         super()._setup_preflight()
         self._assert_gpu_runtime_supported()
         self._resolve_singularity_binary()
 
     def _layer3_setup_commands(self) -> List[str]:
-        """Layer-3 shell commands that download and build the DeePAW container."""
+        """Layer-3 shell commands to download and compile the DeePAW container.
+
+        Returns:
+            A list of shell commands.
+        """
         env_path = str(self._env_path())
         downloads_dir = str(self._downloads_dir())
         container_path = str(self._container_path())
@@ -157,7 +178,11 @@ class DeePAWAdapter(BaseCalculator):
         ]
 
     def _request_extras(self) -> dict:
-        """Pass grid dimensions and container path to the worker script."""
+        """Pass grid dimensions and container path details to the worker script.
+
+        Returns:
+            A dictionary of request extra parameters.
+        """
         extras = super()._request_extras()
         marker_keys = dict(extras.get("marker_keys", {}))
         marker_keys["chgcar"] = _CHGCAR_RAW_KEY
@@ -176,6 +201,12 @@ class DeePAWAdapter(BaseCalculator):
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        """Save specialized artifact files for calculated objectives.
+
+        Args:
+            result: The deserialized calculation results.
+            source_path: Absolute path to the original structure source file.
+        """
         super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
@@ -200,7 +231,7 @@ class DeePAWAdapter(BaseCalculator):
         except Exception as exc:
             warnings.warn(f"[DeePAWAdapter] Could not write CHGCAR for {stem}: {exc}")
 
-    # ── Execution ────────────────────────────────────────────────────────
+    # ── Execution Interface ───────────────────────────────────────────────────
 
     def run_on_structure(
         self,
@@ -210,8 +241,13 @@ class DeePAWAdapter(BaseCalculator):
     ) -> Dict[str, Any]:
         """Run DeePAW static calculation on a single structure file.
 
-        When ``save_artifacts=True``, the predicted CHGCAR is written to the
-        same directory as the input file as ``{stem}_DEEPAW_RHO.vasp``.
+        Args:
+            file_path: Path to the input structure file.
+            objectives: Optional list of objective codes to compute.
+            **kwargs: Additional runtime arguments.
+
+        Returns:
+            A dictionary containing the parsed calculation results.
         """
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
@@ -238,9 +274,13 @@ class DeePAWAdapter(BaseCalculator):
     ) -> list[Dict[str, Any]]:
         """Run DeePAW static calculation on all structures in a directory.
 
-        When ``save_artifacts=True``, predicted CHGCARs are written to the
-        parent of the input directory (same location as ``objectives.json``)
-        as ``{stem}_DEEPAW_RHO.vasp``.
+        Args:
+            path: Path to the target directory.
+            objectives: Optional list of objective codes to compute.
+            **kwargs: Additional runtime arguments.
+
+        Returns:
+            A list of result dictionaries for each processed structure.
         """
         self._assert_os_supported()
         self._assert_gpu_runtime_supported()
@@ -266,10 +306,14 @@ class DeePAWAdapter(BaseCalculator):
         return parsed_results
 
     def _run_code(self) -> str:
-        """Return a self-contained Python worker script."""
+        """Return a self-contained Python worker script.
+
+        Returns:
+            The embedded python script as a string.
+        """
         return _DEEPAW_WORKER_SCRIPT
 
-    # ── Serialization ────────────────────────────────────────────────
+    # ── Serialization ─────────────────────────────────────────────────────────
 
     @staticmethod
     def _deserialize_worker_value(value: Any) -> Any:
@@ -279,6 +323,12 @@ class DeePAWAdapter(BaseCalculator):
         ``_CHGCAR_RAW_KEY``.  Deserialization runs in the main crystall env
         where pymatgen is available, so ``Chgcar.from_file`` can be used via
         a temporary file (pymatgen does not expose a ``from_str`` API).
+
+        Args:
+            value: The raw objective value from the worker.
+
+        Returns:
+            The deserialized Python object.
         """
         if isinstance(value, dict):
             if _CHGCAR_RAW_KEY in value:
@@ -309,7 +359,14 @@ class DeePAWAdapter(BaseCalculator):
 
     @classmethod
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Deserialize marker-wrapped values in a result dict."""
+        """Deserialize marker-wrapped values in a result dict.
+
+        Args:
+            result: The raw result dictionary from the worker.
+
+        Returns:
+            The result dictionary with deserialized values.
+        """
         if not isinstance(result, dict):
             return result
         props = result.get("objectives")
@@ -327,9 +384,9 @@ _DEEPAW_WORKER_SCRIPT = """\
 import sys
 import os
 import json
- import tempfile
- import shutil
- import subprocess as sp
+import tempfile
+import shutil
+import subprocess as sp
 
 
 def main():

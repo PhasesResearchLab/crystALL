@@ -1,16 +1,17 @@
-"""crystall.adapters.upetdos — UPET-DOS adapter.
+"""UPET-DOS adapter and embedded worker script.
 
 Provides an adapter for the PET-MAD-DOS calculator from the upet package.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, List, Any, Sequence, Literal
 import logging
-from pymatgen.electronic_structure.dos import CompleteDos
 import os
 import warnings
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Sequence
+
+from pymatgen.electronic_structure.dos import CompleteDos
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 
@@ -54,34 +55,70 @@ class UPETDosAdapter(BaseCalculator):
     ]  # worker auto-selects via torch.cuda.is_available()
 
     def __init__(self, **kwargs) -> None:
+        """Initialize the UPET-DOS adapter.
+
+        Args:
+            **kwargs: Keyword arguments passed to the base class.
+        """
         super().__init__(**kwargs)
 
+    # ── Environment Helpers ───────────────────────────────────────────────────
+
     def _input_structure_format(self) -> str:
+        """Get the expected input structure format pattern.
+
+        Returns:
+            str: The format pattern.
+        """
         return "*"
 
     def _layer2_dependencies(self) -> List[str]:
+        """Get the pip dependencies required for layer 2 of the micro-environment.
+
+        Returns:
+            List[str]: List of dependency strings.
+        """
         return ["torch==2.10.0"]
 
     def _layer3_setup_commands(self) -> List[str]:
+        """Get the setup commands required for layer 3 of the micro-environment.
+
+        Returns:
+            List[str]: List of shell commands.
+        """
         return [
             "pip install upet",
             "pip install ase",
             "pip install pymatgen",
         ]
 
-    def _run_code(self) -> str:
-        return _UPETDOS_WORKER_SCRIPT
+    # ── Deserialization ───────────────────────────────────────────────────────
 
     @classmethod
     def _deserialize_worker_value(cls, key: str, value: Any) -> Any:
-        """Deserialize custom objects from worker output."""
+        """Deserialize custom objects from worker output.
+
+        Args:
+            key: The objective code.
+            value: The raw serialized value.
+
+        Returns:
+            Any: The deserialized Python object.
+        """
         if key == "UPETDOS_DOS" and isinstance(value, dict):
             return CompleteDos.from_dict(value)
         return value
 
     @classmethod
     def _deserialize_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Deserialize payload emitted with canonical objective-code keys."""
+        """Deserialize payload emitted with canonical objective-code keys.
+
+        Args:
+            result: The raw result dictionary.
+
+        Returns:
+            Dict[str, Any]: The result dictionary with deserialized values.
+        """
         if "objectives" in result and isinstance(result["objectives"], dict):
             props = result["objectives"]
             result["objectives"] = {
@@ -93,8 +130,17 @@ class UPETDosAdapter(BaseCalculator):
     def _deserialize_results(
         cls, results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Deserialize payload arrays inside a list of results."""
+        """Deserialize payload arrays inside a list of results.
+
+        Args:
+            results: A list of raw result dictionaries.
+
+        Returns:
+            List[Dict[str, Any]]: A list of deserialized result dictionaries.
+        """
         return [cls._deserialize_result(res) for res in results]
+
+    # ── Execution Interface ───────────────────────────────────────────────────
 
     def run_on_structure(
         self,
@@ -102,6 +148,16 @@ class UPETDosAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
+        """Run the calculator on a single structure file.
+
+        Args:
+            file_path: Path to the input structure file.
+            objectives: Optional list of objective codes to compute.
+            **kwargs: Additional runtime arguments.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the parsed calculation results.
+        """
         res = super().run_on_structure(
             file_path,
             objectives=objectives,
@@ -119,6 +175,16 @@ class UPETDosAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
+        """Run the calculator on all supported structures in a directory.
+
+        Args:
+            path: Path to the target directory.
+            objectives: Optional list of objective codes to compute.
+            **kwargs: Additional runtime arguments.
+
+        Returns:
+            List[Dict[str, Any]]: A list of result dictionaries for each processed structure.
+        """
         results = super().run_on_directory(
             path,
             objectives=objectives,
@@ -134,9 +200,17 @@ class UPETDosAdapter(BaseCalculator):
         self._maybe_print_results(parsed_results)
         return parsed_results
 
+    # ── Serialization ─────────────────────────────────────────────────────────
+
     def _save_artifact_objectives(
         self, result: Dict[str, Any], source_path: str
     ) -> None:
+        """Save specialized artifact files for calculated objectives.
+
+        Args:
+            result: The deserialized calculation results.
+            source_path: Absolute path to the original structure source file.
+        """
         super()._save_artifact_objectives(result, source_path)
         if not self.save_artifacts:
             return
@@ -154,10 +228,20 @@ class UPETDosAdapter(BaseCalculator):
 
             plotter = DosPlotter()
             plotter.add_dos("Total DOS", dos)
-            plotter.save_plot(out_path, img_format="pdf")
+            plotter.save_plot(out_path)
         except Exception as exc:
             warnings.warn(f"[UPETDosAdapter] Could not write DOS for {stem}: {exc}")
 
+    def _run_code(self) -> str:
+        """Get the Python code to run in the micro-environment.
+
+        Returns:
+            str: The worker script source code.
+        """
+        return _UPETDOS_WORKER_SCRIPT
+
+
+# ── Embedded micro-env script ──────────────────────────────────────────────
 
 _UPETDOS_WORKER_SCRIPT = """\
 import os

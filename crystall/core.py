@@ -36,18 +36,18 @@ from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 from crystall.calculators import ObjectiveRegistry, load_adapters
 from crystall.prototypes import run_local, run_MPDD, run_MPDD_devs, run_optimade
 
-# Disable undesired warnings from torch and pymatgen ******************************************
+# ── Warning suppression ───────────────────────────────────────────────────────
 warnings.filterwarnings(
     "ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*"
 )
 warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
 
-# Default descriptor for pySIPFENN ************************************************************
+# ── Default descriptor for pySIPFENN ──────────────────────────────────────────
 _DEFAULT_PYSIPFENN_DESCRIPTOR = "KS2022"
 
 
-# Top-Level Functions *************************************************************************
+# ── Top-Level Functions ───────────────────────────────────────────────────────
 def _pysipfenn_defaults(descriptor: str) -> tuple[str, List[str], str]:
     spec = importlib.util.find_spec("pysipfenn")
     if spec is None or not spec.submodule_search_locations:
@@ -77,7 +77,7 @@ def _pysipfenn_defaults(descriptor: str) -> tuple[str, List[str], str]:
     return package_root, compatible_models, default_model
 
 
-# Convenience High-Level API Classes **********************************************************
+# ── Convenience High-Level API Classes ────────────────────────────────────────
 class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` prototypes from either MPDD or a local
@@ -928,7 +928,7 @@ class CrystALLSearch:
             optimizer=optimizer,
             **kwargs,
         )
-        # Be tolerant to partial results: merge what we have and warn on mismatch
+        # Be tolerant to partial results: merge available results and warn on mismatch
         if len(results) != len(self.prototypes):
             warnings.warn(
                 f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names."
@@ -2102,7 +2102,7 @@ class CrystALLSearch:
             iplot(figure, filename=file_name)
 
 
-# Package Metadata ****************************************************************************
+# ── Package Metadata ──────────────────────────────────────────────────────────
 __name__ = "crystall"
 __version__ = "X.X.X"
 __release__ = "YYYY-MM"

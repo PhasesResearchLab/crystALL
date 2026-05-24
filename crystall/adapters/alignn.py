@@ -1,7 +1,7 @@
 """ALIGNN calculator adapter with micro-environment support.
 
 Runs MPDD-ALIGNN static calculation inside an isolated micro-environment managed
-by :class:`~crystall.calculators.BaseCalculator`.  The micro-env is created under
+by :class:`~crystall.calculators.BaseCalculator`. The micro-env is created under
 ``<env_root>/alignn/``.
 """
 
@@ -14,18 +14,21 @@ from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry
 class AlignnAdapter(BaseCalculator):
     """Adapter for running MPDD-ALIGNN static calculation inside a micro-environment.
 
-    Example (standalone usage)::
-
-        adapter = AlignnAdapter()
-        adapter.setup_env()                          # one-time install
-        results = adapter.run_on_directory("./dir")  # batch calculation
+    Example:
+        >>> adapter = AlignnAdapter()
+        >>> adapter.setup_env()
+        >>> results = adapter.run_on_directory("./dir")
     """
 
     name = "ALIGNN"
     calculator_type: Literal["mlip", "static"] = "static"
 
-    def __init__(self, **kwargs):
-        """Initialize ALIGNN adapter."""
+    def __init__(self, **kwargs) -> None:
+        """Initialize the ALIGNN adapter.
+
+        Args:
+            **kwargs: Configuration arguments forwarded to BaseCalculator.
+        """
         super().__init__(**kwargs)
 
     objectives: ObjectiveRegistry = ObjectiveRegistry(
@@ -97,19 +100,22 @@ class AlignnAdapter(BaseCalculator):
         ]
     )
     supported_os: List[str] = ["windows", "macos", "linux"]
-    supported_devices: List[str] = ["cpu"]  # torch installed without CUDA index
+    supported_devices: List[str] = ["cpu"]
 
-    # ── Micro-env path ──────────────────────────────────────────────────────
-
-    # ── Hook overrides ──────────────────────────────────────────────────────
+    # ── Setup Hooks ───────────────────────────────────────────────────────────
 
     def _layer3_setup_commands(self) -> List[str]:
+        """Return shell commands to initialize layer 3 of the micro-environment.
+
+        Returns:
+            A list of package installation shell commands.
+        """
         return [
             "pip install 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html",
             "pip install 'mpdd-alignn>=1.0.6'",
         ]
 
-    # ── Execution ───────────────────────────────────────────────────────────
+    # ── Execution Interface ───────────────────────────────────────────────────
 
     def run_on_structure(
         self,
@@ -117,7 +123,16 @@ class AlignnAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Run ALIGNN static calculation on a single structure file."""
+        """Run ALIGNN static calculation on a single structure file.
+
+        Args:
+            file_path: Path to the input structure file.
+            objectives: Optional list of objective codes to compute.
+            **kwargs: Additional runtime arguments.
+
+        Returns:
+            A dictionary containing the parsed calculation results.
+        """
         result = super().run_on_structure(
             file_path,
             objectives=objectives,
@@ -132,7 +147,16 @@ class AlignnAdapter(BaseCalculator):
         objectives: Sequence[str] | None = None,
         **kwargs,
     ) -> list[Dict[str, Any]]:
-        """Run ALIGNN static calculation on all structures in a directory."""
+        """Run ALIGNN static calculation on all structures in a directory.
+
+        Args:
+            path: Path to the target directory.
+            objectives: Optional list of objective codes to compute.
+            **kwargs: Additional runtime arguments.
+
+        Returns:
+            A list of result dictionaries for each processed structure.
+        """
         results = super().run_on_directory(
             path,
             objectives=objectives,
@@ -144,13 +168,8 @@ class AlignnAdapter(BaseCalculator):
     def _run_code(self) -> str:
         """Return a self-contained Python script for ALIGNN static calculation.
 
-        The script:
-        1. Reads a request JSON from ``sys.argv[1]``.
-        2. Imports ``alignn.pretrained`` and downloads models if needed.
-        3. Calls ``run_models_from_directory()`` on the directory containing
-           the requested files.
-        4. Rounds results to 4 decimal places.
-        5. Writes a results JSON to ``sys.argv[2]``.
+        Returns:
+            The embedded python script as a string.
         """
         return _ALIGNN_WORKER_SCRIPT
 
@@ -362,7 +381,6 @@ def main():
                 fp,
                 mode="serial",
                 models=requested_model_names,
-                format=fmt_hint,
             )
         else:
             # No explicit format hint is needed here: BaseCalculator stages
