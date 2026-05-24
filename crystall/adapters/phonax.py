@@ -65,7 +65,7 @@ class PhonaxAdapter(BaseCalculator):
     # by objective code inside the worker (e.g. PBS vs PDOS).
     objectives: ObjectiveRegistry = ObjectiveRegistry(
         [
-            # NequIP uniIAP -------------------------------------------------------
+            # ── NequIP uniIAP ────────────────────────────────────────────────────
             Objective(
                 code="PHONAX_PBS_NEQUIP",
                 description="Phonon Band Structure — NequIP uniIAP",
@@ -80,7 +80,7 @@ class PhonaxAdapter(BaseCalculator):
                 backend="Phonax",
                 kind="artifact",
             ),
-            # NequIP uniIAP fine-tuned --------------------------------------------
+            # ── NequIP uniIAP fine-tuned ─────────────────────────────────────────
             Objective(
                 code="PHONAX_PBS_NEQUIP_FT",
                 description="Phonon Band Structure — NequIP uniIAP fine-tuned",
@@ -95,7 +95,7 @@ class PhonaxAdapter(BaseCalculator):
                 backend="Phonax",
                 kind="artifact",
             ),
-            # NequIP JAX uniIAP ---------------------------------------------------
+            # ── NequIP JAX uniIAP ────────────────────────────────────────────────
             Objective(
                 code="PHONAX_PBS_NEQUIP_JAX",
                 description="Phonon Band Structure — NequIP JAX uniIAP",
@@ -110,7 +110,7 @@ class PhonaxAdapter(BaseCalculator):
                 backend="Phonax",
                 kind="artifact",
             ),
-            # MACE uniIAP ---------------------------------------------------------
+            # ── MACE uniIAP ──────────────────────────────────────────────────────
             Objective(
                 code="PHONAX_PBS_MACE",
                 description="Phonon Band Structure — MACE uniIAP",
@@ -125,7 +125,7 @@ class PhonaxAdapter(BaseCalculator):
                 backend="Phonax",
                 kind="artifact",
             ),
-            # MACE uniIAP fine-tuned ----------------------------------------------
+            # ── MACE uniIAP fine-tuned ───────────────────────────────────────────
             Objective(
                 code="PHONAX_PBS_MACE_FT",
                 description="Phonon Band Structure — MACE uniIAP fine-tuned",

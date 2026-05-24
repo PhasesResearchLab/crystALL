@@ -736,7 +736,7 @@ def run_MPDD_devs(
     print("Using MPDD Database with collections: " + ", ".join(collections))
 
     if target_prototypes == "native":
-        # ************************* Try to find materials already in the MPDD database **********************************
+        # ── Try to find materials already in the MPDD database ──────────────────────
 
         out_dir = f"{formula_str}-{source_str}-prototypes(native)"
 
@@ -839,12 +839,12 @@ def run_MPDD_devs(
         return out_dir
 
     elif target_prototypes == "non-native":
-        # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
+        # ── Try to find materials from the MPDD database that can be adjusted to the target formula ──
 
         # Sorted fractions dictionary query
         sortedFractionsDictQuery = comp2acomp_q(target_composition_dict, devs)
 
-        # ************************************** Count prototypes ********************************************************
+        # ── Count prototypes ────────────────────────────────────────────────────────
 
         print("\nDetecting Matching Input Structures:")
         foundTotal = 0
@@ -855,7 +855,7 @@ def run_MPDD_devs(
 
         print("\nTotal of " + str(foundTotal) + " structures available.\n")
 
-        # ********************************* Substitution elements combination ********************************************
+        # ── Substitution elements combination ───────────────────────────────────────
 
         out_dir = f"{formula_str}-{source_str}-prototypes"
         print("Final Prototype Directory: " + out_dir)
