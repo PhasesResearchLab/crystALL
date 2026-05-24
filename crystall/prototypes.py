@@ -38,8 +38,8 @@ _STRUCTURE_FORMATS: dict[str, list[str]] = {
 
 
 def _read_structure_format(
-    filepath: Union[str, os.PathLike], file_format: Union[str, None] = None
-) -> Union[Tuple[str, str], None]:
+    filepath: Union[str, os.PathLike], file_format: str | None = None
+) -> Tuple[str, str] | None:
     """Determine structure format, preferring file_format override if provided.
 
     Args:

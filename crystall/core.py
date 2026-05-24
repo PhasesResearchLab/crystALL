@@ -20,7 +20,7 @@ from plotly.offline import plot, iplot
 from urllib.error import HTTPError
 from decimal import Decimal, ROUND_DOWN
 from itertools import combinations
-from typing import Any, Sequence, List, Dict, Union, Literal, Optional
+from typing import Any, Sequence, List, Dict, Union, Literal
 
 # ML / Data
 from pymongo.database import Database
@@ -87,7 +87,7 @@ class CrystALLSearch:
     """
 
     def __init__(
-        self, target_formula: Union[str, Composition], calculator: Optional[Any] = None
+        self, target_formula: Union[str, Composition], calculator: Any | None = None
     ) -> None:
         """
         Initialize the CrystALLSearch class.
@@ -114,10 +114,10 @@ class CrystALLSearch:
                 "Target formula must be a string or a pymatgen Composition object"
             )
 
-        self.Calculator = calculator if calculator is not None else None
+        self.Calculator: Any | None = calculator if calculator is not None else None
 
-        self.MPDD = None
-        self.prototype_path: Optional[str] = None
+        self.MPDD: Database | None = None
+        self.prototype_path: str | None = None
         self._optimade_provider_registry: Dict[str, Dict[str, str]] = {}
         self._optimade_active_base_urls: List[str] = []
 
@@ -127,7 +127,7 @@ class CrystALLSearch:
         self._objective_registry: Dict[
             str, Any
         ] = {}  # code -> ObjectiveEntry, built after adapters load
-        self.ks2022: np.ndarray = None
+        self.ks2022: np.ndarray | None = None
         self.prototype_path = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
@@ -442,7 +442,7 @@ class CrystALLSearch:
             print(f"{Fore.GREEN}✔ {calculator_name} ready.{Style.RESET_ALL}")
 
     def setup_MPDD(
-        self, MPDD: Database = None, collections: List[str] = ["curated"]
+        self, MPDD: Database | None = None, collections: List[str] = ["curated"]
     ) -> None:
         """
         Establish a connection to the MPDD database and set the collections to search in.
@@ -480,9 +480,9 @@ class CrystALLSearch:
 
     def setup_OPTIMADE(
         self,
-        providers: List[str] = None,
-        base_urls: List[str] = None,
-        exclude_providers: List[str] = None,
+        providers: List[str] | None = None,
+        base_urls: List[str] | None = None,
+        exclude_providers: List[str] | None = None,
         check_reachable: bool = False,
     ) -> List[Dict[str, Union[str, bool, None]]]:
         """
@@ -683,7 +683,7 @@ class CrystALLSearch:
             "material.structID", "material.volNormStructID"
         ] = "material.structID",
         limit: int = 1000,
-        devs: Dict[str, int] = None,
+        devs: Dict[str, int] | None = None,
     ) -> None:
         """
         Generate prototype materials from the MPDD database based on the target formula.
@@ -732,7 +732,7 @@ class CrystALLSearch:
             {"index": i + 1, "name": file} for i, file in enumerate(inputFiles)
         ]
 
-    def generate_local(self, prototype_path: str = None) -> None:
+    def generate_local(self, prototype_path: str | None = None) -> None:
         """
         Generate prototypes from a local directory containing POSCAR or CIF files.
 
@@ -1204,7 +1204,7 @@ class CrystALLSearch:
             )
 
     def cluster_prototypes_KMeans(
-        self, n_clusters: int = None, same_composition: bool = False
+        self, n_clusters: int | None = None, same_composition: bool = False
     ) -> None:
         """
         Cluster the prototypes using KMeans, assign each data point to its cluster, and select the best prototypes.
@@ -1533,7 +1533,7 @@ class CrystALLSearch:
 
     def plot_barchart(
         self,
-        objective: Union[str, List[str]] = None,
+        objective: Union[str, List[str]] | None = None,
         save: bool = False,
         file_name: str = "barchart_clusterPrototypes",
         color_blind: bool = False,
@@ -1697,7 +1697,7 @@ class CrystALLSearch:
 
     def plot_2D(
         self,
-        objective: Union[str, List[str]] = None,
+        objective: Union[str, List[str]] | None = None,
         save: bool = False,
         file_name: str = "2D_clusterPrototypes",
         marker_symbol: bool = False,
@@ -1907,7 +1907,7 @@ class CrystALLSearch:
 
     def plot_3D(
         self,
-        objective: Union[str, List[str]] = None,
+        objective: Union[str, List[str]] | None = None,
         save: bool = False,
         file_name: str = "3D_clusterPrototypes",
         marker_symbol: bool = False,

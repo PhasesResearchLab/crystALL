@@ -11,7 +11,7 @@ The micro-env is created under ``<env_root>/deepaw/``.
 import os
 import subprocess as sp
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Sequence, Any
+from typing import Dict, List, Literal, Sequence, Any
 import warnings
 
 from crystall.calculators import BaseCalculator, Objective, ObjectiveRegistry

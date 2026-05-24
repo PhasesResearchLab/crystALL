@@ -18,7 +18,7 @@ from colorama import Fore, Style
 from dataclasses import dataclass
 
 import numpy as np
-from typing import Any, Sequence, List, Dict, Literal, Optional
+from typing import Any, Sequence, List, Dict, Literal
 
 from duecredit import BibTeX, Doi, due
 
@@ -32,7 +32,7 @@ DispatchPrimitive = str | int | float | bool | None
 DispatchSpec = tuple[tuple[str, DispatchPrimitive], ...]
 
 
-def _load_objectives_json(path: str) -> dict:
+def _load_objectives_json(path: str) -> dict[str, Any]:
     if not os.path.isfile(path):
         return {}
     try:
@@ -45,7 +45,7 @@ def _load_objectives_json(path: str) -> dict:
 def _upsert_objectives_json(
     json_path: str,
     filename: str,
-    new_objectives: dict,
+    new_objectives: dict[str, Any],
 ) -> None:
     data = _load_objectives_json(json_path)
     entry = data.get(filename, {"objectives": {}})
@@ -65,7 +65,7 @@ def _upsert_objectives_json(
                 pass
 
 
-def _is_done(entry: dict | None, requested_keys: list[str]) -> bool:
+def _is_done(entry: dict[str, Any] | None, requested_keys: list[str]) -> bool:
     if entry is None:
         return False
     present = entry.get("objectives", {})
@@ -139,7 +139,7 @@ class ObjectiveRegistry:
         """Check if a code is registered."""
         return code in self._by_code
 
-    def get(self, code: str, default=None) -> Objective | None:
+    def get(self, code: str, default: Objective | None = None) -> Objective | None:
         """Return the objective for *code*, or *default* if not found."""
         return self._by_code.get(code, default)
 
@@ -154,7 +154,7 @@ class ObjectiveRegistry:
         return [o.code for o in self._objectives]
 
     def resolve_dispatch_keys(
-        self, codes: Optional[List[str]] = None
+        self, codes: List[str] | None = None
     ) -> List[DispatchSpec]:
         """Return dispatch keys for the requested codes, or all if ``None``.
 
@@ -178,7 +178,7 @@ class ObjectiveRegistry:
         """Return objective codes matching a specific kind tag."""
         return [o.code for o in self._objectives if o.kind == kind]
 
-    def resolve_backends(self, codes: Optional[List[str]] = None) -> set:
+    def resolve_backends(self, codes: List[str] | None = None) -> set[str]:
         """Return the set of backend names for the requested codes, or all."""
         src = (
             self._objectives
@@ -509,7 +509,7 @@ class BaseCalculator:
         slug = re.sub(r"[^a-z0-9]", "", self.name.lower())
         return self._env_root() / slug
 
-    def _cite_at_runtime(self, requested_codes: Optional[Sequence[str]] = None) -> None:
+    def _cite_at_runtime(self, requested_codes: Sequence[str] | None = None) -> None:
         """Emit backend citations for requested objectives."""
 
         def _cite_backends(b: set[str]) -> None:
@@ -848,7 +848,7 @@ class BaseCalculator:
             f"{self.__class__.__name__} must implement _run_code()."
         )
 
-    def _request_extras(self) -> dict:
+    def _request_extras(self) -> dict[str, Any]:
         """Additional keys merged into the request JSON sent to the worker.
 
         Base implementation propagates marker keys to workers.
@@ -1116,7 +1116,7 @@ class BaseCalculator:
         *,
         verbose: bool = False,
         **kwargs,
-    ) -> list:
+    ) -> list[Dict[str, Any]]:
         """Write a request JSON, execute the worker script in the micro-env,
         and parse the results JSON.
 
@@ -1478,7 +1478,7 @@ class BaseCalculator:
     # ── Utility ─────────────────────────────────────────────────────────────
 
     @staticmethod
-    def vector_to_scalar(type: str, data: Any) -> Optional[float]:
+    def vector_to_scalar(type: str, data: Any) -> float | None:
         """Generic conversion helper available to all adapters.
 
         Supported types:

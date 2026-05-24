@@ -22,7 +22,7 @@ import re
 import json
 import warnings
 from pathlib import Path
-from typing import Dict, List, Sequence, Optional, Any, Literal, Tuple
+from typing import Dict, List, Sequence, Any, Literal, Tuple
 from colorama import Fore, Style
 
 from crystall.calculators import (
@@ -139,9 +139,9 @@ class MLIPAdapter(BaseCalculator):
     def __init__(
         self,
         model_name: str,
-        device: Optional[str] = None,
-        static: Optional[List[BaseCalculator]] = None,
-        custom: Optional[Dict[str, Any]] = None,
+        device: str | None = None,
+        static: List[BaseCalculator] | None = None,
+        custom: Dict[str, Any] | None = None,
         **kwargs,
     ):
         """Initialize the MLIPAdapter instance.
