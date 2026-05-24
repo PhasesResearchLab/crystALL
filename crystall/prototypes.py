@@ -1141,11 +1141,11 @@ def ordered_allowed_substitutions(
         allInRangeSubstitutions.append(inRangeSubstitutions)
 
     # E.g. [['Al', 'Fe', 'N'], ['Al', 'Fe', 'N'], ['N']]
-    allInRangeSubstitutionPermutations = list(product(*allInRangeSubstitutions))
-    allAllowedSubstitutions = []
-    for irsp in allInRangeSubstitutionPermutations:
-        if len(irsp) == len(set(irsp)):
-            allAllowedSubstitutions += [irsp]
+    allAllowedSubstitutions = [
+        irsp
+        for irsp in product(*allInRangeSubstitutions)
+        if len(irsp) == len(set(irsp))
+    ]
     # E.g. [('Al', 'Fe', 'N'), ('Fe', 'Al', 'N')]
 
     return allAllowedSubstitutions
