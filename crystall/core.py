@@ -984,12 +984,11 @@ class CrystALLSearch:
         MPDD_curated = self.MPDD["curated"]
 
         eList = self.target_formula.chemical_system.split("-")
-        sysList = []
-        for nComponents in range(eList.__len__()):
-            for c in combinations(eList, 1 + nComponents):
-                t = list(c)
-                t.sort()
-                sysList.append("-".join(t))
+        sysList = [
+            "-".join(sorted(c))
+            for nComponents in range(len(eList))
+            for c in combinations(eList, 1 + nComponents)
+        ]
 
         entriesForPD = []
         formulaSet = set()
