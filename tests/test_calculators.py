@@ -654,24 +654,6 @@ class TestObjectiveRegistry(unittest.TestCase):
         cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
         self.assertEqual(cas._resolve_to_code("ALIGNN_EF_MP"), "ALIGNN_EF_MP")
 
-    def test_resolve_to_code_accepts_full_key(self) -> None:
-        """_resolve_to_code extracts the bare code from a legacy 'CODE: description' key."""
-        reg = ObjectiveRegistry(
-            [
-                Objective(
-                    code="ALIGNN_EF_MP",
-                    description="Formation energy",
-                    dispatch_key=(("model", "mp_e_form"),),
-                    backend="ALIGNN",
-                )
-            ]
-        )
-        cas = self._make_minimal_search(registry=reg, predicted=["ALIGNN_EF_MP"])
-        self.assertEqual(
-            cas._resolve_to_code("ALIGNN_EF_MP: Formation energy (eV/atom)"),
-            "ALIGNN_EF_MP",
-        )
-
     def test_resolve_to_code_raises_on_unknown(self) -> None:
         """_resolve_to_code raises ValueError naming the bad code and a prefix-matched hint."""
         reg = ObjectiveRegistry(

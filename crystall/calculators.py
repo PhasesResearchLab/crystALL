@@ -13,7 +13,6 @@ import os
 import sys
 import warnings
 import inspect
-import pprint
 from pathlib import Path
 from colorama import Fore, Style
 from dataclasses import dataclass
@@ -369,7 +368,7 @@ class BaseCalculator:
     Subclasses override the hook methods to customise environment creation and
     computation. The lifecycle is split into two phases:
 
-    1. **Setup** — ``setup_env()`` creates an isolated venv via ``uv``,
+    1. **Setup** — ``setup_env()`` creates an isolated micro-environment,
        installs PyTorch, base dependencies, and model-specific packages.
     2. **Execution** — ``run_on_structure()`` / ``run_on_directory()`` dispatch
        a self-contained Python script into the micro-env via ``subprocess``.
@@ -451,7 +450,7 @@ class BaseCalculator:
 
     # ── Micro-env path helpers ──────────────────────────────────────────────
 
-    def __init_subclass__(cls, **kwargs: object) -> None:  # noqa: D105
+    def __init_subclass__(cls, **kwargs: object) -> None:
         """Warn at class-creation time when an override omits ``super()``.
 
         By default, direct overrides of :class:`BaseCalculator` methods are
@@ -661,17 +660,11 @@ class BaseCalculator:
         return env / "bin" / "python"
 
     def _uv_bin(self) -> str:
-        """Resolve the full path to the ``uv`` binary.
-
-        Search order:
-          1. ``<sys.prefix>/bin/uv`` (active conda/venv — most common)
-          2. ``shutil.which('uv')`` on PATH
-          3. Bare ``'uv'`` as last resort
-        """
+        """Resolves the path to the environment manager binary used internally."""
         from pathlib import Path
         import shutil as _shutil
 
-        # sys.prefix / bin / uv (covers conda envs where uv is pip-installed)
+        # sys.prefix / bin / <bin> (covers environments where the manager is pip-installed)
         candidate = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin") / "uv"
         if candidate.exists():
             return str(candidate)
@@ -1048,7 +1041,7 @@ class BaseCalculator:
         """Dispatch a single setup command inside the micro-env.
 
         Handles three styles (ported from ``mwe_runner.py``):
-          - ``pip install ...``  → ``uv pip install ... --python <micro_python>``
+          - ``pip install ...``  → installed into the micro-environment Python
           - ``python -c "..."``  → ``<micro_python> -c "..."``
           - anything else        → shell command with micro-env's ``bin/`` on PATH
         """
@@ -1154,7 +1147,6 @@ class BaseCalculator:
         file_format = kwargs.pop("file_format", None)
 
         from crystall.prototypes import _read_structure_format, _STRUCTURE_FORMATS
-        import tempfile
         import shutil
 
         file_formats_map = {}
@@ -1571,4 +1563,4 @@ class BaseCalculator:
 
 # ── Adapter re-exports ───────────────────────────────────────────────────────
 
-from crystall.adapters import *  # noqa: E402, F401, F403
+from crystall.adapters import *  # noqa: E402, F401, F403  # Registers all adapters into BaseCalculator; star-import is intentional.

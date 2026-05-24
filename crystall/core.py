@@ -268,9 +268,7 @@ class CrystALLSearch:
             "Objective must be a non-empty string"
         )
 
-        # Objectives are always bare codes; accept a legacy "CODE: description"
-        # key for backward compatibility by stripping anything after the colon.
-        code = objective.split(":")[0].strip()
+        code = objective
         if code in self._objective_registry:
             return code
         if code in self.predicted_objectives:
@@ -896,7 +894,7 @@ class CrystALLSearch:
 
         adapter = self.supported_calculators[calculator]
 
-        # If the adapter is a class (legacy entry-point registration), instantiate it
+        # Adapter provided as a class; instantiate before use.
         if isinstance(adapter, type):
             try:
                 adapter = adapter()

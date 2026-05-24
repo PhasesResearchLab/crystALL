@@ -10,7 +10,7 @@ import time
 import threading
 import concurrent.futures
 
-from typing import Union, List, Dict, Literal, Tuple, Any, Iterable
+from typing import Union, List, Dict, Literal, Tuple, Iterable
 
 from natsort import natsorted
 from colorama import Fore, Style
@@ -297,7 +297,6 @@ def run_local(
 
     # Substitution elements combination.
     sEL = sorted_elements_list(composition)
-    sELtarget = [item for sublist in sEL for item in sublist]
 
     # Verify need for permutations
     permN = 1
@@ -521,7 +520,6 @@ def run_MPDD(
 
         # Substitution elements combination.
         sEL = sorted_elements_list(composition)
-        sELtarget = [item for sublist in sEL for item in sublist]
 
         # Verify need for permutations
         permN = 1
@@ -1046,7 +1044,7 @@ def comp2acomp_q(
                 }
             }
         )
-    result.update({f"material.nComponents": len(eVals)})
+    result.update({"material.nComponents": len(eVals)})
     return result
 
 
