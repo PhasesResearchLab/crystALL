@@ -848,19 +848,19 @@ class CrystALLSearch:
             "Number of prototypes does not match number of property predictions"
         )
 
+        proto_by_name = {prototype["name"]: prototype for prototype in self.prototypes}
         for result in resultDicts:
             name = result["name"]
-            for prototype in self.prototypes:
-                if prototype["name"] == name:
-                    prototype.update(result)
-                    for key in result.keys():
-                        if isinstance(prototype[key], float):
-                            prototype[key] = float(
-                                Decimal(prototype[key]).quantize(
-                                    Decimal("0.0001"), rounding=ROUND_DOWN
-                                )
+            proto = proto_by_name.get(name)
+            if proto is not None:
+                proto.update(result)
+                for key in result:
+                    if isinstance(proto[key], float):
+                        proto[key] = float(
+                            Decimal(proto[key]).quantize(
+                                Decimal("0.0001"), rounding=ROUND_DOWN
                             )
-                    break
+                        )
 
         print(
             f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN"
