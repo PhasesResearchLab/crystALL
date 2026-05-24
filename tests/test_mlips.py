@@ -75,6 +75,7 @@ def test_mlipadapter_host_side_state_a_skip():
         mock_entry = {
             "objectives": {
                 "MACE_RELAX_E": -5.0,
+                "MACE_RELAX_EF": -5.0,
                 "MACE_RELAX_F": 0.01,
                 "MACE_RELAX_STRESS": 1.0,
                 "MACE_RELAX_VOL": 10.0,
@@ -113,9 +114,9 @@ def test_mlip_worker_state_b_warm_restart():
     assert extras["traj_dir"] == "/tmp"
     assert extras["traj_prefix"] == "MACE_"
     assert extras["persist_traj"] is True
-    assert "objective_spec" not in extras, (
-        "objective_spec is injected by BaseCalculator._dispatch_worker, not _request_extras"
-    )
+    assert (
+        "objective_spec" not in extras
+    ), "objective_spec is injected by BaseCalculator._dispatch_worker, not _request_extras"
 
     worker_script = adapter._run_code()
     assert 'req.get("objective_spec", [])' in worker_script
@@ -185,7 +186,6 @@ def test_worker_cold_start_fallback_present():
 
 def test_run_on_directory_state_a_skips_worker(tmp_path):
     """State A files must be returned from the JSON without dispatching to the worker."""
-    import json
     from unittest.mock import MagicMock, patch
     from crystall.adapters.mlips import MLIPAdapter, _upsert_objectives_json
 
@@ -201,6 +201,7 @@ def test_run_on_directory_state_a_skips_worker(tmp_path):
     # Pre-populate a complete State A entry
     complete_objectives = {
         "MACE_RELAX_E": -3.0,
+        "MACE_RELAX_EF": -3.0,
         "MACE_RELAX_F": 0.01,
         "MACE_RELAX_STRESS": 0.5,
         "MACE_RELAX_VOL": 10.0,
@@ -234,7 +235,6 @@ def test_state_b_dispatches_worker(tmp_path):
     missing_paths is non-empty, so self._dispatch_worker must be called
     exactly once with that path.
     """
-    import json
     from unittest.mock import MagicMock, patch
     from crystall.adapters.mlips import MLIPAdapter, _upsert_objectives_json
 
@@ -254,15 +254,6 @@ def test_state_b_dispatches_worker(tmp_path):
     }
     _upsert_objectives_json(str(json_path), "Fe2O3.vasp", partial_objectives)
 
-    # Full key list that the adapter will request
-    full_keys = [
-        "MACE_RELAX_E",
-        "MACE_RELAX_F",
-        "MACE_RELAX_STRESS",
-        "MACE_RELAX_VOL",
-        "MACE_RELAX_STRUCT",
-    ]
-
     adapter = MLIPAdapter("MACE")
     adapter._assert_device_supported = MagicMock()
     adapter._assert_os_supported = MagicMock()
@@ -277,9 +268,9 @@ def test_state_b_dispatches_worker(tmp_path):
     # State B must not be silently skipped — worker must be called once
     mock_dw.assert_called_once()
     call_args = mock_dw.call_args[0][0]  # first positional arg: file_paths list
-    assert any("Fe2O3.vasp" in fp for fp in call_args), (
-        "State B path must be included in the worker dispatch call"
-    )
+    assert any(
+        "Fe2O3.vasp" in fp for fp in call_args
+    ), "State B path must be included in the worker dispatch call"
 
 
 def test_traj_cleanup_persist_false(tmp_path):
@@ -294,7 +285,6 @@ def test_traj_cleanup_persist_false(tmp_path):
 
 def test_traj_cleanup_persist_true(tmp_path):
     """When persist_traj=True, os.remove must NOT be called on the .traj file."""
-    import os
     from unittest.mock import MagicMock, patch
     from crystall.adapters.mlips import MLIPAdapter
 
@@ -333,6 +323,6 @@ def test_traj_cleanup_persist_true(tmp_path):
         )
 
     traj_calls = [c for c in mock_remove.call_args_list if ".traj" in str(c)]
-    assert not traj_calls, (
-        "os.remove must NOT be called on the .traj file when persist_traj=True"
-    )
+    assert (
+        not traj_calls
+    ), "os.remove must NOT be called on the .traj file when persist_traj=True"

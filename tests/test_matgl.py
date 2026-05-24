@@ -6,15 +6,16 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-from pymatgen.core import Lattice, Structure
+from pymatgen.core import Structure
 
 from crystall.calculators import MatGLAdapter, ObjectiveRegistry
+from tests.test_core import make_dummy_structure
 
 STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
 
 def _sample_structure() -> Structure:
-    return Structure(Lattice.cubic(3.5), ["Si"], [[0.0, 0.0, 0.0]])
+    return make_dummy_structure()
 
 
 class TestMatGLAdapterContract(unittest.TestCase):
@@ -41,17 +42,42 @@ class TestMatGLAdapterContract(unittest.TestCase):
         self.assertEqual(objectives.codes(), expected_codes)
 
         cases = [
-            ("MATGL_EF_MEGNET", "Formation Energy MEGNet [eV/atom]", (("model", "MEGNet-Eform-MP-2018.6.1"),), "MEGNet"),
+            (
+                "MATGL_EF_MEGNET",
+                "Formation Energy MEGNet [eV/atom]",
+                (("model", "MEGNet-Eform-MP-2018.6.1"),),
+                "MEGNet",
+            ),
             (
                 "MATGL_BG_MEGNET",
                 "Band Gap MEGNet [eV]",
                 (("model", "MEGNet-BandGap-mfi-MP-2019.4.1"), ("state_attr", 0)),
                 "MEGNet",
             ),
-            ("MATGL_EF_M3GNET", "Formation Energy M3GNet [eV/atom]", (("model", "M3GNet-Eform-MP-2018.6.1"),), "M3GNet"),
-            ("MATGL_EWALD_QET", "Electrostatic (Ewald) Energy [eV/cell]", (("model", "QET-PES-MatQ"),), "QET"),
-            ("MATGL_CDIPOLE_QET", "Charge Dipole Magnitude [e\u00b7\u00c5]", (("model", "QET-PES-MatQ"),), "QET"),
-            ("MATGL_STRUCT_CHARGES_QET", "Structure with Charges", (("model", "QET-PES-MatQ"),), "QET"),
+            (
+                "MATGL_EF_M3GNET",
+                "Formation Energy M3GNet [eV/atom]",
+                (("model", "M3GNet-Eform-MP-2018.6.1"),),
+                "M3GNet",
+            ),
+            (
+                "MATGL_EWALD_QET",
+                "Electrostatic (Ewald) Energy [eV/cell]",
+                (("model", "QET-PES-MatQ"),),
+                "QET",
+            ),
+            (
+                "MATGL_CDIPOLE_QET",
+                "Charge Dipole Magnitude [e\u00b7\u00c5]",
+                (("model", "QET-PES-MatQ"),),
+                "QET",
+            ),
+            (
+                "MATGL_STRUCT_CHARGES_QET",
+                "Structure with Charges",
+                (("model", "QET-PES-MatQ"),),
+                "QET",
+            ),
             (
                 "MATGL_STRUCT_MAGMOMS_CHGNET",
                 "Structure with Magmoms",
@@ -68,11 +94,9 @@ class TestMatGLAdapterContract(unittest.TestCase):
         for code, description, dispatch_key, backend in cases:
             with self.subTest(code=code):
                 obj = objectives[code]
-                self.assertEqual(obj.description,  description)
+                self.assertEqual(obj.description, description)
                 self.assertEqual(obj.dispatch_key, dispatch_key)
                 self.assertEqual(obj.backend, backend)
-
-    
 
     def test_name(self):
         self.assertEqual(self.adapter.name, "MatGL")
@@ -92,7 +116,7 @@ class TestMatGLAdapterContract(unittest.TestCase):
         self.assertIn("matgl", str(env_path))
 
     def test_setup_commands_do_not_install_standalone_chgnet(self):
-        cmds = self.adapter.setup_commands()
+        cmds = self.adapter._layer3_setup_commands()
         self.assertTrue(any("matgl" in c for c in cmds))
         self.assertFalse(any("chgnet" in c for c in cmds))
 
@@ -125,7 +149,9 @@ class TestMatGLAdapterContract(unittest.TestCase):
             results[0]["objectives"]["MATGL_MDIPOLE_CHGNET"],
             -1.2345,
         )
-        self.assertIsInstance(results[0]["objectives"]["MATGL_STRUCT_MAGMOMS_CHGNET"], Structure)
+        self.assertIsInstance(
+            results[0]["objectives"]["MATGL_STRUCT_MAGMOMS_CHGNET"], Structure
+        )
 
     def test_run_on_directory_empty_dir_returns_empty(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertWarns(UserWarning):
@@ -164,9 +190,21 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
             req_data = {
                 "file_paths": [poscar_path],
                 "objective_spec": [
-                    {"code": "MATGL_EWALD_QET", "kind": "scalar", "model": "QET-PES-MatQ"},
-                    {"code": "MATGL_CDIPOLE_QET", "kind": "scalar", "model": "QET-PES-MatQ"},
-                    {"code": "MATGL_STRUCT_CHARGES_QET", "kind": "artifact", "model": "QET-PES-MatQ"},
+                    {
+                        "code": "MATGL_EWALD_QET",
+                        "kind": "scalar",
+                        "model": "QET-PES-MatQ",
+                    },
+                    {
+                        "code": "MATGL_CDIPOLE_QET",
+                        "kind": "scalar",
+                        "model": "QET-PES-MatQ",
+                    },
+                    {
+                        "code": "MATGL_STRUCT_CHARGES_QET",
+                        "kind": "artifact",
+                        "model": "QET-PES-MatQ",
+                    },
                 ],
             }
             with open(req_path, "w") as f:
@@ -188,9 +226,7 @@ class TestMatGLQETWorkerSemantics(unittest.TestCase):
                     {
                         "matgl": matgl_mock,
                         "matgl.ext": MagicMock(),
-                        "matgl.ext.ase": MagicMock(
-                            PESCalculator=pes_calculator_mock
-                        ),
+                        "matgl.ext.ase": MagicMock(PESCalculator=pes_calculator_mock),
                         "torch": torch_mock,
                     },
                 ),
@@ -237,8 +273,16 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
             req_data = {
                 "file_paths": [poscar_path],
                 "objective_spec": [
-                    {"code": "MATGL_MDIPOLE_CHGNET", "kind": "scalar", "model": "CHGNet-PES-MatPES-PBE-2025.2.10"},
-                    {"code": "MATGL_STRUCT_MAGMOMS_CHGNET", "kind": "artifact", "model": "CHGNet-PES-MatPES-PBE-2025.2.10"},
+                    {
+                        "code": "MATGL_MDIPOLE_CHGNET",
+                        "kind": "scalar",
+                        "model": "CHGNet-PES-MatPES-PBE-2025.2.10",
+                    },
+                    {
+                        "code": "MATGL_STRUCT_MAGMOMS_CHGNET",
+                        "kind": "artifact",
+                        "model": "CHGNet-PES-MatPES-PBE-2025.2.10",
+                    },
                 ],
             }
             with open(req_path, "w") as f:
@@ -260,9 +304,7 @@ class TestMatGLCHGNetWorkerSemantics(unittest.TestCase):
                     {
                         "matgl": matgl_mock,
                         "matgl.ext": MagicMock(),
-                        "matgl.ext.ase": MagicMock(
-                            PESCalculator=pes_calculator_mock
-                        ),
+                        "matgl.ext.ase": MagicMock(PESCalculator=pes_calculator_mock),
                         "torch": torch_mock,
                     },
                 ),

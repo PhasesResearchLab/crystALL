@@ -5,7 +5,6 @@ Calculator test suite for the crystALL project.
 import os
 import tempfile
 import unittest
-import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -45,20 +44,23 @@ class TestLoadAdapters(unittest.TestCase):
 class TestBaseCalculator(unittest.TestCase):
     """Tests for BaseCalculator helpers and abstract behavior."""
 
-    class DummyEnvCalculator(BaseCalculator):
+    class _DummyEnvCalculator(BaseCalculator):
         """Small test adapter used for micro-environment lifecycle tests."""
 
         name = "dummy-env"
         objectives = ObjectiveRegistry([])
 
         def __init__(self, env_path: Path, fail_layer2: bool = False) -> None:
+            super().__init__()
             self._test_env_path = Path(env_path)
             self._fail_layer2 = fail_layer2
 
         def _env_path(self) -> Path:
+            super()._env_path()
             return self._test_env_path
 
         def _install_layer2(self, env: dict) -> None:
+            super()._install_layer2(env)
             if self._fail_layer2:
                 raise RuntimeError("layer2-failure")
 
@@ -68,7 +70,7 @@ class TestBaseCalculator(unittest.TestCase):
         def _run_code(self) -> str:
             return "print('noop')"
 
-    class DummyStaticCalculator(BaseCalculator):
+    class _DummyStaticCalculator(BaseCalculator):
         name = "dummy-static"
         objectives = ObjectiveRegistry(
             [
@@ -98,14 +100,15 @@ class TestBaseCalculator(unittest.TestCase):
     def test_run_on_directory(self) -> None:
         """BaseCalculator.run_on_directory should raise NotImplementedError by default."""
 
-        class DummyBase(BaseCalculator):
+        class _DummyBase(BaseCalculator):
             name = "dummy"
             objectives = ObjectiveRegistry([])
 
             def is_env_ready(self) -> bool:
+                super().is_env_ready()
                 return True
 
-        dummy = DummyBase()
+        dummy = _DummyBase()
         with tempfile.TemporaryDirectory() as tempdir:
             # Create a dummy file so it calls _evaluate_structure
             with open(os.path.join(tempdir, "dummy.cif"), "w") as f:
@@ -120,9 +123,7 @@ class TestBaseCalculator(unittest.TestCase):
         data_1d = [3.0, 4.0]
         rms = BaseCalculator.vector_to_scalar("rms", data_1d)
         total = BaseCalculator.vector_to_scalar("sum", data_1d)
-        self.assertAlmostEqual(
-            rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5
-        )
+        self.assertAlmostEqual(rms, (3.0**2 + 4.0**2) ** 0.5 / 2**0.5)
         self.assertAlmostEqual(total, 7.0)
 
         # norm and mean on small arrays
@@ -145,7 +146,7 @@ class TestBaseCalculator(unittest.TestCase):
         """setup_env should write readiness sentinel and is_env_ready should require it."""
         with tempfile.TemporaryDirectory() as tmp:
             env_path = Path(tmp) / "dummy_env"
-            calc = self.DummyEnvCalculator(env_path=env_path)
+            calc = self._DummyEnvCalculator(env_path=env_path)
 
             with patch("subprocess.run", side_effect=self._fake_uv_venv_run):
                 calc.setup_env()
@@ -161,7 +162,7 @@ class TestBaseCalculator(unittest.TestCase):
         """setup_env should remove/rebuild env when Python exists but sentinel is missing."""
         with tempfile.TemporaryDirectory() as tmp:
             env_path = Path(tmp) / "dummy_env"
-            calc = self.DummyEnvCalculator(env_path=env_path)
+            calc = self._DummyEnvCalculator(env_path=env_path)
 
             old_py = calc._micro_python()
             old_py.parent.mkdir(parents=True, exist_ok=True)
@@ -182,7 +183,7 @@ class TestBaseCalculator(unittest.TestCase):
         """setup_env should remove partial env when layer-2 install fails."""
         with tempfile.TemporaryDirectory() as tmp:
             env_path = Path(tmp) / "dummy_env"
-            calc = self.DummyEnvCalculator(env_path=env_path, fail_layer2=True)
+            calc = self._DummyEnvCalculator(env_path=env_path, fail_layer2=True)
 
             with patch("subprocess.run", side_effect=self._fake_uv_venv_run):
                 with self.assertRaises(RuntimeError):
@@ -221,7 +222,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
       - setup_env aborts cleanly on interactive 'n' input
       - _setup_preflight fires before the cached-env short-circuit
       - _resolve_device behaviour for cpu / cuda
-      - MLIPAdapter and DeePAWAdapter do not override setup_env
+      - MLIPAdapter does not override setup_env
       - NequIP MLIP config raises on unsupported OS via base guard
       - all concrete non-MLIP adapters have explicit supported_os / supported_devices
     """
@@ -243,6 +244,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
         supported_devices = ["cpu", "cuda"]
 
         def _env_path(self):
+            super()._env_path()
             return Path(self._tmp) / "env"
 
         def _run_code(self):
@@ -262,7 +264,6 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
                 patch.object(adapter, "_uv_bin", return_value="uv"),
                 patch("subprocess.run", return_value=MagicMock(returncode=0)),
                 patch.object(adapter, "_install_layer2"),
-                patch.object(adapter, "setup_commands", return_value=[]),
                 patch.object(adapter, "_layer3_setup_commands", return_value=[]),
                 patch("builtins.input") as mock_input,
             ):
@@ -338,15 +339,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
             "MLIPAdapter must not override setup_env",
         )
 
-    # ── 7. DeePAWAdapter does not override setup_env ─────────────────────
-    def test_deepaw_adapter_does_not_override_setup_env(self):
-        self.assertIs(
-            DeePAWAdapter.setup_env,
-            BaseCalculator.setup_env,
-            "DeePAWAdapter must not override setup_env",
-        )
-
-    # ── 8. NequIP MLIP config raises on non-Linux OS ─────────────────────
+    # ── 7. NequIP MLIP config raises on non-Linux OS ─────────────────────
     def test_nequip_mlip_raises_on_non_linux_os(self):
         """NequIP is linux-only; _assert_os_supported must raise on macOS."""
         adapter = MLIPAdapter("NequIP")
@@ -355,7 +348,7 @@ class TestBaseCalculatorSchemaGuards(unittest.TestCase):
                 adapter._assert_os_supported()
         self.assertIn("linux", str(ctx.exception).lower())
 
-    # ── 9. All concrete non-MLIP adapters have explicit declarations ──────
+    # ── 8. All concrete non-MLIP adapters have explicit declarations ──────
     def test_all_concrete_adapters_declare_supported_os_and_devices(self):
         """Every concrete non-MLIP adapter must declare supported_os and supported_devices."""
         adapters = [

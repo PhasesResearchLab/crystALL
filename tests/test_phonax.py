@@ -5,18 +5,20 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 
-from pymatgen.core import Lattice, Structure
+from pymatgen.core import Structure
 
 from crystall.adapters.phonax import PhonaxAdapter
 
 
 from crystall.calculators import ObjectiveRegistry
+from tests.test_core import make_dummy_structure
+
 
 def _sample_structure() -> Structure:
-    return Structure(
-        Lattice.cubic(5.5),
-        ["Na", "Cl"],
-        [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]],
+    return make_dummy_structure(
+        a=5.5,
+        species=("Na", "Cl"),
+        frac_coords=((0.0, 0.0, 0.0), (0.5, 0.5, 0.5)),
     )
 
 
@@ -50,16 +52,56 @@ class TestPhonaxAdapterContract(unittest.TestCase):
         self.assertEqual(objectives.codes(), expected_codes)
 
         cases = [
-            ("PHONAX_PBS_NEQUIP", "Phonon Band Structure — NequIP uniIAP", (("model", "nequip-uniIAP"),)),
-            ("PHONAX_PDOS_NEQUIP", "Phonon DOS — NequIP uniIAP", (("model", "nequip-uniIAP"),)),
-            ("PHONAX_PBS_NEQUIP_FT", "Phonon Band Structure — NequIP uniIAP fine-tuned", (("model", "nequip-uniIAP-finetune"),)),
-            ("PHONAX_PDOS_NEQUIP_FT", "Phonon DOS — NequIP uniIAP fine-tuned", (("model", "nequip-uniIAP-finetune"),)),
-            ("PHONAX_PBS_NEQUIP_JAX", "Phonon Band Structure — NequIP JAX uniIAP", (("model", "nequip-JAX-uniIAP"),)),
-            ("PHONAX_PDOS_NEQUIP_JAX", "Phonon DOS — NequIP JAX uniIAP", (("model", "nequip-JAX-uniIAP"),)),
-            ("PHONAX_PBS_MACE", "Phonon Band Structure — MACE uniIAP", (("model", "mace-uniIAP"),)),
-            ("PHONAX_PDOS_MACE", "Phonon DOS — MACE uniIAP", (("model", "mace-uniIAP"),)),
-            ("PHONAX_PBS_MACE_FT", "Phonon Band Structure — MACE uniIAP fine-tuned", (("model", "mace-uniIAP-finetune"),)),
-            ("PHONAX_PDOS_MACE_FT", "Phonon DOS — MACE uniIAP fine-tuned", (("model", "mace-uniIAP-finetune"),)),
+            (
+                "PHONAX_PBS_NEQUIP",
+                "Phonon Band Structure — NequIP uniIAP",
+                (("model", "nequip-uniIAP"),),
+            ),
+            (
+                "PHONAX_PDOS_NEQUIP",
+                "Phonon DOS — NequIP uniIAP",
+                (("model", "nequip-uniIAP"),),
+            ),
+            (
+                "PHONAX_PBS_NEQUIP_FT",
+                "Phonon Band Structure — NequIP uniIAP fine-tuned",
+                (("model", "nequip-uniIAP-finetune"),),
+            ),
+            (
+                "PHONAX_PDOS_NEQUIP_FT",
+                "Phonon DOS — NequIP uniIAP fine-tuned",
+                (("model", "nequip-uniIAP-finetune"),),
+            ),
+            (
+                "PHONAX_PBS_NEQUIP_JAX",
+                "Phonon Band Structure — NequIP JAX uniIAP",
+                (("model", "nequip-JAX-uniIAP"),),
+            ),
+            (
+                "PHONAX_PDOS_NEQUIP_JAX",
+                "Phonon DOS — NequIP JAX uniIAP",
+                (("model", "nequip-JAX-uniIAP"),),
+            ),
+            (
+                "PHONAX_PBS_MACE",
+                "Phonon Band Structure — MACE uniIAP",
+                (("model", "mace-uniIAP"),),
+            ),
+            (
+                "PHONAX_PDOS_MACE",
+                "Phonon DOS — MACE uniIAP",
+                (("model", "mace-uniIAP"),),
+            ),
+            (
+                "PHONAX_PBS_MACE_FT",
+                "Phonon Band Structure — MACE uniIAP fine-tuned",
+                (("model", "mace-uniIAP-finetune"),),
+            ),
+            (
+                "PHONAX_PDOS_MACE_FT",
+                "Phonon DOS — MACE uniIAP fine-tuned",
+                (("model", "mace-uniIAP-finetune"),),
+            ),
         ]
         for code, description, dispatch_key in cases:
             with self.subTest(code=code):
@@ -104,7 +146,7 @@ class TestPhonaxAdapterContract(unittest.TestCase):
         self.assertEqual(extras["dos_sigma"], 1.5)
 
     def test_layer2_dependencies(self):
-        deps = self.adapter.layer2_dependencies()
+        deps = self.adapter._layer2_dependencies()
         self.assertTrue(any(dep.startswith("jax") for dep in deps))
         self.assertIn("ase>=3.23", deps)
 
@@ -287,9 +329,7 @@ class TestDeserializeResult(unittest.TestCase):
         bs = deserialized["objectives"]["PHONAX_PBS_NEQUIP"]
         self.assertIsInstance(bs, PhononBandStructureSymmLine)
         self.assertEqual(bs.bands.shape, (6, n_qpoints))
-        np.testing.assert_allclose(
-            bs.bands, np.array(freqs_cm1).T * 0.02998, rtol=1e-5
-        )
+        np.testing.assert_allclose(bs.bands, np.array(freqs_cm1).T * 0.02998, rtol=1e-5)
         self.assertEqual(bs.has_nac, False)
 
     def test_deserialize_dos(self):

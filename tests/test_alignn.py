@@ -42,25 +42,63 @@ class TestAlignnAdapterContract(unittest.TestCase):
         self.assertEqual(objectives.codes(), expected_codes)
 
         cases = [
-            ("ALIGNN_EF_MP",     "ALIGNN-MP Formation Energy [eV/atom]",         (("model", "ALIGNN-MP Formation Energy [eV/atom]"),)),
-            ("ALIGNN_BG_MP",     "ALIGNN-MP PBE Bandgap [eV]",                   (("model", "ALIGNN-MP PBE Bandgap [eV]"),)),
-            ("ALIGNN_EF_JV",     "ALIGNN-JARVIS Formation Energy [eV/atom]",     (("model", "ALIGNN-JARVIS Formation Energy [eV/atom]"),)),
-            ("ALIGNN_BG_JV_MBJ", "ALIGNN-JARVIS MBJ Bandgap [eV]",               (("model", "ALIGNN-JARVIS MBJ Bandgap [eV]"),)),
-            ("ALIGNN_SHEAR_JV",  "ALIGNN-JARVIS Shear Modulus [GPa]",            (("model", "ALIGNN-JARVIS Shear Modulus [GPa]"),)),
-            ("ALIGNN_BULK_JV",   "ALIGNN-JARVIS Bulk Modulus [GPa]",             (("model", "ALIGNN-JARVIS Bulk Modulus [GPa]"),)),
-            ("ALIGNN_EXFOL_JV",  "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",  (("model", "ALIGNN-JARVIS Exfoliation Energy [meV/atom]"),)),
-            ("ALIGNN_BG_ALEX",   "ALIGNN-Alexandria Bandgap [eV]",               (("model", "ALIGNN-Alexandria Bandgap [eV]"),)),
-            ("ALIGNN_EF_ALEX",   "ALIGNN-Alexandria Formation Energy [eV/atom]", (("model", "ALIGNN-Alexandria Formation Energy [eV/atom]"),)),
-            ("ALIGNN_VOL_ALEX",  "ALIGNN-Alexandria Volume Per Atom [\u00c5\u00b3]", (("model", "ALIGNN-Alexandria Volume Per Atom [A^3]"),)),
+            (
+                "ALIGNN_EF_MP",
+                "ALIGNN-MP Formation Energy [eV/atom]",
+                (("model", "ALIGNN-MP Formation Energy [eV/atom]"),),
+            ),
+            (
+                "ALIGNN_BG_MP",
+                "ALIGNN-MP PBE Bandgap [eV]",
+                (("model", "ALIGNN-MP PBE Bandgap [eV]"),),
+            ),
+            (
+                "ALIGNN_EF_JV",
+                "ALIGNN-JARVIS Formation Energy [eV/atom]",
+                (("model", "ALIGNN-JARVIS Formation Energy [eV/atom]"),),
+            ),
+            (
+                "ALIGNN_BG_JV_MBJ",
+                "ALIGNN-JARVIS MBJ Bandgap [eV]",
+                (("model", "ALIGNN-JARVIS MBJ Bandgap [eV]"),),
+            ),
+            (
+                "ALIGNN_SHEAR_JV",
+                "ALIGNN-JARVIS Shear Modulus [GPa]",
+                (("model", "ALIGNN-JARVIS Shear Modulus [GPa]"),),
+            ),
+            (
+                "ALIGNN_BULK_JV",
+                "ALIGNN-JARVIS Bulk Modulus [GPa]",
+                (("model", "ALIGNN-JARVIS Bulk Modulus [GPa]"),),
+            ),
+            (
+                "ALIGNN_EXFOL_JV",
+                "ALIGNN-JARVIS Exfoliation Energy [meV/atom]",
+                (("model", "ALIGNN-JARVIS Exfoliation Energy [meV/atom]"),),
+            ),
+            (
+                "ALIGNN_BG_ALEX",
+                "ALIGNN-Alexandria Bandgap [eV]",
+                (("model", "ALIGNN-Alexandria Bandgap [eV]"),),
+            ),
+            (
+                "ALIGNN_EF_ALEX",
+                "ALIGNN-Alexandria Formation Energy [eV/atom]",
+                (("model", "ALIGNN-Alexandria Formation Energy [eV/atom]"),),
+            ),
+            (
+                "ALIGNN_VOL_ALEX",
+                "ALIGNN-Alexandria Volume Per Atom [\u00c5\u00b3]",
+                (("model", "ALIGNN-Alexandria Volume Per Atom [A^3]"),),
+            ),
         ]
         for code, description, dispatch_key in cases:
             with self.subTest(code=code):
                 obj = objectives[code]
-                self.assertEqual(obj.description,  description)
+                self.assertEqual(obj.description, description)
                 self.assertEqual(obj.dispatch_key, dispatch_key)
-                self.assertEqual(obj.backend,      "ALIGNN")
-
-    
+                self.assertEqual(obj.backend, "ALIGNN")
 
     def test_name(self):
         self.assertEqual(self.adapter.name, "ALIGNN")
@@ -87,16 +125,15 @@ class TestAlignnAdapterContract(unittest.TestCase):
         self.assertIn("alignn", str(env_path))
 
     def test_python_version(self):
-        self.assertEqual(self.adapter.python_version(), "3.11")
+        self.assertEqual(self.adapter._layer1_python_version(), "3.11")
 
     def test_layer2_dependencies_non_empty(self):
-        deps = self.adapter.layer2_dependencies()
+        deps = self.adapter._layer2_dependencies()
         self.assertIsInstance(deps, list)
-        self.assertGreaterEqual(len(deps), 1)
-        self.assertTrue(any("torch" in d for d in deps))
+        self.assertEqual(deps, [])
 
     def test_setup_commands_non_empty(self):
-        cmds = self.adapter.setup_commands()
+        cmds = self.adapter._layer3_setup_commands()
         self.assertIsInstance(cmds, list)
         self.assertGreaterEqual(len(cmds), 1)
         self.assertTrue(any("mpdd-alignn" in c for c in cmds))

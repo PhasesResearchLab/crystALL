@@ -33,7 +33,7 @@ def test_upetdos_adapter_setup():
     assert objectives["UPETDOS_EF"].dispatch_key == (("model", "PET-MAD-DOS"),)
     assert objectives["UPETDOS_EF"].backend == "UPET-DOS"
 
-    cmds = adapter.setup_commands()
+    cmds = adapter._layer3_setup_commands()
     assert any("upet" in cmd for cmd in cmds)
     assert any("pymatgen" in cmd for cmd in cmds)
 
@@ -60,9 +60,21 @@ class TestUPETDosWorkerSemantics:
                     {
                         "file_paths": [fake_struct_path],
                         "objective_spec": [
-                            {"code": "UPETDOS_DOS", "kind": "artifact", "model": "PET-MAD-DOS"},
-                            {"code": "UPETDOS_BG", "kind": "scalar", "model": "PET-MAD-DOS"},
-                            {"code": "UPETDOS_EF", "kind": "scalar", "model": "PET-MAD-DOS"},
+                            {
+                                "code": "UPETDOS_DOS",
+                                "kind": "artifact",
+                                "model": "PET-MAD-DOS",
+                            },
+                            {
+                                "code": "UPETDOS_BG",
+                                "kind": "scalar",
+                                "model": "PET-MAD-DOS",
+                            },
+                            {
+                                "code": "UPETDOS_EF",
+                                "kind": "scalar",
+                                "model": "PET-MAD-DOS",
+                            },
                         ],
                     },
                     f,
