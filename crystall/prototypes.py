@@ -257,7 +257,7 @@ def run_local(
     assert os.path.isdir(prototype_path), "Prototype path must be a valid directory"
 
     aFormula = composition.anonymized_formula
-    nElements = composition.to_data_dict["nelements"]
+    nElements = len(composition.elements)
 
     # Initial prototype dataset scan – collect matching structures in memory only
     fileList = natsorted(os.listdir(prototype_path))
@@ -1200,7 +1200,7 @@ def run_optimade(
         composition = target_formula
 
     formula_str = str(target_formula).replace(" ", "")
-    nelements = len(composition.as_dict())
+    nelements = len(composition.elements)
 
     if target_prototypes == "native":
         filter_str = f'chemical_formula_reduced = "{composition.reduced_formula}" AND nelements = {nelements}'
