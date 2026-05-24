@@ -254,7 +254,6 @@ def run_local(
         raise ValueError(
             "Target formula must be a string or a pymatgen Composition object"
         )
-    assert os.path.isdir(prototype_path), "Prototype path must be a valid directory"
 
     aFormula = composition.anonymized_formula
     nElements = len(composition.elements)

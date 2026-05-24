@@ -128,7 +128,6 @@ class CrystALLSearch:
             str, Any
         ] = {}  # code -> ObjectiveEntry, built after adapters load
         self.ks2022: np.ndarray | None = None
-        self.prototype_path = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.top_candidates: List[Dict[str, Union[str, float]]] = []

@@ -1106,8 +1106,6 @@ class BaseCalculator:
         its own results to (``parent(/data/structures/) == /data/``).
         """
         target = os.path.abspath(target)
-        if os.path.isdir(target):
-            return os.path.join(os.path.dirname(target), _OBJECTIVES_JSON_FILENAME)
         return os.path.join(os.path.dirname(target), _OBJECTIVES_JSON_FILENAME)
 
     def _dispatch_worker(
