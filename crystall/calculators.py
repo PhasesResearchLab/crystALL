@@ -72,25 +72,6 @@ def _is_done(entry: dict | None, requested_keys: list[str]) -> bool:
     return all(k in present for k in requested_keys)
 
 
-def _cite_backends(backends: set[str]) -> None:
-    for backend in sorted(backends):
-        payload = _BACKEND_CITATIONS.get(backend)
-        if not payload:
-            continue
-        entry_type = payload.get("entry_type")
-        entry = payload.get("entry")
-        if not entry_type or not entry:
-            continue
-        citation = BibTeX(entry) if entry_type == "bibtex" else Doi(entry)
-        due.cite(
-            citation,
-            description=payload.get("description", ""),
-            path=payload.get("path", f"crystall.backends.{backend}"),
-            tags=payload.get("tags", ["reference-implementation"]),
-            cite_module=payload.get("cite_module", False),
-        )
-
-
 @dataclass(frozen=True)
 class Objective:
     """A single computable objective exposed by a calculator adapter.
@@ -530,6 +511,26 @@ class BaseCalculator:
 
     def _cite_at_runtime(self, requested_codes: Optional[Sequence[str]] = None) -> None:
         """Emit backend citations for requested objectives."""
+
+        def _cite_backends(b: set[str]) -> None:
+            """Register citations for a set of backends."""
+            for backend in sorted(b):
+                payload = _BACKEND_CITATIONS.get(backend)
+                if not payload:
+                    continue
+                entry_type = payload.get("entry_type")
+                entry = payload.get("entry")
+                if not entry_type or not entry:
+                    continue
+                citation = BibTeX(entry) if entry_type == "bibtex" else Doi(entry)
+                due.cite(
+                    citation,
+                    description=payload.get("description", ""),
+                    path=payload.get("path", f"crystall.backends.{backend}"),
+                    tags=payload.get("tags", ["reference-implementation"]),
+                    cite_module=payload.get("cite_module", False),
+                )
+
         codes = list(requested_codes) if requested_codes is not None else None
         backends = self.objectives.resolve_backends(codes)
         _cite_backends(backends)
@@ -1081,16 +1082,6 @@ class BaseCalculator:
             self._print_results_section(result)
 
     @staticmethod
-    def _is_done(entry: dict | None, requested_keys: list[str]) -> bool:
-        return _is_done(entry, requested_keys)
-
-    @staticmethod
-    def _upsert_objectives_json(
-        json_path: str, filename: str, new_objectives: dict
-    ) -> None:
-        _upsert_objectives_json(json_path, filename, new_objectives)
-
-    @staticmethod
     def _results_json_path(target: str) -> str:
         """Absolute path of the shared objectives JSON for a run target.
 
@@ -1385,7 +1376,7 @@ class BaseCalculator:
             list(objectives) if objectives is not None else self.objectives.codes()
         )
         entry = data.get(filename)
-        if self._is_done(entry, requested_keys):
+        if _is_done(entry, requested_keys):
             entry = dict(entry)
             entry["name"] = filename
             return entry
@@ -1396,7 +1387,7 @@ class BaseCalculator:
         if not results:
             return {"name": filename, "objectives": {}}
         result = results[0]
-        self._upsert_objectives_json(json_path, filename, result.get("objectives", {}))
+        _upsert_objectives_json(json_path, filename, result.get("objectives", {}))
         return result
 
     def run_on_directory(
@@ -1447,7 +1438,7 @@ class BaseCalculator:
         for fp in file_paths:
             filename = os.path.basename(fp)
             entry = data.get(filename)
-            if self._is_done(entry, requested_keys):
+            if _is_done(entry, requested_keys):
                 cached = dict(entry)
                 cached["name"] = filename
                 skip_results.append(cached)
@@ -1466,7 +1457,7 @@ class BaseCalculator:
                         **kwargs,
                     )
                     for res in chunk_results:
-                        self._upsert_objectives_json(
+                        _upsert_objectives_json(
                             json_path, res.get("name", ""), res.get("objectives", {})
                         )
                     fresh_results.extend(chunk_results)
@@ -1478,7 +1469,7 @@ class BaseCalculator:
                     **kwargs,
                 )
                 for res in fresh_results:
-                    self._upsert_objectives_json(
+                    _upsert_objectives_json(
                         json_path, res.get("name", ""), res.get("objectives", {})
                     )
 
