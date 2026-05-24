@@ -1075,7 +1075,7 @@ def comp2comp_q(
             {
                 key: {
                     "$gte": (comp_dict[e] - devs[e]) / 1000,
-                    "$lte": (comp_dict[e] - devs[e]) / 1000,
+                    "$lte": (comp_dict[e] + devs[e]) / 1000,
                 }
             }
         )
