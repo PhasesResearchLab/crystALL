@@ -1163,22 +1163,20 @@ class BaseCalculator:
             orig_fmt = fmt_info[0]
             base = os.path.basename(fp)
             if target_format != "*" and orig_fmt != target_format:
-                import ase.io
+                from pymatgen.core import Structure
+                from crystall.prototypes import _write_structure_format
 
-                fmt_entry_in = _STRUCTURE_FORMATS.get(
-                    orig_fmt, [orig_fmt, f".{orig_fmt}"]
-                )
                 fmt_entry_out = _STRUCTURE_FORMATS.get(
                     target_format, [target_format, f".{target_format}"]
                 )
-                ase_fmt_in = fmt_entry_in[0]
-                ase_fmt_out = fmt_entry_out[0]
-                out_ext = fmt_entry_out[1]
+                out_ext = f".{fmt_entry_out[0]}"
 
                 try:
-                    atoms = ase.io.read(fp, format=ase_fmt_in)
-                except Exception:
-                    atoms = ase.io.read(fp)
+                    structure = Structure.from_file(fp)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to read {fp} for format conversion: {e}"
+                    )
 
                 staged_name = (
                     f"{i}_{base}{out_ext}"
@@ -1188,7 +1186,12 @@ class BaseCalculator:
                 staged_path = os.path.join(staging_dir, staged_name)
 
                 try:
-                    ase.io.write(staged_path, atoms, format=ase_fmt_out)
+                    _write_structure_format(
+                        structure,
+                        staging_dir,
+                        os.path.splitext(staged_name)[0],
+                        target_format,
+                    )
                 except Exception as e:
                     raise RuntimeError(
                         f"Failed to convert {fp} to {target_format}: {e}"
