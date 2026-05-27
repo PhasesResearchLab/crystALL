@@ -1047,7 +1047,12 @@ def main():
                 fmt_hint = file_formats_map.get(filepath, ("poscar",))[0]
                 if fmt_hint == "poscar":
                     fmt_hint = "vasp"
-                atoms = read(filepath, format=fmt_hint)
+                if fmt_hint == "vasp":
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                        sanitized = "\\n".join(line.strip() for line in f)
+                    atoms = read(io.StringIO(sanitized), format="vasp")
+                else:
+                    atoms = read(filepath, format=fmt_hint)
             except Exception:
                 try:
                     atoms = read(filepath)
