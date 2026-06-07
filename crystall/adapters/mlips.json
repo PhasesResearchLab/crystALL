@@ -192,6 +192,29 @@
             "damping": "BJ"
         }
     },
+"Osaka": {
+        "setup": [
+            "pip install 'mace-torch~=0.3.0'",
+            "curl -L 'https://github.com/qiqb-osaka/{model}/releases/download/v0.0.1/{model}-{size}.model' -o {SFY_PATH}/{model}-{size}.model"
+        ],
+        "calculator": [
+            "from mace.calculators import MACECalculator",
+            "calc = MACECalculator(model_path='{SFY_PATH}/{model}-{size}.model', device='{device}')"
+        ],
+        "device": [
+            "cpu",
+            "cuda"
+        ],
+        "os": [
+            "windows",
+            "macos",
+            "linux"
+        ],
+        "custom": {
+            "model": "mace-osaka26",
+            "size": "small"
+        }
+    },
     "SevenNet": {
         "setup": [
             "pip install 'sevenn~=0.12.0'"
