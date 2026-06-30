@@ -53,6 +53,9 @@ dependencies = [
 [tool.setuptools]
 packages = { find = { exclude = ["paper", "oldfiles"] } }
 
+[tool.setuptools.package-data]
+"crystall.utils" = ["*.yaml"]
+
 [project.urls]
 "Documentation" = "https://crystall.readthedocs.io"
 "Repository" = "https://github.com/PhasesResearchLab/crystALL"
