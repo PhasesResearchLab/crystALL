@@ -188,21 +188,27 @@ def _normalize_other_targets(
 
     return {k: v for k, v in other_targets.items() if not is_redundant(k, v)}
 
-_STRUCTURE_EXTENSION_WHITELIST = frozenset({
-    '.poscar',
-    '.contcar',
-    '.vasp',
-    '.cif',
-    '.mcif',
-    '.xsf',
-    '.cssr',
-    '.res',
-    '.pwmat',
-})
-"""Filename extensions accepted as crystal-structure inputs by downstream code.
-Format must be supported by both pymatgen (Structure.from_file) and ASE
-(ase.io.read). Used to whitelist files when iterating a prototype directory, so
-metadata files and any other non-structure files are skipped automatically.
+_STRUCTURE_FORMATS: dict[str, list[str]] = {
+    # key   = structure file format
+    # value = [*accepted_extensions]; value[0] is the extension crystALL uses when writing.
+    # Every format must be supported by both pymatgen (Structure.from_file) and
+    # ASE (ase.io.read).
+    "poscar": ["vasp", "poscar", "contcar"],
+    "cif": ["cif", "mcif"],
+    "xyz": ["xyz"],
+    "json": ["json"],
+    "xsf": ["xsf"],
+    "cssr": ["cssr"],
+    "res": ["res"],
+    "pwmat": ["pwmat"],
+}
+
+_STRUCTURE_EXTENSIONS = frozenset(
+    f'.{ext}' for exts in _STRUCTURE_FORMATS.values() for ext in exts
+)
+"""Filename extensions accepted as crystal-structure inputs, derived from
+`_STRUCTURE_FORMATS`. Used to whitelist files when iterating a prototype
+directory, so metadata and other non-structure files are skipped automatically.
 """
 
 def _write_query_yaml(out_dir: str, **fields: Any) -> None:
@@ -1346,7 +1352,7 @@ class CrystALLSearch:
             self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
         else:
             self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
-        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSION_WHITELIST]
+        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS]
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
     def generate_local(
@@ -1366,7 +1372,7 @@ class CrystALLSearch:
         self.prototype_path = prototype_path if prototype_path is not None else self.prototype_path
         assert self.prototype_path, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
         self.prototype_path = run_local(self.target_formula, self.prototype_path)
-        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSION_WHITELIST]
+        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS]
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(
