@@ -480,7 +480,7 @@ class TestTopLevelFunctions(unittest.TestCase):
     def test_load_known_fields(self) -> None:
         """_load_known_fields returns a frozenset of YAML-listed paths plus
         dynamically-derived material.compositionDictionary.<symbol> leaves."""
-        from crystall.core import _load_known_fields
+        from crystall.utils.fields import _load_known_fields
 
         fields = _load_known_fields()
         self.assertIsInstance(fields, frozenset)
@@ -503,7 +503,7 @@ class TestTopLevelFunctions(unittest.TestCase):
     def test_suggest_field_typos(self) -> None:
         """_suggest_field_typos warns on close-match field and operator typos,
         silent on exact matches, no-close-match keys, and payload dicts."""
-        from crystall.core import _suggest_field_typos
+        from crystall.utils.fields import _suggest_field_typos
 
         # Empty other_targets: silent
         with warnings.catch_warnings(record=True) as w:
@@ -556,7 +556,7 @@ class TestTopLevelFunctions(unittest.TestCase):
     def test_warn_unrecognized_fields(self) -> None:
         """_warn_unrecognized_fields warns when any key is not in _KNOWN_FIELDS,
         listing only the unrecognized keys; silent when everything is known."""
-        from crystall.core import _warn_unrecognized_fields
+        from crystall.utils.fields import _warn_unrecognized_fields
 
         # Empty: silent
         with warnings.catch_warnings(record=True) as w:
