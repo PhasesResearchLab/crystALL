@@ -5,11 +5,6 @@
     "DGLBACKEND": "pytorch"
   },
   "customizations": {
-    "codespaces": {
-      "openFiles": [
-        "tutorial/01.QuickStart.ipynb"
-      ]
-    },
     "vscode": {
       "settings": {
         "remote.autoForwardPortsSource": "process",
@@ -20,11 +15,17 @@
         "ms-toolsai.jupyter",
         "hansvn.instant-mongo"
       ]
+    },
+    "codespaces": {
+      "openFiles": [
+        "tutorial/README.md"
+      ]
     }
   },
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
     "storage": "16gb"
-  }
+  },
+  "postCreateCommand": "pip install yaspin"
 }

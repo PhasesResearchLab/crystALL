@@ -7,23 +7,28 @@ import re
 import json
 import csv
 import time
-from urllib.error import HTTPError
-from decimal import Decimal, ROUND_DOWN
-from itertools import groupby, permutations, product, combinations
-from operator import itemgetter
-from importlib import resources
-from statistics import mean
-from typing import List, Dict, Union, Literal
-
-# Common tool libraries
 import numpy as np
 import pandas as pd
+import plotly.graph_objs as go
+import importlib.resources
+import threading
+import warnings
+import tomllib
+
+# Common tool libraries
 from tqdm import tqdm
 from natsort import natsorted
 from colorama import Fore, Style
 from distinctipy import get_colors
 from plotly.offline import plot, iplot
-import plotly.graph_objs as go
+from yaspin import yaspin
+from urllib.error import HTTPError
+from decimal import Decimal, ROUND_DOWN
+from itertools import groupby, permutations, product, combinations
+from operator import itemgetter
+from statistics import mean
+from typing import Any, Sequence, List, Dict, Union, Literal, Optional, Tuple
+from importlib.metadata import entry_points
 
 # ML / Data
 from pymongo.database import Database
@@ -32,22 +37,117 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score, pairwise_distances
 from sklearn.cluster import KMeans, DBSCAN
-
-# Atomistic / Atomistic ML
 from pysipfenn import Calculator
 from pysipfenn.descriptorDefinitions.KS2022 import onlyStructural
-from alignn import pretrained
 from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
 
 # Disable undesired warnings from torch and pymatgen
-import warnings
 warnings.filterwarnings("ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*")
 warnings.filterwarnings("ignore", message="(?:.|\n)*electronegativity(?:.|\n)*")
 
 # Top-Level Functions *************************************************************************
+
+def load_adapters() -> Dict[str, Any]:
+    """Discover and load calculator adapters.
+
+    Primary mechanism: Python entry points under group 'crystall.calculators'.
+    Fallback (useful in editable/unchecked-out source trees): dynamically scan
+    local 'crystall.calculators' modules for classes exposing the minimal
+    adapter interface: attributes 'name', 'objectives', and method 'run_on_directory'.
+    Returns a mapping of adapter-name -> adapter class. Failures are warned and skipped.
+    """
+    adapters: Dict[str, Any] = {}
+    # 1) Entry points (preferred when package is installed)
+    try:
+        eps = entry_points(group="crystall.calculators")
+        for ep in eps:
+            try:
+                adapters[ep.name] = ep.load()
+            except Exception as e:
+                warnings.warn(f"Skipping calculator '{ep.name}' due to load error: {e}")
+    except Exception as e:
+        warnings.warn(f"Failed to read entry points for calculators: {e}")
+
+    if adapters:
+        return adapters
+
+    # 2) Fallback: scan local package modules
+    try:
+        import pkgutil
+        import importlib
+        import inspect
+        pkg = importlib.import_module('crystall.calculators')
+        for _, modname, ispkg in pkgutil.iter_modules(pkg.__path__):
+            if ispkg:
+                continue
+            try:
+                mod = importlib.import_module(f'crystall.calculators.{modname}')
+            except Exception as e:
+                warnings.warn(f"Could not import local calculator module '{modname}': {e}")
+                continue
+            for _, obj in inspect.getmembers(mod, inspect.isclass):
+                if getattr(obj, '__module__', '') != mod.__name__:
+                    continue
+                # Minimal adapter contract
+                if all(hasattr(obj, attr) for attr in ('name', 'objectives', 'run_on_directory')):
+                    try:
+                        name = getattr(obj, 'name')
+                        if isinstance(name, str) and name and name not in adapters:
+                            adapters[name] = obj
+                    except Exception:
+                        pass
+    except Exception as e:
+        warnings.warn(f"Local adapter discovery failed: {e}")
+
+    return adapters
+
+
+def _aggregate_pipeline(
+        collection,
+        pipeline: List[Dict[str, Any]],
+        hint: Optional[Dict[str, int]] = None,
+        msgs: Optional[Sequence[str]] = None,
+        interval: float = 0.6
+    ) -> List[Dict[str, Any]]:
+    """
+    Run a MongoDB aggregate() call while displaying a yaspin spinner whose text
+    cycles through a short list of status messages.
+    """
+
+    if msgs is None:
+        msgs = (
+            'rɛplacing elɛments in thɛ prototypes',
+            'replacing ɛlemɛnts in the prototypɛs',
+            'rɛplacing ɛlɛments in the prototypes',
+            'replacing elemɛnts in thɛ prototypɛs',
+        )
+
+    aggregate_kwargs = {"allowDiskUse": True}
+    if hint is not None:
+        aggregate_kwargs["hint"] = hint
+
+    with yaspin(text=msgs[0]) as sp:
+        stop_evt = threading.Event()
+
+        def cycle() -> None:
+            i = 0
+            while not stop_evt.is_set():
+                sp.text = msgs[i % len(msgs)]
+                i += 1
+                time.sleep(interval)
+
+        t = threading.Thread(target=cycle, daemon=True)
+        t.start()
+        try:
+            result = list(collection.aggregate(pipeline, **aggregate_kwargs))
+        finally:
+            stop_evt.set()
+            t.join(timeout=2)
+
+    return result
 
 def run_local(
         target_formula: Union[str, Composition],
@@ -69,9 +169,9 @@ def run_local(
     """
 
     assert os.path.isdir(prototype_path), 'Prototype path must be a valid directory'
-    
+
     print(f'\nSearching for structure prototypes for: {target_formula}')
-    print('Structure prototype dataset:\n' + prototype_path)
+    print("Structure prototype dataset: " + prototype_path)
 
     if isinstance(target_formula, str):
         # Formula to pymatgen Composition
@@ -85,52 +185,49 @@ def run_local(
     aFormula = composition.anonymized_formula
     nElements = composition.to_data_dict['nelements']
 
-    # Initial prototype dataset scan
+    # Initial prototype dataset scan – collect matching structures in memory only
     fileList = natsorted(os.listdir(prototype_path))
-    total = fileList.__len__()
-    print(str(total)+' files detected\n')
-    # Intermediate directory for identified prototypes
-    try:
-        os.mkdir(os.path.split(prototype_path)[1] + '-' + aFormula)
-        print('Intermediate directory for '+aFormula+' created.')
-    except FileExistsError:
-        print('Intermediate directory for '+aFormula+' already exist.\nPrototypes selection will be overwritten/updated.\n')
+    total = len(fileList)
 
-    # Counters
-    allS = 0
-    nEl = 0
-    aF = 0
-    print('{0:*^80}'.format('Scanning database for '+aFormula+' compounds.'))
-    # Iterate over dataset of all structures
+    allS = 0           # total files inspected
+    nEl = 0            # structures with correct number of elements
+    aF = 0             # structures matching anonymized formula
+    # Keep both the original filename (base_name) and the Structure to avoid name collisions later
+    prototypeList: List[Tuple[str, Structure]] = []
+
     for file in fileList:
-        allS = allS + 1
-        if os.path.splitext(file)[1] == '.POSCAR':
-            s = Structure.from_file(prototype_path +'/'+ file)
-            if s.n_elems == nElements:
-                nEl = nEl + 1
-                if Composition(s.formula).anonymized_formula == aFormula:
-                    sP = Poscar(s)
-                    sP.write_file(os.path.split(prototype_path)[1] + '-' + aFormula + '/' + str(aF) + '-' + os.path.splitext(file)[0] + '-' + str.replace(s.formula, ' ', '') + '.POSCAR')
-                    aF = aF + 1
-                    if aF % 100 == 0:
-                        print(str(aF) + ' prototype structures identified.')
-        if allS % 5000 == 0:
+        allS += 1
+        if os.path.splitext(file)[1] != '.POSCAR':
+            continue
+
+        s = Structure.from_file(os.path.join(prototype_path, file))
+        if s.n_elems == nElements:
+            nEl += 1
+            if Composition(s.formula).anonymized_formula == aFormula:
+                base_name = os.path.splitext(os.path.basename(file))[0]
+                prototypeList.append((base_name, s))
+                aF += 1
+                if aF % 100 == 0:
+                    print(str(aF) + ' prototype structures identified.')
+
+        if total and allS % 5000 == 0:
             print(str(round(allS / total * 100, 1)) + '% database scan completed.')
 
     print('\nTotal structures detected: ' + str(allS))
-    print('\n' + str(nElements) + '-element structures: ' + str(nEl))
-    print(str(nElements) + '-element structures fraction: ' + str(round(nEl / total * 100)) + '%')
-    print('\n' + aFormula + ': ' + str(aF))
-    print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%')
-
-    # List selected prototypes
-    prototypeList = natsorted(os.listdir(os.path.split(prototype_path)[1] + '-' + aFormula))
+    print(str(nElements) + '-element structures: ' + str(nEl))
+    if total:
+        print(str(nElements) + '-element structures fraction: ' + str(round(nEl / total * 100)) + '%\n')
+    else:
+        print(str(nElements) + '-element structures fraction: 0%\n')
+    print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(aF))
+    if nEl:
+        print(aFormula + ' Fraction from ' + str(nElements) + '-element: ' + str(round(aF / nEl * 100)) + '%\n')
+    else:
+        print(aFormula + ' Fraction from ' + str(nElements) + '-element: 0%\n')
 
     # Substitution elements combination.
-    print('{0:*^80}'.format(' Substituting elements in the prototypes '))
     sEL = sorted_elements_list(composition)
     sELtarget = [item for sublist in sEL for item in sublist]
-    print('\nTarget Element Combination: ' + str(sELtarget))
 
     # Verify need for permutations
     permN = 1
@@ -138,32 +235,32 @@ def run_local(
         permN = permN * math.factorial(multiples.__len__())
 
     if permN > 1:
-        print('\nTarget composition has degenerate anonymous formula thus requires permutations.')
-        print('Up to ' + str(permN) + ' per structure.')
-        print('Total number of prototypes increased up to: ' + str(aF * permN) + '\n')
+        print('Target composition has degenerate anonymous formula thus requires permutations.')
+        print(f'Up to {Fore.BLUE}{Style.BRIGHT}{str(permN)}{Style.RESET_ALL} per structure.\n')
     else:
-        print('\nTarget composition indicates discrete element substitution.')
+        print('Target composition indicates discrete element substitution.\n')
 
-    intPath = f"{os.path.split(prototype_path)[1]}-{aFormula}"
-    print('Intermediate Directory: ' + intPath)
-    finPath = f"{os.path.split(prototype_path)[1]}-{str(target_formula).replace(' ', '')}"
-    print('Final Directory: ' + finPath)
+    # Standardized output directory naming: <formula>-local-prototypes
+    formula_str = str(target_formula).replace(' ', '')
+    out_dir = f"{formula_str}-local-prototypes"
+    # Ensure we are not writing back into the prototype source directory
+    assert os.path.abspath(out_dir) != os.path.abspath(prototype_path), 'Output directory must differ from prototype_path'
+
+    print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
     try:
-        os.mkdir(finPath)
-        print('Final directory created.')
+        os.mkdir(out_dir)
+        print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
     except FileExistsError:
-        print('Final directory already exist.\nPrototypes will be overwritten/updated.')
+        print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
-    # Substitute over all condidates over all of their permutations
+    # Substitute over all candidates over all of their permutations
     allS = 0
-    for prototype in prototypeList:
-        s = Structure.from_file(intPath + '/' + prototype)
+    for base_name, s in prototypeList:
 
         permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
         spGroupA = SpacegroupAnalyzer(s)
-        fileSplit = prototype.split('.')
-        newNameRoot = fileSplit[0] + '-' + str(
-            spGroupA.get_crystal_system()) + '-'
+        # Preserve original base_name to avoid overwriting files from different prototypes
+        newNameRoot = 'local-' + str(spGroupA.get_crystal_system()) + '-' + base_name
 
         p = 0
         for permut in permuts:
@@ -178,12 +275,12 @@ def run_local(
             else:
                 newName = newNameRoot + '.POSCAR'
             sP = Poscar(st)
-            sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
+            sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', newName))
         allS = allS + p
         if allS % 100 == 0:
             print(str(allS) + ' substitutions complete.')
     print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
-    return finPath
+    return out_dir
 
 def run_MPDD(
         target_formula: Union[str, Composition],
@@ -200,7 +297,7 @@ def run_MPDD(
         target_formula: The target formula as a string or pymatgen Composition object.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
-        target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
 
@@ -215,8 +312,8 @@ def run_MPDD(
     assert len(collections) > 0, 'At least one collection must be specified'
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
     
-    print(f'\nSearching for structure prototypes for: {target_formula}')
-    print('Using MPDD Database with collections: '+', '.join(collections))
+    print(f'\nSearching for structure prototypes for: {Fore.YELLOW}{Style.BRIGHT}{target_formula}{Style.RESET_ALL}')
+    print(f'Using MPDD Database with collections: {Fore.MAGENTA}{Style.BRIGHT}{", ".join(collections)}{Style.RESET_ALL}')
 
     if isinstance(target_formula, str):
         # Formula to pymatgen Composition
@@ -231,17 +328,18 @@ def run_MPDD(
     aFormula = composition.anonymized_formula
     rFormula = composition.reduced_formula
 
-    print(f'\nLooking for {target_formula} in MPDD database collections.')
+    formula_str = str(target_formula).replace(' ', '')
+    source_str = f"MPDD({'-'.join(collections)})"
 
     if target_prototypes == 'native':
 
-        natPath = f"{str(target_formula).replace(' ', '')}-{'_'.join(collections)}-native-prototypes"
+        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
 
         try:
-            os.mkdir(natPath)
-            print('Directory created for MPDD prototypes: '+natPath )
+            os.mkdir(out_dir)
+            print('Directory created for MPDD prototypes: ' + out_dir)
         except FileExistsError:
-            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.')
+            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
 
         for col in collections:
             print('Looking through: ' + col)
@@ -253,10 +351,25 @@ def run_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline))
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                msgs=('matching native candidates')
+            )
+
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -275,27 +388,25 @@ def run_MPDD(
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
 
                 p = Poscar(s)
-                p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
+                p.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
         print('Done.\n')
 
-        return natPath
+        return out_dir
 
     elif target_prototypes == 'non-native':
 
-        print('\nDetecting Input Structures:')
+        print('\nDetecting Matching Input Structures:')
         foundTotal = 0
         for col in collections:
             foundN = MPDD[col].count_documents({'material.anonymizedFormula' : aFormula})
             foundTotal += foundN
-            print('Found ' + str(foundN) + ' in ' + col)
+            print(f'Found {Fore.GREEN}{Style.BRIGHT}{str(foundN)}{Style.RESET_ALL} in {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
 
-        print('\nTotal of '+str(foundTotal) + ' structures available.\n')
+        print(f'\nTotal of {Fore.GREEN}{Style.BRIGHT}{str(foundTotal)}{Style.RESET_ALL} structures available.\n')
 
         # Substitution elements combination.
-        print('{0:*^80}'.format(' Substituting elements in the prototypes '))
         sEL = sorted_elements_list(composition)
         sELtarget = [item for sublist in sEL for item in sublist]
-        print('\nTarget Element Combination: ' + str(sELtarget))
 
         # Verify need for permutations
         permN = 1
@@ -303,25 +414,24 @@ def run_MPDD(
             permN = permN * math.factorial(multiples.__len__())
 
         if permN > 1:
-            print('\nTarget composition has degenerate anonymous formula thus requires permutations.')
-            print('Up to ' + str(permN) + ' per structure.')
-            print('Total number of prototypes increased up to: ' + str(foundTotal * permN) + '\n')
+            print('Target composition has degenerate anonymous formula thus requires permutations.')
+            print(f'Up to {Fore.BLUE}{Style.BRIGHT}{str(permN)}{Style.RESET_ALL} per structure.\n')
         else:
-            print('\nTarget composition indicates discrete element substitution.')
+            print('Target composition indicates discrete element substitution.\n')
 
-        finPath = f"{str(target_formula).replace(' ', '')}-{'_'.join(collections)}-prototypes"
-        print('Final Prototype Directory: ' + finPath)
+        out_dir = f"{formula_str}-{source_str}-prototypes"
+        print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
 
         try:
-            os.mkdir(finPath)
-            print('Final directory created.')
+            os.mkdir(out_dir)
+            print(f'{Fore.GREEN}Final directory created.{Style.RESET_ALL}')
         except FileExistsError:
-            print('Final directory already exist.\nPrototypes will be overwritten/updated.')
+            print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
         # Substitute over all prototypes over all of their permutations
         allS = 0
         for col in collections:
-            print('Looking through: ' + col)
+            print(f'Looking through: {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
 
             pipeline = [
                 {"$match": {"material.anonymizedFormula": aFormula}},
@@ -330,10 +440,26 @@ def run_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline, hint={'material.anonymizedFormula': 1}))
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                hint={'material.anonymizedFormula': 1},
+            )
+            
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -363,17 +489,20 @@ def run_MPDD(
                     else:
                         name = nameRoot + '.POSCAR'
                     sP = Poscar(st)
-                    sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
+                    sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name))
                 allS = allS + p
                 if allS % 1000 == 0:
                     print(str(allS) + ' substitutions complete.')
 
-        print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.')
-        
-        return finPath
+        print(
+            f"Total number of unique prototypes: {Fore.GREEN}{Style.BRIGHT}{len(aggregated_data)}{Style.RESET_ALL} * {Fore.BLUE}{Style.BRIGHT}{permN}{Style.RESET_ALL} permutations each\n"
+            f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {target_formula} prototypes.'
+        )
 
-def run_compositional_MPDD(
-        target_composition_dict: Dict[str, int],
+        return out_dir
+
+def run_MPDD_devs(
+        target_formula: Union[str, Composition],
         devs: Dict[str, int],
         MPDD: Database,
         collections: List[str],
@@ -385,11 +514,11 @@ def run_compositional_MPDD(
     Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
 
     Args:
-        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
+        target_formula: The target formula as a string or pymatgen Composition object.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.
-        target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes.
+        target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
 
@@ -400,26 +529,36 @@ def run_compositional_MPDD(
     assert len(collections) > 0, 'At least one collection must be specified'
     assert isinstance(MPDD, Database), 'MPDD must be a pymongo Database object'
     
-    # Target formula
-    meanFormula = ''.join(f'{key}{val}' for key, val in target_composition_dict.items())
-    rangesStr = f"+-({','.join(str(r) for r in devs.values())})"
+    if isinstance(target_formula, str):
+        # Formula to pymatgen Composition
+        composition = Composition(target_formula)
+    elif isinstance(target_formula, Composition):
+        composition = target_formula
+    else:
+        raise ValueError('Target formula must be a string or a pymatgen Composition object')
+    
+    # Target formula and standardized directory naming components
+    rangesStr = f"({','.join(str(r) for r in devs.values())})"
+    formula_str = f"{str(target_formula).replace(' ', '')}±{rangesStr}"
+    source_str = f"MPDD({'-'.join(collections)})"
 
-    print('\nSearching for structure prototypes for: ' + meanFormula + ' ' + rangesStr)
+    target_composition_dict = {el: round(amt / composition.num_atoms * 1000, 0)
+                                    for el, amt in composition.as_dict().items()}
+
+    print('\nSearching for structure prototypes for: ' + formula_str)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
 
     if target_prototypes == 'native':
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
-        print('\nLooking for ' + meanFormula + ' in MPDD database collections.')
-
-        natPath = '_'.join(collections) + '-native-' + meanFormula + rangesStr
+        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
 
         try:
-            os.mkdir(natPath)
-            print('Directory created for MPDD prototypes: ' + natPath)
+            os.mkdir(out_dir)
+            print('Directory created for MPDD prototypes: ' + out_dir)
         except FileExistsError:
-            print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.')
+            print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
 
         # Query for matching MPDD entries
         nativeQuery = comp2comp_q(target_composition_dict, devs)
@@ -435,10 +574,25 @@ def run_compositional_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline))
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                msgs=('matching native candidates')
+            )
+
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -457,13 +611,13 @@ def run_compositional_MPDD(
                     name = name + '-from-' + e['metadata']['name'] + '-at-' + e['metadata']['affiliation']
 
                 p = Poscar(s)
-                p.write_file(natPath + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
+                p.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name) + '.POSCAR')
                 targetPresent += 1
 
         print('Done.')
         print(f'{targetPresent} target materials found in MPDD.\n')
 
-        return natPath
+        return out_dir
 
     elif target_prototypes == 'non-native':
         # ******** Try to find materials from the MPDD database that can be adjusted to the target formula  **************
@@ -473,7 +627,7 @@ def run_compositional_MPDD(
 
         # ************************************** Count prototypes ********************************************************
 
-        print('\nDetecting Input Structures:')
+        print('\nDetecting Matching Input Structures:')
         foundTotal = 0
         for col in collections:
             foundN = MPDD[col].count_documents(sortedFractionsDictQuery)
@@ -484,16 +638,14 @@ def run_compositional_MPDD(
 
         # ********************************* Substitution elements combination ********************************************
 
-        print('{0:*^80}'.format(' Substituting elements in the prototypes '))
-
-        finPath = '_'.join(collections) + '-' + meanFormula + rangesStr
-        print('Final Prototype Directory: ' + finPath)
+        out_dir = f"{formula_str}-{source_str}-prototypes"
+        print('Final Prototype Directory: ' + out_dir)
 
         try:
-            os.mkdir(finPath)
+            os.mkdir(out_dir)
             print('Final directory created.')
         except FileExistsError:
-            print('Final directory already exist.\nPrototypes will be overwritten/updated.')
+            print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
 
         # All generated prototypes
         allS = 0
@@ -511,19 +663,34 @@ def run_compositional_MPDD(
                     "document": {"$first": "$$ROOT"}
                 }},
                 {"$sort": {"document.properties.EF_SIPFENN_NN30": 1}},
-                {"$limit": limit}
+                {"$facet": {
+                    "data": [ {"$limit": limit} ],
+                    "meta": [ {"$count": "total"} ]
+                }}
             ]
 
-            aggregated_data = list(MPDD[col].aggregate(pipeline, hint={
-                'material.sortedFractionsDict.c1': 1,
-                'material.sortedFractionsDict.c2': 1,
-                'material.sortedFractionsDict.c3': 1,
-                'material.sortedFractionsDict.c4': 1,
-                'material.sortedFractionsDict.c5': 1,
-                'material.sortedFractionsDict.c6': 1,
-                'material.sortedFractionsDict.c7': 1,
-                'material.sortedFractionsDict.c8': 1
-            }))
+            facet_out = _aggregate_pipeline(
+                MPDD[col],
+                pipeline,
+                hint={
+                    'material.sortedFractionsDict.c1': 1,
+                    'material.sortedFractionsDict.c2': 1,
+                    'material.sortedFractionsDict.c3': 1,
+                    'material.sortedFractionsDict.c4': 1,
+                    'material.sortedFractionsDict.c5': 1,
+                    'material.sortedFractionsDict.c6': 1,
+                    'material.sortedFractionsDict.c7': 1,
+                    'material.sortedFractionsDict.c8': 1
+                },
+            )
+
+            facet = facet_out[0] if facet_out else {"data": [], "meta": []}
+            aggregated_data = facet.get("data", [])
+            total_groups = facet.get("meta", [{}])[0].get("total", 0) if facet.get("meta") else 0
+            print(
+                f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
+                f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
+            )
 
             for entry in aggregated_data:
 
@@ -564,19 +731,19 @@ def run_compositional_MPDD(
                     else:
                         name = nameRoot + '.POSCAR'
                     sP = Poscar(st)
-                    sP.write_file(finPath + '/' + re.sub(r'[?:*|><\\/]', '-', name))
+                    sP.write_file(out_dir + '/' + re.sub(r'[?:*|><\\/]', '-', name))
                 allS = allS + p
                 if allS % 50 == 0:
                     print(str(allS) + ' substitutions complete.')
 
         if allS>0:
-            print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {meanFormula} prototypes.')
+            print(f'\nGenerated {Fore.GREEN}{Style.BRIGHT}{str(allS)}{Style.RESET_ALL} {formula_str} prototypes.')
             print(f'Mean number of permutations: {mean(permutNList)}')
             print(f'Min / Max number of permutations: {min(permutNList)} / {max(permutNList)}')
         else:
             print('No prototypes were generated.')
 
-        return finPath
+        return out_dir
 
 def sorted_elements_list(
         comp: Composition
@@ -663,7 +830,7 @@ def comp2comp_q(
     mpddQuery.update({'material.system': meanComposition.chemical_system})
     for e in comp_dict:
         key = 'material.compositionDictionary.' + e
-        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] - devs[e]) / 1000}})
+        mpddQuery.update({key: {'$gte': (comp_dict[e] - devs[e]) / 1000, '$lte': (comp_dict[e] + devs[e]) / 1000}})
     return mpddQuery
 
 def ordered_allowed_substitutions(
@@ -703,13 +870,13 @@ def ordered_allowed_substitutions(
 
     return allAllowedSubstitutions
 
-# Convenience High-Level API Class ************************************************************
+# Convenience High-Level API Classes **********************************************************
 
 class CrystALLSearch:
     """
     A self-contained environment for (1) obtaining POSCAR files of ``crystALL`` prototypes from either MPDD or a local 
     dataset of POSCAR files, (2) featurizing the prototypes with KS2022 or future ``pySIPFENN`` descriptor calculators,
-    (3) getting property predictions using ``pySIPFENN`` or ``ALIGNN``, (4) clustering the prototypes in ``KS2022`` 
+    (3) getting property predictions using ``pySIPFENN`` or external calculators via adapters, (4) clustering the prototypes in ``KS2022`` 
     feature space, and (5) selecting prototypes based on desired property and cluster affiliation.
     """
     
@@ -738,8 +905,6 @@ class CrystALLSearch:
             self.target_formula = target_formula
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
-        self.target_composition_dict = {el: round(amt / self.target_formula.num_atoms * 1000, 0)
-                                      for el, amt in self.target_formula.as_dict().items()}
 
         stdout, sys.stdout = sys.stdout, io.StringIO()
         self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
@@ -748,66 +913,67 @@ class CrystALLSearch:
         self.MPDD = None
         
         # Internal parameters to use during the processing steps
-        self.available_objectives: List[str] = []
+        self.available_calculators: Dict[str, List[str]] = {}
         self.predicted_objectives: List[str] = []
         self.ks2022: np.ndarray = None
+        self.prototype_path = None
         self.cluster_affiliation: Dict[int, Dict[str, float]] = {}
         self.prototypes: List[Dict[str, Union[str, float]]] = []
         self.top_candidates: List[Dict[str, Union[str, float]]] = []
 
-        print(f"Initialized CrystALLSearch for target formula: {Fore.MAGENTA}{Style.BRIGHT}{self.target_formula.formula}{Style.RESET_ALL}")
+        print(f"Initialized CrystALLSearch for target formula: {Fore.YELLOW}{Style.BRIGHT}{self.target_formula.formula}{Style.RESET_ALL}")
 
-        print(f"\nChecking for available models on the computer..")
-
-        # Dictionary to record model availability
-        self.model_status = {
-            'pySIPFENN': False,
-            'MPDD-ALIGNN': False
-        }
+        print("\nChecking for available calculators on the computer..")
 
         # Check for pySIPFENN models
         existingCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available))
         if existingCompatibleModels:
-            self.model_status['pySIPFENN'] = True
+            loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
+            if not len(loadedCompatibleModels) > 0:
+                alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
+                stdout, sys.stdout = sys.stdout, io.StringIO()
+                self.Calculator.loadModels(network = alternative_model)
+                sys.stdout = stdout
+            # Record pySIPFENN available objectives
+            self.available_calculators['pySIPFENN'] = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
         else:
-            user_input = input("pySIPFENN models not found. Would you like to automatically run `download_models`? ([y]/n):")
+            user_input = input("pySIPFENN models not found. Would you like to automatically run `download_pysipfenn`? ([y]/n):")
             if user_input.lower() in ('y', ''):
-                self.download_models()
+                self.download_pysipfenn()
 
-        # Check for MPDD-ALIGNN models
-        with resources.files('alignn') as alignn_dir:
-            for model_dict in pretrained.get_default_models():
-                if os.path.exists(os.path.join(alignn_dir, model_dict['model'])):
-                    self.model_status['MPDD-ALIGNN'] = True
-                    break
-            if not self.model_status['MPDD-ALIGNN']:
-                user_input = input("MPDD-ALIGNN models not found. Would you like to automatically run `download_models`? ([y]/n):")
-                if user_input.lower() in ('y', ''):
-                    self.download_models()
+        # Supported calculators include builtin pySIPFENN and external adapters via entry points
+        self.supported_calculators: Dict[str, Any] = {'pySIPFENN': None}
+        self.supported_calculators.update(load_adapters())
 
-        # Print the status of models
-        for model, status in self.model_status.items():
-            if status:
+        # Setup external calculators (stub: mark all supported adapters as available with their declared objectives)
+        for calc_name, adapter_cls in self.supported_calculators.items():
+            if calc_name == 'pySIPFENN':
+                continue
+            self.setup_calculator(calc_name)
+
+        # Print the status of calculators (found if present in available_calculators)
+        for calc_name in self.supported_calculators.keys():
+            if calc_name in self.available_calculators:
                 try:
-                    print(f"{Fore.GREEN}✔ {model} models found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}✔ {calc_name} found.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
-                    print(f"{Fore.GREEN}v {model} models found.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}v {calc_name} found.{Style.RESET_ALL}")
             else:
                 try:
-                    print(f"{Style.DIM}✘ {model} models not found.{Style.RESET_ALL}")
+                    print(f"{Style.DIM}✘ {calc_name} not found.{Style.RESET_ALL}")
                 except UnicodeEncodeError:
-                    print(f"{Style.DIM}x {model} models not found.{Style.RESET_ALL}")
+                    print(f"{Style.DIM}x {calc_name} not found.{Style.RESET_ALL}")
 
-        # Update objectives with models found
-        self.update_objectives(self.Calculator)
+        # Update objectives with calculators found
+        self._update_objectives(self.Calculator)
 
-    def update_objectives(
-            self,
-            calculator: Calculator,
-            verbose: bool = True
+    def _update_objectives(
+        self,
+        calculator: Calculator,
+        verbose: bool = True
     ) -> None:
         """
-        Update the available objectives with the models found.
+        Update the available objectives with the calculators found.
 
         Args:
             calculator: A pySIPFENN Calculator object.
@@ -818,30 +984,36 @@ class CrystALLSearch:
         """
 
         assert isinstance(calculator, Calculator), "Calculator must be a Calculator object"
-        
-        if self.model_status['pySIPFENN']:
-        
-            loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
 
-            if not len(loadedCompatibleModels) > 0:
-                alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
-                stdout, sys.stdout = sys.stdout, io.StringIO()
-                self.Calculator.loadModels(network = alternative_model)
-                sys.stdout = stdout
-            
-            self.available_objectives = list(set(calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
+        # pySIPFENN objectives already populated in available_calculators during init or download
+        if 'pySIPFENN' not in self.available_calculators:
+            print("\npySIPFENN objective required for calculation. Run `download_pysipfenn` first.")
 
-        else:
+        # Add objectives from discovered adapters (classes expose class attribute 'objectives')
+        try:
+            for name, adapter_cls in getattr(self, "supported_calculators", {}).items():
+                if name == 'pySIPFENN' or adapter_cls is None:
+                    continue
+                objectives = getattr(adapter_cls, "objectives", []) or []
+                if name not in self.available_calculators:
+                    self.available_calculators[name] = list(objectives)
+        except Exception as e:
+            warnings.warn(f"Adapter objectives aggregation failed: {e}")
 
-            print("\npySIPFENN objective required for calculation. Run `download_models` first.")
+        if len(self.available_calculators) >= 1 and verbose:
+            print("\nObjectives available for calculation:")
+            for calc_name, obj_list in self.available_calculators.items():
+                if not obj_list:
+                    continue
+                try:
+                    colored_calc = f"{calc_name}"
+                    colored_objs = ', '.join(f"{Fore.GREEN}{Style.BRIGHT}{o}{Style.RESET_ALL}" for o in sorted(obj_list))
+                    print(f"- {colored_calc}: {colored_objs}")
+                except UnicodeEncodeError:
+                    # Fallback without colors if terminal cannot render them
+                    print(f"- {calc_name}: {', '.join(sorted(obj_list))}")
 
-        self.available_objectives += ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]'] if self.model_status['MPDD-ALIGNN'] else []
-
-        if len(self.available_objectives) >= 1 and verbose:
-        
-            print(f"\nObjectives available for calculation: {Fore.GREEN}{Style.BRIGHT}{', '.join(self.available_objectives)}{Style.RESET_ALL}.")
-
-    def __check_objectives(
+    def check_objectives(
             self
     ) -> None:
         """
@@ -853,12 +1025,16 @@ class CrystALLSearch:
         Returns:
             List of common objectives between available objectives and predicted objectives.
         """
+        # Build a list of all available objectives across calculators
+        flat_available = []
+        for lst in self.available_calculators.values():
+            flat_available.extend(lst)
 
-        assert isinstance(self.available_objectives, list) and len(self.available_objectives) >= 1, "At least one objective is required for classification. Run `download_models` first."
+        assert isinstance(flat_available, list) and len(flat_available) >= 1, "At least one objective is required for classification. Run `download_pysipfenn` first."
         
-        if any(value not in self.predicted_objectives for value in self.available_objectives):
+        if any(value not in self.predicted_objectives for value in flat_available):
             print("\nSome objectives do not have predictions calculated and will not be considered for classification.")
-            for obj in self.available_objectives:
+            for obj in flat_available:
                 if obj not in self.predicted_objectives:
                     try:
                         print(f"{Style.DIM}✘ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
@@ -868,16 +1044,16 @@ class CrystALLSearch:
                     try:
                         print(f"{Fore.GREEN}✔ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
                     except UnicodeEncodeError:
-                        print(f"{Fore.GREEN}√ {Style.BRIGHT}{obj}{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}v {Style.BRIGHT}{obj}{Style.RESET_ALL}")
 
-    def download_models(
+    def download_pysipfenn(
             self,
             mode: Literal['serial', 'parallel'] = 'parallel',
             retries=3, 
             delay=5
     ) -> None:
         """
-        Download the default models for both pySIPFENN and MPDD-ALIGNN.
+        Download the default models required for pySIPFENN operation.
 
         Args:
             mode: Mode to download models: ``'serial'`` or ``'parallel'``. Defaults to 'parallel'.
@@ -885,11 +1061,12 @@ class CrystALLSearch:
             delay: Delay between retry attempts in seconds.
         """
         
-        print(f"Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
+        print("Downloading SIPFENN_Krajewski2022_NN30 model for pysipfenn..")
         for attempt in range(retries):
             try:
                 self.Calculator.downloadModels("SIPFENN_Krajewski2022_NN30")
-                self.model_status['pySIPFENN'] = True
+                # Mark pySIPFENN objectives as available
+                self.available_calculators['pySIPFENN'] = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))
                 break  # Exit the loop if successful
             except HTTPError as e:
                 print(f"HTTPError: {e.code} - {e.reason}")
@@ -898,24 +1075,27 @@ class CrystALLSearch:
                     time.sleep(delay)
                 else:
                     raise
-        
-        print(f"Downloading models for MPDD-alignn..")
-        for attempt in range(retries):
-            try:
-                pretrained.download_default_models(parallel=(mode == 'parallel'))
-                self.model_status['MPDD-ALIGNN'] = True
-                break  # Exit the loop if successful
-            except HTTPError as e:
-                print(f"HTTPError: {e.code} - {e.reason}")
-                if attempt < retries - 1:
-                    print(f"Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    raise
-        
-        print(f"Done! Models are ready to use.")
+        print("Done! Models are ready to use.")
+        self._update_objectives(self.Calculator, False)
+    
+    def setup_calculator(
+        self, 
+        calculator_name: str
+    ) -> None:
+        """Stub to setup an external calculator adapter.
 
-        self.update_objectives(self.Calculator, False)
+        For now, this just registers the adapter's declared objectives into
+        available_calculators so they appear in the objective list.
+
+        Args:
+            calculator_name: Name of the calculator (adapter key).
+        """
+        adapter_cls = getattr(self, 'supported_calculators', {}).get(calculator_name)
+        if adapter_cls is None:
+            return
+        objectives = getattr(adapter_cls, 'objectives', []) or []
+        if calculator_name not in self.available_calculators:
+            self.available_calculators[calculator_name] = list(objectives)
 
     def connect_MPDD(
             self,
@@ -938,7 +1118,7 @@ class CrystALLSearch:
         availableCollections = self.MPDD.list_collection_names()
         assert len(availableCollections) > 0, 'No collections found in the database or the database connection has not been established properly'
         assert set(collections).issubset(availableCollections), 'At least one of the specified collections is not available in the database'
-        filtered_collections = [col for col in availableCollections if 'test' not in col.lower()]
+        filtered_collections = [col for col in availableCollections if 'test' not in col.lower() and 'abnormal' not in col.lower()]
         print(f"\nConnected to database {Fore.MAGENTA}{Style.BRIGHT}{self.MPDD.name}{Style.RESET_ALL} with collections: {Fore.MAGENTA}{Style.BRIGHT}{', '.join(filtered_collections)}{Style.RESET_ALL}")
         assert len(collections) > 0, 'At least one collection must be specified'
         self.collections = collections
@@ -955,7 +1135,7 @@ class CrystALLSearch:
         Generate prototype materials from the MPDD database based on the target formula.
 
         Args:
-            target_prototypes: Specifies whether to use 'native' or 'non-native' prototypes. Defaults to 'non-native'.
+            target_prototypes: Specifies whether to use 'native' or 'non-native' compositions. Defaults to 'non-native'.
             filter_prototypes: Specifies the prototype filter to use. Defaults to 'material.structID'.
             limit: The maximum number of prototypes to generate. Defaults to 1000.
             devs: Dictionary with element symbols as keys and their allowed deviations as values. Defaults to None.
@@ -971,7 +1151,7 @@ class CrystALLSearch:
         if devs is None:
             self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
         else:
-            self.prototype_path = run_compositional_MPDD(self.target_composition_dict, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
+            self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
         inputFiles = natsorted(os.listdir(self.prototype_path))
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
@@ -1000,7 +1180,7 @@ class CrystALLSearch:
             mode: Literal['serial', 'parallel'] = 'serial'
     ) -> None:
         """
-        Predict properties for the prototype materials using pySIPFENN models and update the prototypes with the predictions.
+        Generate pySIPFENN predictors (features) and predict properties for the prototype materials using pySIPFENN models and update the prototypes with the predictions.
 
         Args:
             mode: Mode to run pySIPFENN: ``'serial'`` or ``'parallel'``. Defaults to 'serial'.
@@ -1011,12 +1191,18 @@ class CrystALLSearch:
 
         assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
         assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
-        assert self.model_status['pySIPFENN'], 'pySIPFENN models not found. Please run `download_models` first.'
+        assert 'pySIPFENN' in self.available_calculators and len(self.available_calculators.get('pySIPFENN', [])) > 0, \
+            'pySIPFENN models not found. Please run `download_pysipfenn` first.'
 
-        for model in set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.available_objectives)):
+        # Track which objectives (models) will be predicted by pySIPFENN
+        for model in self.available_calculators.get('pySIPFENN', []):
+            if model not in self.Calculator.loadedModels:
+                stdout, sys.stdout = sys.stdout, io.StringIO()
+                self.Calculator.loadModels(network = model)
+                sys.stdout = stdout
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
-        
+
         self.Calculator.runFromDirectory(self.prototype_path, 'KS2022', mode=mode, max_workers=8)
         resultDicts, self.ks2022 = self.Calculator.get_resultDictsWithNames(), np.array(self.Calculator.descriptorData)
         assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
@@ -1031,52 +1217,69 @@ class CrystALLSearch:
                             prototype[key] = float(Decimal(prototype[key]).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
                     break
 
-        # Update average of the predictions
-        self.calculate_average()
-        
         print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(self.ks2022)}{Style.RESET_ALL} prototypes using pySIPFENN")
     
-    def get_alignn_properties(
-            self,
-            mode: Literal['serial', 'parallel'] = 'serial'
+    def get_calculator_properties(
+        self,
+        calculator: str,
+        mode: Literal["serial", "parallel"] = "serial",
+        max_workers: int | None = None,
+        objectives: Sequence[str] | None = None,
     ) -> None:
-        """
-        Predict properties for the prototype materials using MPDD-ALIGNN models and update the prototypes with the predictions.
+        """Run a pluggable calculator adapter over the prototype directory and merge results.
 
         Args:
-            mode: Mode to run ALIGNN: ``'serial'`` or ``'parallel'``. Defaults to 'serial'.
+            calculator: The adapter name as declared in entry points.
+            mode: 'serial' or 'parallel' as supported by the adapter.
 
         Raises:
-            AssertionError: If no prototype directory is specified, if the prototype directory path is not a string, if no MPDD-ALIGNN models are found, or if the number of prototypes does not match the number of property predictions.
+            AssertionError: if prototypes folder missing or unknown calculator name.
         """
-
         assert self.prototype_path is not None, 'No prototypes folder identified. Please run `generate_MPDD` or `generate_local` first.'
         assert isinstance(self.prototype_path, str), 'Prototypes folder path must be a string'
-        assert self.model_status['MPDD-ALIGNN'], 'MPDD-ALIGNN models not found. Please run `download_models` first.'
-        
-        for model_dict in pretrained.get_default_models():
-            if model_dict['name'] in self.available_objectives and model_dict['name'] not in self.predicted_objectives:
-                self.predicted_objectives.append(model_dict['name'])
-        
-        print("\nModels that will be run: ['ALIGNN-MP Formation Energy [eV/atom]', 'ALIGNN-JARVIS Formation Energy [eV/atom]']")
-        print('Calculating descriptors...')
-        resultDicts = pretrained.run_models_from_directory(self.prototype_path, mode=mode)
-        assert len(self.prototypes) == len(resultDicts), 'Number of prototypes does not match number of property predictions'
+        assert hasattr(self, "supported_calculators"), "Supported calculators not initialized."
+        assert calculator in self.supported_calculators and calculator != 'pySIPFENN', \
+            f"Unknown calculator '{calculator}'. Available: {list(self.supported_calculators.keys())}"
 
-        for result in resultDicts:
-            name = result['name']
-            for prototype in self.prototypes:
-                if prototype['name'] == name:
-                    prototype.update(result)
-                    for key in result.keys():
-                        if isinstance(prototype[key], float):
-                            prototype[key] = float(Decimal(prototype[key]).quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
-                    break
+        adapter_cls = self.supported_calculators[calculator]
+        try:
+            adapter = adapter_cls()
+        except Exception as e:
+            raise RuntimeError(f"Failed to instantiate adapter '{calculator}': {e}")
 
-        # Update average of the predictions
-        self.calculate_average()
-        
-        print(f"Predicted properties for {Fore.GREEN}{Style.BRIGHT}{len(resultDicts)}{Style.RESET_ALL} prototypes using ALIGNN")
+        results = adapter.run_on_directory(self.prototype_path, mode=mode, max_workers=max_workers, objectives=objectives)
+        # Be tolerant to partial results: merge what we have and warn on mismatch
+        if len(results) != len(self.prototypes):
+            warnings.warn(f"Calculator '{calculator}' returned {len(results)} results for {len(self.prototypes)} prototypes; merging overlapping names.")
+
+        # Build index for fast merge
+        name_to_index = {p.get('name'): i for i, p in enumerate(self.prototypes)}
+        matched = 0
+        for r in results:
+            name = r.get('name') if isinstance(r, dict) else None
+            props = r.get('properties', {}) if isinstance(r, dict) else {}
+            if name in name_to_index:
+                self.prototypes[name_to_index[name]].update(props)
+                matched += 1
+
+        if matched == 0:
+            raise AssertionError("No calculator predictions matched any prototype names. Ensure filenames are preserved.")
+
+        # Track only objectives actually produced (respecting user selection)
+        produced_objectives = set()
+        for r in results:
+            props = r.get('properties', {}) if isinstance(r, dict) else {}
+            for key, val in props.items():
+                if isinstance(val, (int, float)):
+                    produced_objectives.add(key)
+        # If user passed a subset, intersect
+        if objectives is not None:
+            produced_objectives = produced_objectives.intersection(set(objectives))
+        for obj in sorted(produced_objectives):
+            if obj not in self.predicted_objectives:
+                self.predicted_objectives.append(obj)
+
+    # No automatic objective aggregation here; users can call `define_objective` to derive new ones.
 
     def get_mpdd_convexhull(
             self
@@ -1132,28 +1335,100 @@ class CrystALLSearch:
             prototype.update({'MPDD_Stability': stability})
             entriesForPD.pop()
 
-    def calculate_average(
-            self
+    def define_objective(
+            self,
+            name: str,
+            objectives: List[str],
+            definition: str
     ) -> None:
         """
-        Calculate the average of the predicted properties for each prototype material.
+        Define a new objective as an arithmetic combination of existing objectives.
+
+        The expression in `definition` supports the following tokens:
+        - +, -, *, /, **
+        - Parentheses: (...)
+        - Indexed objectives: #X where X is the 0-based index in `objectives`
+
+        Examples:
+            name = 'Avg_Formation_Energy', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '(#0 + #1) / 2'
+            name = 'Scaled_Energy', objectives = ['EF_SIPFENN_NN30'], definition = '#0*3.18'
+            name = 'Energy_Diff', objectives = ['EF_SIPFENN_NN30', 'EF_SIPFENN_NN20'], definition = '#0-#1'
+
+        Args:
+            name: The name of the new objective to create/update on each prototype.
+            objectives: Ordered list of objective names referenced by #0, #1, ... in definition.
+            definition: Arithmetic expression combining the objectives. Whitespaces are ignored.
 
         Raises:
-            AssertionError: If no features are identified or if less than two models are available for averaging.
+            AssertionError: If prerequisites are not met or inputs are invalid.
         """
 
+        # Basic validations
+        assert isinstance(name, str) and len(name) > 0, "Objective name must be a non-empty string"
+        assert isinstance(objectives, list) and len(objectives) >= 1 and all(isinstance(o, str) for o in objectives), \
+            "`objectives` must be a non-empty list of strings"
+        assert isinstance(definition, str) and len(definition) > 0, "`definition` must be a non-empty string"
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert self.predicted_objectives, 'No objective predictions identified. Please run `run_pysipfenn` or `get_alignn_properties` first.'
 
-        # Calculate the average of the predictions
+        # Ensure all referenced objectives exist among predictions
+        missing = [o for o in objectives if o not in self.predicted_objectives]
+        assert not missing, f"All objectives must exist in predicted objectives. Missing: {missing}"
+
+        import re  # Local import to avoid global pollution if not already imported
+
+        expr_template = definition.replace(' ', '')
+
+        # Validate and transform #X tokens -> values[X] (0-based)
+        indices = re.findall(r"#(\d+)", expr_template)
+        if not indices:
+            # Expression doesn't reference any objective; allow constants-only expressions
+            pass
+        else:
+            # Check bounds
+            for idx_str in indices:
+                idx = int(idx_str)
+                assert 0 <= idx < len(objectives), (
+                    f"Index #{idx} in definition out of range for provided objectives (0..{len(objectives) - 1})"
+                )
+
+        expr = re.sub(r"#(\d+)", lambda m: f"values[{int(m.group(1))}]", expr_template)
+
+        # Safety check: only allow numbers, parentheses, operators, decimal points, 'values' and index brackets
+        # Replace allowed token 'values[<num>]' with '0' and then validate remaining characters
+        tmp = re.sub(r"values\[\d+\]", "0", expr)
+        # Allow digits, decimal points, scientific notation (e/E), operators, parentheses
+        allowed_pattern = r"^[0-9eE\.+\-*/()\s]*$"  # ** is covered by * twice
+        assert re.match(allowed_pattern, tmp) is not None, (
+            "Definition contains invalid characters. Allowed: +, -, *, /, **, (), and #X references."
+        )
+
+        computed_count = 0
         for i, prototype in enumerate(self.prototypes):
-            average_prediction = round(sum(prototype[pred] for pred in self.predicted_objectives) / len(self.predicted_objectives), 4)
-            self.prototypes[i].update({f'Avg_Formation_Energy': average_prediction})
+            # Gather values for this prototype
+            values = [prototype.get(obj) for obj in objectives]
+            # All referenced values must be numeric
+            if not all(isinstance(v, (int, float)) for v in values):
+                # Skip this prototype if any required value missing or non-numeric
+                continue
+            try:
+                result = eval(expr, {"__builtins__": {}}, {"values": values})
+            except Exception:
+                # If evaluation fails for any reason, skip updating this prototype
+                continue
+            if isinstance(result, (int, float)) and not (isinstance(result, float) and (result != result)):  # exclude NaN
+                # Round to 4 decimal places for consistency with existing outputs
+                prototype[name] = round(float(result), 4)
+                computed_count += 1
+
+        # Register the new objective name only if at least one value was computed
+        if computed_count > 0 and name not in self.predicted_objectives:
+            self.predicted_objectives.append(name)
 
     def filter_prototypes(
             self,
             max_prototypes: int,
-            cutoff: float = 0.5
+            cutoff: float = 0.5,
+            objective: str | None = None,
     ) -> None:
         """
         Filter the prototypes based on the Formation Energy cutoff value provided.
@@ -1161,6 +1436,8 @@ class CrystALLSearch:
         Args:
             max_prototypes: The maximum number of prototypes to keep.
             cutoff: The Formation Energy cutoff value. Defaults to 0.5.
+            objective: Name of the objective to use for filtering. If None,
+                the first entry in self.predicted_objectives is used.
 
         Raises:
             AssertionError: If no prototypes are identified or if no features are identified.
@@ -1169,12 +1446,18 @@ class CrystALLSearch:
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
         assert len(self.ks2022) > 0, 'No features identified. Please run `run_pysipfenn` first.'
 
+        objective = objective if objective is not None else self.predicted_objectives[0]        
+        assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
+
         if max_prototypes:
-            self.prototypes.sort(key=lambda prototype: (prototype['Avg_Formation_Energy'], prototype['index']))
+            self.prototypes.sort(key=lambda prototype: (prototype[objective], prototype['index']))
             self.prototypes = self.prototypes[:max_prototypes]
         else:
-            min_energy = min(prototype['Avg_Formation_Energy'] for prototype in self.prototypes)
-            self.prototypes = [prototype for prototype in self.prototypes if prototype['Avg_Formation_Energy'] < cutoff + min_energy]
+            min_energy = min(prototype[objective] for prototype in self.prototypes)
+            self.prototypes = [
+                prototype for prototype in self.prototypes
+                if prototype[objective] < cutoff + min_energy
+            ]
 
         # Delete files not in filtered self.prototypes
         for filename in os.listdir(self.prototype_path):
@@ -1195,36 +1478,6 @@ class CrystALLSearch:
         else:
             print(f"Filtered prototypes to {Fore.GREEN}{Style.BRIGHT}{len(self.prototypes)}{Style.RESET_ALL} based on the cutoff value of {cutoff}")
 
-    def __embed_features(
-            self,
-            same_composition: bool
-    ) -> None:
-        """
-        Embed the features in 2D t-SNE space.
-
-        Args:
-            same_composition: If True, only structural features are used. Defaults to False.
-
-        Raises:
-            AssertionError: If no features are identified.
-        """
-
-        assert len(self.prototypes) >= 5, 'At least 5 prototypes are required to run `cluster_prototypes`.'
-        assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
-
-        if same_composition:
-            features2use = np.array([onlyStructural(v) for v in self.ks2022])
-        else:
-            features2use = self.ks2022
-
-        # Select, Scale and Embed features in 2D and 3D t-SNE space
-        scaler = MinMaxScaler()
-        self.scaledks2022 = scaler.fit_transform(features2use)
-        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
-        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
-        tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
-        self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
-        
     def cluster_prototypes_KMeans(
             self,
             n_clusters: int = None,
@@ -1250,10 +1503,10 @@ class CrystALLSearch:
             print(f"At least 5 prototypes are required to run `cluster_prototypes`. {len(self.prototypes)} found.")
             return
 
-        self.__check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         print("\nNo number of clusters has been provided. Determining the optimal number through `silhouette score`. This may take a few minutes..\n") if n_clusters is None else None
         
@@ -1268,9 +1521,14 @@ class CrystALLSearch:
                     mask[j] = False
 
         filtered_data = self.embeddedks2022[mask] # Filter out overlapping embeddings
-        
+
         sil_dict = {}
-        k_range = [n_clusters] if n_clusters is not None else np.unique(np.geomspace(2, len(filtered_data) - 1, 40).astype(int))
+        if n_clusters is not None:
+            k_range = [n_clusters]
+        else:
+            stop = max(2, len(filtered_data) - 1)
+            k_range = np.unique(np.geomspace(2, stop, 40).astype(int))
+            k_range = k_range[k_range >= 2] if k_range.size else np.array([2])
         for k in tqdm(k_range, desc="Processing", ncols=100, bar_format="{l_bar}{bar}{r_bar}"):
             kmeans = KMeans(n_clusters=k, n_init=500, max_iter=500, random_state=580)
             clusterData = kmeans.fit(self.embeddedks2022)
@@ -1288,7 +1546,7 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
 
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
     def cluster_prototypes_DBSCAN(
             self,
@@ -1319,10 +1577,10 @@ class CrystALLSearch:
             print(f"At least 5 prototypes are required to run `cluster_prototypes`. {len(self.prototypes)} found.")
             return
 
-        self.__check_objectives()
+        self.check_objectives()
 
         # Select, Scale and Embed features in 2D and 3D t-SNE space
-        self.__embed_features(same_composition)
+        self._embed_features(same_composition)
 
         # Cluster the prototypes using DBSCAN
         dbscan = DBSCAN(eps=eps, min_samples=min_samples, p=p)
@@ -1339,9 +1597,39 @@ class CrystALLSearch:
             clusters.setdefault(label + 1, []).append(self.prototypes[i])
       
         # Select the best prototype per cluster and Create a list of top candidates
-        self.__select_prototypes(clusters)
+        self._select_prototypes(clusters)
 
-    def __select_prototypes(
+    def _embed_features(
+            self,
+            same_composition: bool
+    ) -> None:
+        """
+        Embed the features in 2D t-SNE space.
+
+        Args:
+            same_composition: If True, only structural features are used. Defaults to False.
+
+        Raises:
+            AssertionError: If no features are identified.
+        """
+
+        assert len(self.prototypes) >= 5, 'At least 5 prototypes are required to run `cluster_prototypes`.'
+        assert self.ks2022 is not None, 'No features identified. Please run `run_pysipfenn` first.'
+
+        if same_composition:
+            features2use = np.array([onlyStructural(v) for v in self.ks2022])
+        else:
+            features2use = self.ks2022
+
+        # Select, Scale and Embed features in 2D and 3D t-SNE space
+        scaler = MinMaxScaler()
+        self.scaledks2022 = scaler.fit_transform(features2use)
+        tsne = TSNE(n_components = 2, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
+        self.embeddedks2022 = tsne.fit_transform(self.scaledks2022)
+        tsne_3d = TSNE(n_components = 3, perplexity = 4, init = 'pca', learning_rate=10, max_iter = 2000, metric = 'correlation', angle = 0.2, n_jobs = 1, random_state = 580)
+        self.embeddedks2022_3d = tsne_3d.fit_transform(self.scaledks2022)
+
+    def _select_prototypes(
             self,
             clusters: dict
     ) -> None:
@@ -1380,7 +1668,7 @@ class CrystALLSearch:
             self.cluster_affiliation[objective] = {cluster_mapping[old_label]: index for old_label, index in self.cluster_affiliation[objective].items()}
 
         # Print the updated cluster information
-        print(f"List of prototypes selected per energy of each cluster:")
+        print("List of prototypes selected per energy of each cluster:")
         for objective in self.predicted_objectives:
             print(f"\nObjective: {objective}")
             for new_label in sorted(self.cluster_affiliation[objective].keys()):
@@ -1421,7 +1709,7 @@ class CrystALLSearch:
         assert not any(value not in ['all-prototypes', 'top-candidates'] for value in content), 'Content should contain only `all_prototypes` and/or `top_candidates`'
 
         if 'top-candidates' in content and not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all-prototypes' only.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all-prototypes' only.")
             content = ['all-prototypes']
 
         if 'all-prototypes' in content:
@@ -1435,7 +1723,7 @@ class CrystALLSearch:
         
         if 'top-candidates' in content:
             file_name = 'top-candidates.csv' if file_prefix == '' else file_prefix + '_top_candidates.csv'
-            top_candidates_exported = [d for d in self.top_candidates if d['objective'] in self.available_objectives]
+            top_candidates_exported = [d for d in self.top_candidates if d['objective'] in self.predicted_objectives]
             
             with open(file_name, 'w', newline='') as output_file:
                 dict_writer = csv.DictWriter(output_file, top_candidates_exported[0].keys())
@@ -1464,14 +1752,14 @@ class CrystALLSearch:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.available_objectives[0]
+        objective = objective if objective is not None else self.predicted_objectives[0]
 
         assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
             return
         
         # Create a DataFrame from the data
@@ -1487,11 +1775,13 @@ class CrystALLSearch:
 
         # Define color set based on clusters
         colorblind_type = "Protanopia" if color_blind else None
-        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0), (1.0, 0.5, 0.0)], colorblind_type=colorblind_type)
         cluster_colors = {cluster: '#{:02x}{:02x}{:02x}'.format(int(colors[i][0]*255), int(colors[i][1]*255), int(colors[i][2]*255)) for i, cluster in enumerate(df['cluster'].unique())}
 
         # Sort the dataframe by 'objective' in ascending order
-        df_sorted = df.sort_values(by=['objective', 'index'])
+        df_sorted = df.sort_values(by=['objective', 'index']).reset_index(drop=True)
+        # Create a positional x-axis so bars appear in the sorted order
+        df_sorted['xpos'] = df_sorted.index + 1
 
         # Segment the DataFrame into df_prototypes and df_top_candidates
         df_prototypes = df_sorted[~df_sorted['index'].isin(self.cluster_affiliation[objective].values())]
@@ -1516,7 +1806,7 @@ class CrystALLSearch:
 
         # Create bar plots for prototypes and top candidates
         trace_prototypes = go.Bar(
-            x=df_prototypes['index'],
+            x=df_prototypes['xpos'],
             y=df_prototypes['objective'],
             hovertext=df_prototypes['objective'],
             hoverinfo='text',
@@ -1531,7 +1821,7 @@ class CrystALLSearch:
         for cluster in df_top_candidates['cluster'].unique():
             df_cluster = df_top_candidates[df_top_candidates['cluster'] == cluster]
             trace = go.Bar(
-                x=df_cluster['index'],
+                x=df_cluster['xpos'],
                 y=df_cluster['objective'],
                 hovertext=df_cluster['objective'],
                 hoverinfo='text',
@@ -1546,8 +1836,8 @@ class CrystALLSearch:
         layout = go.Layout(
             xaxis=dict(
                 side='top',
-                tickvals=df['index'],
-                ticktext=df['label'],
+                tickvals=df_sorted['xpos'],
+                ticktext=df_sorted['label'],
                 tickangle=300,
                 showline=True,
                 linewidth=1,
@@ -1600,14 +1890,14 @@ class CrystALLSearch:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.available_objectives[0]
+        objective = objective if objective is not None else self.predicted_objectives[0]
 
         assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 2D plot generation.")
             return
         
         # Create a DataFrame from the data
@@ -1624,7 +1914,7 @@ class CrystALLSearch:
 
         # Define a color for each cluster
         colorblind_type = "Protanopia" if color_blind else None
-        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0), (1.0, 0.5, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
         symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
@@ -1746,14 +2036,14 @@ class CrystALLSearch:
             AssertionError: If the objective is not one of the calculated objectives or their average.
         """
 
-        objective = objective if objective is not None else self.available_objectives[0]
+        objective = objective if objective is not None else self.predicted_objectives[0]
 
         assert objective in self.predicted_objectives, 'Objective should be one of the calculated objectives and/or their average: ' + ', '.join(self.predicted_objectives)
         assert isinstance(objective, str) or isinstance(objective, list), 'Objective must be a single value specified as a string or a list with a single string'
         assert not (isinstance(objective, list) and len(objective) != 1), 'If objective is given as a list, it must contain exactly one string'
 
         if not self.top_candidates:
-            print(f"No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 3D plot generation.")
+            print("No clustered prototypes identified. Please run `cluster_prototypes` first. Aborting 3D plot generation.")
             return
 
         # Create a DataFrame from the data
@@ -1771,7 +2061,7 @@ class CrystALLSearch:
 
         # Define a color for each cluster
         colorblind_type = "Protanopia" if color_blind else None
-        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0),(1.0, 1.0, 0.0)], colorblind_type=colorblind_type)
+        colors = get_colors(df['cluster'].nunique(), [(1.0, 1.0, 1.0), (1.0, 1.0, 0.0), (1.0, 0.5, 0.0)], colorblind_type=colorblind_type)
 
         # Define a symbol for each cluster (up to 8)
         symbols = ['circle', 'circle-open', 'cross', 'diamond', 'diamond-open', 'square', 'square-open', 'x']
@@ -1871,3 +2161,110 @@ class CrystALLSearch:
 
         else:
             iplot(figure, filename=file_name)
+
+class BaseCalculator:
+    name: str
+    objectives: Sequence[str]
+    def run_on_directory(
+        self,
+        path: str,
+        mode: Literal["serial", "parallel"] = "serial",
+        max_workers: int | None = None,
+        objectives: Sequence[str] | None = None,
+    ) -> list[Dict[str, Any]]:
+        """Run calculator over a directory of structure files.
+
+        Args:
+            path: Directory containing structure files.
+            mode: Execution mode hint passed to adapter implementation.
+            objectives: Optional subset of objective names to compute/return. If None, all adapter objectives.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def vector_to_scalar(type: str, data: Any) -> Optional[float]:
+        """Generic conversion helper available to all adapters.
+
+        Supported types:
+            - 'rms': Root-mean-square magnitude for multi-dimensional arrays
+            - 'sum': Sum over all elements (for arrays/lists)
+            - 'norm': L2 norm. For >=2D, mean of per-vector norms along the last axis
+            - 'mean': Arithmetic mean over all elements
+            - 'vonMises': Von Mises stress from 3x3 or 6-component tensor (xx,yy,zz,xy,xz,yz)
+
+        Returns a float or None if conversion fails.
+        """
+        try:
+            if type == 'rms':
+                arr = np.array(data)
+                if arr.ndim == 0:
+                    return float(abs(arr))
+                if arr.ndim == 1:
+                    return float(np.sqrt(np.mean(arr.astype(float) ** 2)))
+                # For >=2D: compute vector magnitudes along last axis, then RMS over those magnitudes
+                mags_sq = np.sum(arr.astype(float) ** 2, axis=-1)
+                return float(np.sqrt(np.mean(mags_sq)))
+
+            if type == 'sum':
+                try:
+                    return float(np.sum(np.array(data, dtype=float)))
+                except Exception:
+                    # Fallback for mixed types (e.g., list of numbers)
+                    return float(sum(data))
+
+            if type == 'norm':
+                arr = np.array(data, dtype=float)
+                if arr.ndim == 0:
+                    return float(abs(arr))
+                if arr.ndim == 1:
+                    return float(np.linalg.norm(arr))
+                # For >=2D: compute per-vector L2 norms along last axis, then mean
+                norms = np.linalg.norm(arr, axis=-1)
+                return float(np.mean(norms))
+
+            if type == 'mean':
+                arr = np.array(data, dtype=float)
+                return float(np.mean(arr))
+                
+            if type == 'vonMises':
+                s = np.array(data)
+                if s.shape == (3, 3):
+                    sigma_xx, sigma_yy, sigma_zz = s[0, 0], s[1, 1], s[2, 2]
+                    sigma_xy, sigma_xz, sigma_yz = s[0, 1], s[0, 2], s[1, 2]
+                elif s.shape == (6,):
+                    sigma_xx, sigma_yy, sigma_zz, sigma_xy, sigma_xz, sigma_yz = s.tolist()
+                else:
+                    flat = s.flatten()
+                    if flat.size >= 6:
+                        sigma_xx, sigma_yy, sigma_zz, sigma_xy, sigma_xz, sigma_yz = flat[:6]
+                    else:
+                        return None
+                vm = (((sigma_xx - sigma_yy) ** 2 + (sigma_yy - sigma_zz) ** 2 + (sigma_zz - sigma_xx) ** 2) / 2.0 +
+                      3.0 * (sigma_xy ** 2 + sigma_xz ** 2 + sigma_yz ** 2)) ** 0.5
+                return float(vm)
+
+            return None
+        except Exception:
+            return None
+        
+# Package Metadata **************************************************************************
+try:
+    with importlib.resources.files("crystall").joinpath("pyproject.toml").open("rb") as f:
+        _toml = tomllib.load(f)
+    _project = _toml.get("project", {})
+    _urls = _project.get("urls", {})
+    __name__ = _project.get("name")
+    __version__ = _project.get("version")
+    __release__ = _project.get("release")
+    __authors__ = ", ".join([a.get("name", "") for a in _project.get("authors", [])])
+    __doc__ = _urls.get("Documentation")
+    __rep__ = _urls.get("Repository")
+    __doi__ = _urls.get("DOI")
+except (FileNotFoundError, ModuleNotFoundError):
+    __name__ = "crystall"
+    __version__ = "X.X.X"
+    __release__ = "YYYY-MM"
+    __authors__ = "Adam Krajewski, Ricardo Amaral"
+    __doc__ = "crystALL.mpdd.org"
+    __rep__ = "github.com/PhasesResearchLab/crystALL"
+    __doi__ = "doi.org/10.xxxx/xxxxx"

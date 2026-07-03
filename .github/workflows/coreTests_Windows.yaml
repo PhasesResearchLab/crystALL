@@ -2,16 +2,25 @@ name: Windows
 
 on: 
   push:
+    branches: [main]
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_Windows.yaml'
+  
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_Windows.yaml'
+
   workflow_dispatch:
 
 jobs:
   coreTest:
+    timeout-minutes: 90
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.11", "3.12"]
       fail-fast: false
     runs-on: windows-latest
     steps:
@@ -34,13 +43,18 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools
           python -m pip install wheel flask pytest pytest-order
-          python -m pip install 'dgl>=2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
+          python -m pip install 'dgl==2.2.0' -f https://data.dgl.ai/wheels/torch-2.3/repo.html
           python -m pip install -e .
 
       - name: Test with pytest
+        env:
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          PYTORCH_NUM_THREADS: 1
+          CHGNET_DEVICE: cpu
         run: |
           pytest -s --durations=0
 
       - name: Delay next job
-        if: ${{ matrix.python-version != '3.11' }}
         run: sleep 15
