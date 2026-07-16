@@ -667,7 +667,7 @@ def run_MPDD_devs(
     Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
 
     Args:
-        target_composition_dict: Dictionary with element symbols as keys and their amounts as values.
+        target_formula: The target formula as a string or pymatgen Composition object.
         devs: Dictionary with element symbols as keys and their allowed deviations as values.
         MPDD: A pymongo Database object corresponding to the MPDD database.
         collections: List of collection names to search in.

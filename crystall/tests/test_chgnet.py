@@ -20,7 +20,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
         _clear_chgnet_cache()
 
     @unittest.skipIf(not hasattr(CHGNet, 'load'), 'CHGNet not available')
-    def test_run_per_structure(self):
+    def test_run_on_structure(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
         files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
         self.assertGreaterEqual(len(files), 2)
@@ -35,7 +35,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
             requested = CHGNetStaticAdapter.objectives  # request all objectives to exercise branches
 
             # Subcase A: run with real CHGNet (if available) to exercise default behavior
-            out = CHGNetStaticAdapter.run_per_structure(tmp, name, requested)
+            out = CHGNetStaticAdapter.run_on_structure(tmp, name, requested)
             self.assertIsInstance(out, dict)
             self.assertIn('name', out)
             self.assertIn('properties', out)
@@ -50,7 +50,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
                 'm': [0.5 for _ in range(len(s))],
             }
             with patch.object(CHGNet, 'load', return_value=fake_model):
-                out2 = CHGNetStaticAdapter.run_per_structure(tmp, name, requested)
+                out2 = CHGNetStaticAdapter.run_on_structure(tmp, name, requested)
             self.assertIn('CHGNet Static Energy [eV/atom]', out2['properties'])
             self.assertIn('CHGNet Static RMS Force [eV/A]', out2['properties'])
             self.assertIn('CHGNet Static Von Mises Stress [GPa]', out2['properties'])
@@ -61,7 +61,7 @@ class TestCHGNetStaticAdapter(unittest.TestCase):
             bad_fp = os.path.join(tmp, 'BAD.POSCAR')
             with open(bad_fp, 'w') as f:
                 f.write('this is not a POSCAR')
-            bad_result = CHGNetStaticAdapter.run_per_structure(tmp, 'BAD.POSCAR', requested)
+            bad_result = CHGNetStaticAdapter.run_on_structure(tmp, 'BAD.POSCAR', requested)
             self.assertIsInstance(bad_result, dict)
             self.assertEqual(bad_result['properties'], {})
         finally:
@@ -101,7 +101,7 @@ class TestCHGNetRelaxAdapter(unittest.TestCase):
         _clear_chgnet_cache()
 
     @unittest.skipIf(not hasattr(StructOptimizer, 'relax'), 'StructOptimizer not available')
-    def test_run_per_structure(self):
+    def test_run_on_structure(self):
         src_dir = os.path.join(os.path.dirname(__file__), "testFiles", "localTest")
         files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
         self.assertGreaterEqual(len(files), 2)
@@ -116,7 +116,7 @@ class TestCHGNetRelaxAdapter(unittest.TestCase):
             requested = CHGNetRelaxAdapter.objectives
 
             # Subcase A: run real relaxer if available
-            result, poscar = CHGNetRelaxAdapter.run_per_structure(tmp, name, requested)
+            result, poscar = CHGNetRelaxAdapter.run_on_structure(tmp, name, requested)
             self.assertIsInstance(result, dict)
 
             # Subcase B: patch StructOptimizer to return a controlled relax dict
@@ -133,7 +133,7 @@ class TestCHGNetRelaxAdapter(unittest.TestCase):
             _clear_chgnet_cache()
             fake_relax_instance = type('R', (), {'relax': staticmethod(lambda s, verbose=False: fake_relax(s))})()
             with patch.object(StructOptimizer, '__new__', return_value=fake_relax_instance):
-                res2, pos2 = CHGNetRelaxAdapter.run_per_structure(tmp, name, requested)
+                res2, pos2 = CHGNetRelaxAdapter.run_on_structure(tmp, name, requested)
             self.assertIsInstance(res2, dict)
             # pos2 can be None or POSCAR string depending on serializer; ensure tuple returned
             self.assertIsInstance((res2, pos2)[0], dict)

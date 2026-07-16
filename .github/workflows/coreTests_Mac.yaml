@@ -28,6 +28,7 @@ jobs:
       
       - name: Install and run MongoDB
         run: |
+          brew trust mongodb/brew
           brew tap mongodb/brew
           brew install mongodb-community@8.0
           brew services start mongodb/brew/mongodb-community@8.0

@@ -510,7 +510,7 @@ class CHGNetStaticAdapter(BaseCalculator):
             logger.setLevel(prev_level)
 
     @staticmethod
-    def run_per_structure(path: str, name: str, requested: Sequence[str]) -> Optional[Dict[str, Any]]:
+    def run_on_structure(path: str, name: str, requested: Sequence[str]) -> Optional[Dict[str, Any]]:
         """Compute CHGNet static properties for a single structure file.
 
         Implemented as staticmethod to allow multiprocessing with process_map.
@@ -594,7 +594,7 @@ class CHGNetStaticAdapter(BaseCalculator):
         if mode == 'parallel':
             if max_workers is None:
                 max_workers = os.cpu_count()
-            results = process_map(self.run_per_structure, repeat(path), file_names, repeat(requested), max_workers=max_workers, chunksize=1)
+            results = process_map(self.run_on_structure, repeat(path), file_names, repeat(requested), max_workers=max_workers, chunksize=1)
             out: List[Dict[str, Any]] = []
             for result in results:
                 if result is not None:
@@ -602,7 +602,7 @@ class CHGNetStaticAdapter(BaseCalculator):
         elif mode == 'serial':
             out: List[Dict[str, Any]] = []
             for name in tqdm(file_names, total=len(file_names), disable=False):
-                result = self.run_per_structure(path, name, requested)
+                result = self.run_on_structure(path, name, requested)
                 if result is not None:
                     out.append(result)
         
@@ -652,7 +652,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
             logger.setLevel(prev_level)
 
     @staticmethod
-    def run_per_structure(path: str, name: str, requested: Sequence[str]) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def run_on_structure(path: str, name: str, requested: Sequence[str]) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Compute CHGNet relaxation for a single structure returning (result_dict, final_structure)."""
         try:
             fp = os.path.join(path, name)
@@ -752,7 +752,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
         if mode == 'parallel':
             if max_workers is None:
                 max_workers = os.cpu_count()
-            results = process_map(self.run_per_structure, repeat(path), file_names, repeat(requested), max_workers=max_workers, chunksize=1)
+            results = process_map(self.run_on_structure, repeat(path), file_names, repeat(requested), max_workers=max_workers, chunksize=1)
             out: List[Dict[str, Any]] = []
             for result, poscar_str in results:
                 if result is not None:
@@ -762,7 +762,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
         elif mode == 'serial':
             out: List[Dict[str, Any]] = []
             for name in tqdm(file_names, total=len(file_names), disable=False):
-                result, poscar_str = self.run_per_structure(path, name, requested)
+                result, poscar_str = self.run_on_structure(path, name, requested)
                 if result is not None:
                     out.append(result)
                 if poscar_str is not None:
