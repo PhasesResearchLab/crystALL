@@ -7,6 +7,8 @@ import re
 import json
 import csv
 import time
+import hashlib
+from ruamel.yaml import YAML
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
@@ -43,6 +45,9 @@ from pymatgen.core import Structure, Composition, Element
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.phase_diagram import PDEntry, PhaseDiagram
+
+# crystALL internal
+from crystall.utils.fields import _suggest_field_typos, _warn_unrecognized_fields
 
 # Disable undesired warnings from torch and pymatgen
 warnings.filterwarnings("ignore", message="(?:.|\n)*datapipes.*dataloader2.*deprecated(?:.|\n)*")
@@ -104,6 +109,117 @@ def load_adapters() -> Dict[str, Any]:
 
     return adapters
 
+def _query_tag(formula_str: str, source_str: str, other_targets: Optional[Dict[str, Any]]) -> str:
+    """Return a deterministic short suffix uniquely identifying the prototype-search
+    problem, or '' when `other_targets` is empty/None.
+
+    When `other_targets` is provided, the digest encodes the target formula (and
+    devs, when present, via `formula_str`), the source database + collections
+    (via `source_str`), and the filter dict — so the tag distinguishes runs that
+    differ in any of these. When `other_targets` is empty, no tag is appended:
+    such runs are already unambiguously named by `formula_str` and `source_str`.
+    """
+    if not other_targets:
+        return ''
+    payload = json.dumps({
+        'formula': formula_str,
+        'source': source_str,
+        'other_targets': other_targets,
+    }, sort_keys=True, default=str)
+    digest = hashlib.md5(payload.encode()).hexdigest()[:8]
+    return f'-q{digest}'
+
+
+def _normalize_other_targets(
+        target_formula: Union[str, Composition],
+        other_targets: Optional[Dict[str, Any]],
+        query_mode: Literal['exact-composition', 'composition-range',
+                            'anonymized-formula', 'fraction-range'],
+    ) -> Dict[str, Any]:
+    """Drop entries from `other_targets` whose values are implied by `target_formula`
+    given the `query_mode` (which describes what the implicit MPDD query matches).
+
+    - 'exact-composition' — matches reducedFormula. Implies nComponents, elements,
+      system, formula, reducedFormula, anonymizedFormula.
+    - 'composition-range' — matches compositionDictionary ± devs. Elements pinned,
+      counts vary. Implies nComponents, elements, system.
+    - 'anonymized-formula' — matches anonymizedFormula. Implies nComponents,
+      anonymizedFormula.
+    - 'fraction-range' — matches sortedFractionsDict ± devs. Only nComponents.
+
+    Values that don't match — typos, contradictions, Mongo operator forms — pass
+    through unchanged; Mongo handles them.
+    """
+    if not other_targets:
+        return {}
+
+    composition = (target_formula if isinstance(target_formula, Composition)
+                   else Composition(target_formula))
+    target_elements = sorted(e.symbol for e in composition.elements)
+
+    redundant_keys = {'material.nComponents'}
+    if query_mode == 'exact-composition':
+        redundant_keys |= {'material.elements', 'material.system', 'material.formula',
+                           'material.reducedFormula', 'material.anonymizedFormula'}
+    elif query_mode == 'composition-range':
+        redundant_keys |= {'material.elements', 'material.system'}
+    elif query_mode == 'anonymized-formula':
+        redundant_keys |= {'material.anonymizedFormula'}
+
+    def is_redundant(key: str, value: Any) -> bool:
+        if key not in redundant_keys:
+            return False
+        if key == 'material.nComponents':
+            return value == len(target_elements)
+        if key == 'material.elements':
+            return isinstance(value, list) and sorted(value) == target_elements
+        if key == 'material.system':
+            return value == composition.chemical_system
+        if key == 'material.anonymizedFormula':
+            return value == composition.anonymized_formula
+        if key == 'material.reducedFormula':
+            return value == composition.reduced_formula
+        if key == 'material.formula':
+            try:
+                return Composition(value) == composition
+            except (ValueError, TypeError):
+                return False
+        return False
+
+    return {k: v for k, v in other_targets.items() if not is_redundant(k, v)}
+
+_STRUCTURE_FORMATS: dict[str, list[str]] = {
+    # key   = structure file format
+    # value = [*accepted_extensions]; value[0] is the extension crystALL uses when writing.
+    # Every format must be supported by both pymatgen (Structure.from_file) and
+    # ASE (ase.io.read).
+    "poscar": ["vasp", "poscar", "contcar"],
+    "cif": ["cif", "mcif"],
+    "xyz": ["xyz"],
+    "json": ["json"],
+    "xsf": ["xsf"],
+    "cssr": ["cssr"],
+    "res": ["res"],
+    "pwmat": ["pwmat"],
+}
+
+_STRUCTURE_EXTENSIONS = frozenset(
+    f'.{ext}' for exts in _STRUCTURE_FORMATS.values() for ext in exts
+)
+"""Filename extensions accepted as crystal-structure inputs, derived from
+`_STRUCTURE_FORMATS`. Used to whitelist files when iterating a prototype
+directory, so metadata and other non-structure files are skipped automatically.
+"""
+
+def _write_query_yaml(out_dir: str, **fields: Any) -> None:
+    """Write a `query.yaml` metadata file inside `out_dir` recording the run's parameters.
+
+    Lets a human (or future code) recover the exact inputs that produced a folder,
+    even when the directory name only encodes them via a short hash.
+    """
+    path = os.path.join(out_dir, 'query.yaml')
+    with open(path, 'w') as f:
+        YAML(typ='safe', pure=True).dump(dict(sorted(fields.items())), f)
 
 def _aggregate_pipeline(
         collection,
@@ -288,7 +404,8 @@ def run_MPDD(
         collections: List[str],
         target_prototypes: Literal['native', 'non-native'],
         filter_prototypes: Literal['material.structID', 'material.volNormStructID'],
-        limit: int
+        limit: int,
+        other_targets: Optional[Dict[str, Any]] = None
     ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous formula using the MPDD database.
@@ -299,6 +416,7 @@ def run_MPDD(
         collections: List of collection names to search in.
         target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
+        other_targets: Optional dictionary of additional target parameters E.g., {'field': 'value'}. This specifies the "$match" stage of the aggregation pipeline and can be used to further filter the MPDD entries. The field should be a valid field in the MPDD documents, and the value can be a specific value or a query operator (e.g., {'$gte': value}).
         limit: The maximum number of prototypes to generate.
 
     Returns:
@@ -331,9 +449,17 @@ def run_MPDD(
     formula_str = str(target_formula).replace(' ', '')
     source_str = f"MPDD({'-'.join(collections)})"
 
+    other_targets = other_targets or {}
+    assert isinstance(other_targets, dict), 'other_targets must be a dict'
+    other_targets = _normalize_other_targets(
+        composition, other_targets,
+        'exact-composition' if target_prototypes == 'native' else 'anonymized-formula',
+    )
+    _suggest_field_typos(other_targets)
+
     if target_prototypes == 'native':
 
-        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes(native)"
 
         try:
             os.mkdir(out_dir)
@@ -341,11 +467,22 @@ def run_MPDD(
         except FileExistsError:
             print('Directory for MPDD prototypes already exist.\nPrototypes will be overwritten/updated.\n')
 
+        if other_targets:
+            _write_query_yaml(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                other_targets=other_targets,
+            )
+
         for col in collections:
             print('Looking through: ' + col)
 
             pipeline = [
-                {"$match": {"material.reducedFormula": rFormula}},
+                {"$match": {"material.reducedFormula": rFormula, **other_targets}},
                 {"$group": {
                     "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
@@ -370,6 +507,8 @@ def run_MPDD(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -419,7 +558,7 @@ def run_MPDD(
         else:
             print('Target composition indicates discrete element substitution.\n')
 
-        out_dir = f"{formula_str}-{source_str}-prototypes"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes"
         print(f'Final Prototype Directory: {Fore.LIGHTBLACK_EX}{Style.BRIGHT}{out_dir}{Style.RESET_ALL}')
 
         try:
@@ -428,13 +567,24 @@ def run_MPDD(
         except FileExistsError:
             print(f'{Fore.RED}Final directory already exist: Prototypes will be overwritten/updated.{Style.RESET_ALL}\n')
 
+        if other_targets:
+            _write_query_yaml(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='non-native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                other_targets=other_targets,
+            )
+
         # Substitute over all prototypes over all of their permutations
         allS = 0
         for col in collections:
             print(f'Looking through: {Fore.MAGENTA}{Style.BRIGHT}{col}{Style.RESET_ALL}')
 
             pipeline = [
-                {"$match": {"material.anonymizedFormula": aFormula}},
+                {"$match": {"material.anonymizedFormula": aFormula, **other_targets}},
                 {"$group": {
                     "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
@@ -460,6 +610,8 @@ def run_MPDD(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -508,7 +660,8 @@ def run_MPDD_devs(
         collections: List[str],
         target_prototypes: Literal['native', 'non-native'],
         filter_prototypes: Literal['material.structID', 'material.volNormStructID'],
-        limit: int
+        limit: int,
+        other_targets: Optional[Dict[str, Any]] = None
     ) -> str:
     """
     Run prototype identification and elemental substitution for permutations within the anonymous composition fractions.
@@ -521,6 +674,7 @@ def run_MPDD_devs(
         target_prototypes: Specifies whether to use 'native' or 'non-native' compositions.
         filter_prototypes: Specifies the prototype filter to use.
         limit: The maximum number of prototypes to generate.
+        other_targets: Optional dictionary of additional target parameters E.g., {'field': 'value'}. Merged into the "$match" stage of the aggregation pipeline to further filter MPDD entries. Values can be specific values or query operators (e.g., {'$gte': value}). Cannot override the composition/fraction keys produced from target_formula and devs.
 
     Returns:
         Path to the directory containing the generated prototypes.
@@ -545,6 +699,14 @@ def run_MPDD_devs(
     target_composition_dict = {el: round(amt / composition.num_atoms * 1000, 0)
                                     for el, amt in composition.as_dict().items()}
 
+    other_targets = other_targets or {}
+    assert isinstance(other_targets, dict), 'other_targets must be a dict'
+    other_targets = _normalize_other_targets(
+        composition, other_targets,
+        'composition-range' if target_prototypes == 'native' else 'fraction-range',
+    )
+    _suggest_field_typos(other_targets)
+
     print('\nSearching for structure prototypes for: ' + formula_str)
     print('Using MPDD Database with collections: ' + ', '.join(collections))
 
@@ -552,7 +714,14 @@ def run_MPDD_devs(
 
         # ************************* Try to find materials already in the MPDD database **********************************
 
-        out_dir = f"{formula_str}-{source_str}-prototypes(native)"
+        # Query for matching MPDD entries
+        nativeQuery = comp2comp_q(target_composition_dict, devs)
+        if nativeQuery.keys() & other_targets.keys():
+            raise ValueError(
+                f'other_targets cannot contain keys produced by the composition query: {sorted(nativeQuery.keys() & other_targets.keys())}'
+            )
+
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes(native)"
 
         try:
             os.mkdir(out_dir)
@@ -560,15 +729,24 @@ def run_MPDD_devs(
         except FileExistsError:
             print('Directory for MPDD prototypes already exist: Prototypes will be overwritten/updated.\n')
 
-        # Query for matching MPDD entries
-        nativeQuery = comp2comp_q(target_composition_dict, devs)
+        if other_targets:
+            _write_query_yaml(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                devs=devs,
+                other_targets=other_targets,
+            )
 
         targetPresent = 0
         for col in collections:
             print('Looking through: ' + col)
 
             pipeline = [
-                {"$match": nativeQuery},
+                {"$match": {**nativeQuery, **other_targets}},
                 {"$group": {
                     "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
@@ -593,6 +771,8 @@ def run_MPDD_devs(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -624,6 +804,10 @@ def run_MPDD_devs(
 
         # Sorted fractions dictionary query
         sortedFractionsDictQuery = comp2acomp_q(target_composition_dict, devs)
+        if sortedFractionsDictQuery.keys() & other_targets.keys():
+            raise ValueError(
+                f'other_targets cannot contain keys produced by the fractions query: {sorted(sortedFractionsDictQuery.keys() & other_targets.keys())}'
+            )
 
         # ************************************** Count prototypes ********************************************************
 
@@ -638,7 +822,7 @@ def run_MPDD_devs(
 
         # ********************************* Substitution elements combination ********************************************
 
-        out_dir = f"{formula_str}-{source_str}-prototypes"
+        out_dir = f"{formula_str}-{source_str}{_query_tag(formula_str, source_str, other_targets)}-prototypes"
         print('Final Prototype Directory: ' + out_dir)
 
         try:
@@ -646,6 +830,18 @@ def run_MPDD_devs(
             print('Final directory created.')
         except FileExistsError:
             print('Final directory already exist.\nPrototypes will be overwritten/updated.\n')
+
+        if other_targets:
+            _write_query_yaml(
+                out_dir,
+                target_formula=formula_str,
+                target_prototypes='non-native',
+                filter_prototypes=filter_prototypes,
+                collections=collections,
+                limit=limit,
+                devs=devs,
+                other_targets=other_targets,
+            )
 
         # All generated prototypes
         allS = 0
@@ -657,7 +853,7 @@ def run_MPDD_devs(
             print('Looking through: ' + col)
 
             pipeline = [
-                {"$match": sortedFractionsDictQuery},
+                {"$match": {**sortedFractionsDictQuery, **other_targets}},
                 {"$group": {
                     "_id": "$" + filter_prototypes,
                     "document": {"$first": "$$ROOT"}
@@ -691,6 +887,8 @@ def run_MPDD_devs(
                 f"Total number of filtered structures: {Fore.GREEN}{Style.BRIGHT}{total_groups}{Style.RESET_ALL}"
                 f"{f' (limited to {Fore.RED}{Style.BRIGHT}{limit}{Style.RESET_ALL})' if limit < total_groups else ''}"
             )
+            if total_groups == 0:
+                _warn_unrecognized_fields(other_targets)
 
             for entry in aggregated_data:
 
@@ -1129,7 +1327,8 @@ class CrystALLSearch:
             target_prototypes: Literal['native', 'non-native'] = 'non-native',
             filter_prototypes: Literal['material.structID', 'material.volNormStructID'] = 'material.structID',
             limit: int = 1000,
-            devs: Dict[str, int] = None
+            devs: Dict[str, int] = None,
+            other_targets: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Generate prototype materials from the MPDD database based on the target formula.
@@ -1139,6 +1338,7 @@ class CrystALLSearch:
             filter_prototypes: Specifies the prototype filter to use. Defaults to 'material.structID'.
             limit: The maximum number of prototypes to generate. Defaults to 1000.
             devs: Dictionary with element symbols as keys and their allowed deviations as values. Defaults to None.
+            other_targets: Optional dictionary of additional MPDD field constraints merged into the "$match" stage of the aggregation pipeline (e.g., {'material.dimensionality': 2}). Forwarded to `run_MPDD` / `run_MPDD_devs`.
 
         Raises:
             AssertionError: If no connection to the MPDD has been established, or if no collections have been specified.
@@ -1147,12 +1347,12 @@ class CrystALLSearch:
         assert self.MPDD is not None, 'No database connection identified. Please run `connect_MPDD` first.'
         assert self.collections, 'No collections identified. Please provide a list of collections to search in.'
         assert devs is None or isinstance(devs, dict), 'Deviations must be a dictionary with element symbols as keys and integer values as deviations'
-        
+
         if devs is None:
-            self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
+            self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
         else:
-            self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit)
-        inputFiles = natsorted(os.listdir(self.prototype_path))
+            self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
+        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS]
         self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
 
     def generate_local(
@@ -1172,7 +1372,7 @@ class CrystALLSearch:
         self.prototype_path = prototype_path if prototype_path is not None else self.prototype_path
         assert self.prototype_path, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
         self.prototype_path = run_local(self.target_formula, self.prototype_path)
-        inputFiles = natsorted(os.listdir(self.prototype_path))
+        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS]
         self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
 
     def run_pysipfenn(

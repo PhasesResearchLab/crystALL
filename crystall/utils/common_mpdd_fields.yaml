@@ -1,0 +1,79 @@
+# Common MPDD field paths users may pass in `other_targets`.
+#
+# Used by crystALL for typo suggestions when a user passes an unrecognized
+# field name (e.g. `material.reducedmassAll` → "did you mean
+# `material.reducedMassAll`?"). Not a comprehensive schema — listing only the
+# top fields most likely to appear in user filters.
+#
+# To add a field: append the dotted path to the list.
+# To remove a field: delete the line.
+
+fields:
+  # metadata.*
+  - metadata.name
+  - metadata.created
+  - metadata.affiliation
+  - metadata.comment
+  - metadata.parentDatabase
+  - metadata.parentDatabaseID
+  - metadata.parentDatabaseURL
+  - metadata.lastModified
+
+  # material.*
+  - material.formula
+  - material.compositionDictionary
+  - material.anonymizedFormula
+  - material.reducedFormula
+  - material.system
+  - material.nComponents
+  - material.mgJSON
+  - material.POSCAR
+  - material.averageElectronegativity
+  - material.crystalSystem
+  - material.density
+  - material.nSites
+  - material.pointGroup
+  - material.spaceGroup
+  - material.spaceGroupN
+  - material.sortedFractionsDict
+  - material.sortedFractionsDict.c1
+  - material.sortedFractionsDict.c2
+  - material.sortedFractionsDict.c3
+  - material.sortedFractionsDict.c4
+  - material.sortedFractionsDict.c5
+  - material.sortedFractionsDict.c6
+  - material.sortedFractionsDict.c7
+  - material.sortedFractionsDict.c8
+  - material.sortedFractionsDict.c9
+  - material.sortedFractionsDict.c10
+  - material.atomicVolume
+  - material.meanMass
+  - material.volume
+  - material.elements
+  - material.reducedMass
+  - material.reducedMassAll
+  - material.coarseStructID
+  - material.structID
+  - material.volNormStructID
+  - material.dimensionality
+  - material.dimensionalityAgreement
+  - material.dimensionalityRaw
+  - material.dimensionalityRaw.larsenLow
+  - material.dimensionalityRaw.larsenMedium
+  - material.dimensionalityRaw.larsenHigh
+  - material.dimensionalityRaw.cheonLow
+  - material.dimensionalityRaw.cheonMedium
+  - material.dimensionalityRaw.cheonHigh
+
+  # properties.*
+  - properties.FormationEnergy_SIPFENN_Krajewski2020_LightModel
+  - properties.FormationEnergy_SIPFENN_Krajewski2020_NovelMaterialsModel
+  - properties.FormationEnergy_SIPFENN_Krajewski2020_StandardMaterialsModel
+  - properties.Stability_SIPFENN_AMK2020_NMM
+  - properties.EF_SIPFENN_NN30
+  - properties.STAB_SIPFENN_NN30
+  - properties.GFT_SIPFENN_NMM+Bartel2018
+
+  # descriptors.*
+  - descriptors.KS2022
+  - descriptors.Ward2017
