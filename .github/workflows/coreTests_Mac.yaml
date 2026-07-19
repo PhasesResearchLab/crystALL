@@ -34,6 +34,12 @@ jobs:
           brew tap mongodb/brew
           brew install mongodb-community@8.0
           brew services start mongodb/brew/mongodb-community@8.0
+
+      - name: Install Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
     
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -47,7 +53,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools
           python -m pip install wheel flask pytest pytest-order
-          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.7.0+cpu" "torchvision==0.22.0+cpu" "torchdata==0.9.0"
+          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.7.0" "torchvision==0.22.0" "torchdata==0.9.0"
           conda install -c dglteam dgl
           python -m pip install -e .
 
