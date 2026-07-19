@@ -6,12 +6,14 @@ on:
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_LinuxUbuntu.yaml'
+      - 'pyproject.toml'
   
   pull_request:
     branches: [main]
     paths:
       - 'crystall/**'
       - '.github/workflows/coreTests_LinuxUbuntu.yaml'
+      - 'pyproject.toml'
   
   workflow_dispatch:
 
