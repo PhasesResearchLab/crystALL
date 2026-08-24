@@ -1,26 +1,16 @@
-<div align="center">
-  <img src="docs/_static/crystALL.png" alt="crystALL Logo" width="180"/>
-  <br>
+[![GitHub top language](https://img.shields.io/github/languages/top/PhasesResearchLab/crystALL)](https://github.com/PhasesResearchLab/crystALL)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Linux](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml)
 
-  <br>
-  <!-- Badges line 1 -->
-  <a href="https://doi.org/10.xxxx/xxxxx"><img src="https://img.shields.io/badge/DOI-10.xxxx/xxxxx-blue"></a>
-  <a href="https://arxiv.org/abs/YYMM.xxxxx"><img src="https://img.shields.io/badge/arXiv-YYMM.xxxxx-darkred"/></a>
-  <img src="https://img.shields.io/badge/Docs-readthedocs-informational"/>
+<!---
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/crystall)](https://pypi.org/project/crystall)
+[![PyPI - Version](https://img.shields.io/pypi/v/crystall?label=PyPI&color=green)](https://pypi.org/project/crystall)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/crystall)](https://pypi.org/project/crystall)
 
-  <br>
-  <!-- Badges line 2 -->
-  <img src="https://img.shields.io/badge/Windows-pass-brightgreen"/>
-  <img src="https://img.shields.io/badge/Macos-pass-brightgreen"/>
-  <img src="https://img.shields.io/badge/Linux-pass-brightgreen"/>
-  <img src="https://img.shields.io/badge/Codecov-100%25-fe226d"/>
-
-  <br>
-  <!-- Badges line 3 -->
-  <img src="https://img.shields.io/badge/python-3.11%2B-lightgray"/>
-  <a href="https://pypi.org/project/crystALL"><img src="https://img.shields.io/badge/pypi-v0.5.0-purple"></a>
-  <a href="https://anaconda.org/conda-forge/crystALL"><img src="https://img.shields.io/badge/condaforge-v0.5.0-yellow"></a>
-</div>
+[![codecov](https://codecov.io/gh/PhasesResearchLab/pySIPFENN/branch/main/graph/badge.svg?token=S2J0KR0WKQ)](https://codecov.io/gh/PhasesResearchLab/pySIPFENN)
+[![stable](https://img.shields.io/badge/Read%20The%20Docs-Stable-green)](https://pysipfenn.readthedocs.io/en/stable/) 
+[![latest](https://img.shields.io/badge/Read%20The%20Docs-Latest-green)](https://pysipfenn.readthedocs.io/en/latest/)
+-->
 
 # Summary
 
