@@ -11,6 +11,8 @@ docs/_build
 # Test and temporary files
 **/*-prototypes*
 **/*-candidates*
+**/localTest-*
+**/curated-*
 
 # General
 .DS_Store
