@@ -1,3 +1,5 @@
+# crystALL
+
 [![GitHub top language](https://img.shields.io/github/languages/top/PhasesResearchLab/crystALL)](https://github.com/PhasesResearchLab/crystALL)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Linux](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml)
@@ -12,7 +14,7 @@
 [![latest](https://img.shields.io/badge/Read%20The%20Docs-Latest-green)](https://pysipfenn.readthedocs.io/en/latest/)
 -->
 
-# Summary
+## Summary
 
 **crystALL** is an open-source data-driven framework for atomic structure prediction and materials discovery, designed to address the critical gap between computational predictions and experimental observations. Unlike methods focused solely on stable ground states, crystALL systematically embraces structural diversity and compositional uncertainty, enabling the discovery, modeling, and validation of both stable and metastable crystal configurations.
 
@@ -21,32 +23,48 @@ By leveraging millions of relaxed and experimental structures from the MPDD data
 crystALL uniquely supports searches accommodating experimental uncertainty and complex materials systems, generating unbiased, ensemble-focused predictions suitable for high-throughput candidate selection, statistical modeling, and validation against experiment or DFT.
 
 
-# Installation
+## Installation
 
-Installing **crystALL** is simple and easy by utilizing **PyPI** package repository, **conda-forge**  package repository, or by cloning from **GitHub** directly. While not required, it is recommended to first set up a virtual environment using venv or Conda. This ensures that (a) one of the required versions of Python (3.11+) is used and (b) there are no dependency conflicts. If you have Conda installed on your system (see [`miniconda` install instructions](https://docs.conda.io/en/latest/miniconda.html)), you can create a new environment using:
+Installing `crystALL` on your machine can be done via the `PyPI` package repository, `conda-forge`  package repository, or by cloning from GitHub directly, following the instructions below. You can also effortlessly run it on the cloud [by clicking here to launch a pre-configured GitHub Codespaces environment](https://codespaces.new/PhasesResearchLab/crystALL?quickstart=1) with [tutorials](#tutorials) ready to go.
+
+While not required, it is recommended to first set up a virtual environment using `micromamba`, `miniconda`, or `venv`. This ensures that (a) one of the required versions of Python (3.11+) is used and (b) there are no dependency conflicts. If you have Conda installed on your system (see [`micromamba` install instructions](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html)), you can create a new environment using:
 
 ``` shell
-conda create -n crystall python=3.11
-conda activate crystall
+micromamba create -n crystall python=3.12
+micromamba activate crystall
 ```
 
-Then install **crystALL** (regular)
+Then install `crystALL` (regular)
 ``` shell
 pip install crystall
 ```
-Or for editable install (development)
+
+or if you work with the source code directly, you can clone the GitHub repository and install it in editable mode:
 ``` shell
 pip install -e .
 ```
 
-🚧 **Linux users:** First install DGL for torch >=2.3 🚧
-``` shell
-python -m pip install "dgl==2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html
-pip install crystall
-```
+**Note:** To run _certain functions_ within the `crystALL` framework, you may need to connect to (a) access-restricted MPDD endpoint ([Material-Property-Descriptor Database](https://mpdd.org)) or your local MongoDB instance with the data loaded and (b) OPTIMADE-compliant endpoints, which are all open and include MPDD data with minor delay, for remote crystal structure data.
+
+##### Additional Install Notes
+
+The `dgl` library is infrequently updated as of 2026 but still widely used for deep learning on graphs and required by `ALIGNN` models within the `crystALL` framework, which are currently tightly integrated (until `v0.6.0`, which is fully modularized, becomes live). If you are having trouble installing `torch` / `dgl` / `mpdd-alignn` on your system, the recommended approach is to:
+
+1. Consider utilizing the [provided pre-configured GitHub Codespace](https://codespaces.new/PhasesResearchLab/crystALL?quickstart=1), which includes all `crystALL` dependencies and a local MongoDB instance you can populate with MPDD or any other database of your choice, to avoid installation issues on your local system
+
+2. If you are using **Linux**, the recommended approach is to first install the required system dependencies via wheels directly from `pytorch.org` and then from `dgl.ai` with the following commands:
+
+    ```shell
+    pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.7.0+cpu" "torchvision==0.22.0+cpu" "torchdata==0.9.0"
+    pip install --no-deps 'dgl==2.5.0' -f https://data.dgl.ai/wheels/torch-2.6/repo.html
+    ```
+
+3. If you are using **Windows** or **macOS**, the versions between `v0.3.x` and `v0.5.0` should install without major issues using standard `pip` commands, possibly with manual `pip install "dgl==2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html` first; however, versions `v0.5.x` had to top with the latest releases of `torch`. 
+
+4. If you need to install the latest version on **Windows** or **macOS**, consider doing so in environments like Windows Subsystem for Linux [`WSL`](https://learn.microsoft.com/en-us/windows/wsl/install), Linux VM, or [`Docker`](https://www.docker.com/get-started) to avoid compatibility issues.
 
 
-# Features
+## Features
 
 **crystALL** provides a practical, science‑driven pipeline to generate, featurize, and prioritize candidate crystal structures for a target composition. At a high level the workflow gathers prototype structures (from local files or MPDD), computes consistent ML descriptors, applies one or more property predictors, and selects compact, experimentally actionable candidate sets.
 
@@ -69,7 +87,7 @@ After featurization and property assignment, crystALL clusters the prototype ens
 The final selection step produces Top Candidates by selecting the lowest‑energy representative from each cluster for every available objective; these candidates provide a compact, diverse set for higher‑accuracy DFT relaxation or experimental validation. Outputs are exportable as CSV (`all-prototypes` and `top-candidates`), and an optional MPDD convex‑hull check (energy‑above‑hull) can be performed to further prioritize thermodynamically plausible entries.
 
 
-# Tutorials
+## Tutorials
 
 If you would like to try **crystALL**'s functionalities in a reproducible, hands-on environment, we provide a pre-configured GitHub Codespace with all required dependencies and local-access to MPDD database for running our tutorials:
 
@@ -80,7 +98,7 @@ If you would like to try **crystALL**'s functionalities in a reproducible, hands
 3. Open any notebook and execute cells interactively to explore candidate structure generation, ML-powered predictions, and data-driven analysis.
 
 
-# Contributing
+## Contributing
 
 We welcome contributions from the wider scientific community and appreciate bug reports/fixes, documentation improvements, new adapters/models, and larger feature proposals.
 
@@ -100,7 +118,7 @@ Extending crystALL with new property predictors is welcome. We integrate models 
 - Lightweight runtime: Avoid forcing heavy runtime dependencies for users who don't need them. If an adapter requires optional packages, guard imports with try/except and show a clear error message describing how to install the extras.
 
 
-# Citing
+## Citing
 
 **crystALL** is an open-source Python package developed by the [Phases Research Lab](https://phaseslab.com/) at The Pennsylvania State University, under the supervision of Dr. Zi-Kui Liu, and distributed under the MIT License.
 
