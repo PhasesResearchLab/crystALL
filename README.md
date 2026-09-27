@@ -14,6 +14,11 @@
 [![latest](https://img.shields.io/badge/Read%20The%20Docs-Latest-green)](https://pysipfenn.readthedocs.io/en/latest/)
 -->
 
+Examples:
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.actamat.2021.117448-blue)](https://doi.org/10.1016/j.actamat.2021.117448)
+[![DOI](https://img.shields.io/badge/DOI-10.1038%2Fs41598--021--03578--0-blue)](https://doi.org/10.1038/s41598-021-03578-0)
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.molliq.2025.127811-blue)](https://doi.org/10.1016/j.molliq.2025.127811)
+
 ## Summary
 
 **crystALL** is an open-source data-driven framework for atomic structure prediction and materials discovery, designed to address the critical gap between computational predictions and experimental observations. Unlike methods focused solely on stable ground states, crystALL systematically embraces structural diversity and compositional uncertainty, enabling the discovery, modeling, and validation of both stable and metastable crystal configurations, going beyond more common data-driven discovery approaches that prioritize only the lowest-energy structures often failing to explain experimental observations or propose structures stable under conditions of interest.
@@ -49,6 +54,15 @@ After featurization and property assignment, crystALL clusters the prototype ens
 </div>
 
 The final selection step produces Top Candidates by selecting the lowest‑energy representative from each cluster for every available objective; these candidates provide a compact, diverse set for higher‑accuracy DFT relaxation or experimental validation. Outputs are exportable as CSV (`all-prototypes` and `top-candidates`), and an optional MPDD convex‑hull check (energy‑above‑hull) can be performed to further prioritize thermodynamically plausible entries.
+
+## News
+
+_For detailed account of changes, please consult the GitHub [changelog](https://github.com/PhasesResearchLab/crystALL/releases)._
+
+- `v0.5.2` - Updated compatibility with the latest versions of Python and key dependencies.
+- `v0.5.1` - Improved MPDD querying capabilities and documentation.
+- `v0.5.0` - Major re-write of all code except for the core `crystALL` logic, turning it into a user-ready tool with additional ML models, polished architecture, user-friendly tutorials, and improved documentation.
+- `v0.4.0` - Initial private GitHub release of crystALL, separated from MPDD repository; as used in [10.1016/j.actamat.2021.117448](https://doi.org/10.1016/j.actamat.2021.117448) or [10.1038/s41598-021-03578-0](https://doi.org/10.1038/s41598-021-03578-0).
 
 
 ## Installation
