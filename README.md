@@ -87,7 +87,7 @@ The `dgl` library is infrequently updated as of 2026 but still widely used for d
 
 ## Tutorials
 
-If you would like to try **crystALL**'s functionalities in a reproducible, hands-on environment, we provide a pre-configured GitHub Codespace with all required dependencies and local-access to MPDD database for running our tutorials:
+If you would like to try **crystALL**'s functionalities in a reproducible, hands-on environment, we provide a pre-configured GitHub Codespace with all required dependencies and local-access to MongoDB database for running our tutorials:
 
    [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/PhasesResearchLab/crystALL?quickstart=1)
 
@@ -95,6 +95,10 @@ If you would like to try **crystALL**'s functionalities in a reproducible, hands
 2. Once your Codespace loads, navigate to the `tutorial` directory to find curated Jupyter notebooks illustrating the main features and scientific workflows.
 3. Open any notebook and execute cells interactively to explore candidate structure generation, ML-powered predictions, and data-driven analysis.
 
+The tutorials currently consist of 3 Jupyter notebooks covering:
+- [01. QuickStart.ipynb](tutorial/01.QuickStart.ipynb) - Core API, BaSO4 walk-through, clustering and visualization
+- [02. HydridesExample.ipynb](tutorial/02.HydridesExample.ipynb) - Real-world discovery in complex metal hydrides.
+- [03. RefiningMPDDSearch.ipynb](tutorial/03.RefiningMPDDSearch.ipynb) - Advanced queries (dimensionality filtering, crystal system constraints, compositional limits).
 
 ## Contributing
 
