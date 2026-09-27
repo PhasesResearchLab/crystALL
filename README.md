@@ -16,11 +16,9 @@
 
 ## Summary
 
-**crystALL** is an open-source data-driven framework for atomic structure prediction and materials discovery, designed to address the critical gap between computational predictions and experimental observations. Unlike methods focused solely on stable ground states, crystALL systematically embraces structural diversity and compositional uncertainty, enabling the discovery, modeling, and validation of both stable and metastable crystal configurations.
+**crystALL** is an open-source data-driven framework for atomic structure prediction and materials discovery, designed to address the critical gap between computational predictions and experimental observations. Unlike methods focused solely on stable ground states, crystALL systematically embraces structural diversity and compositional uncertainty, enabling the discovery, modeling, and validation of both stable and metastable crystal configurations, going beyond more common data-driven discovery approaches that prioritize only the lowest-energy structures often failing to explain experimental observations or propose structures stable under conditions of interest.
 
-By leveraging millions of relaxed and experimental structures from the MPDD database and OPTIMADE API, crystALL rapidly generates wide ensembles of candidate configurations for target compositions or compositional ranges. These candidates undergo atomic substitution, advanced machine learning-based featurization, clustering, and multi-model property prediction, supporting robust selection and direct ab initio or experimental validation.
-
-crystALL uniquely supports searches accommodating experimental uncertainty and complex materials systems, generating unbiased, ensemble-focused predictions suitable for high-throughput candidate selection, statistical modeling, and validation against experiment or DFT.
+By leveraging millions of relaxed and experimental structures from the MPDD Database and OPTIMADE API, `crystALL` rapidly generates wide ensembles of candidate configurations for either target compositions or compositional ranges, with the latter being a unique strength of `crystALL`+`MPDD` combination. These candidates undergo all permutations of atomic substitution, advanced machine learning-based featurization, clustering, and multi-model property prediction, supporting robust selection and direct ab initio or experimental validation (in a typical use case).
 
 ## Features
 
