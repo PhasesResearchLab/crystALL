@@ -1,19 +1,19 @@
 name: Windows
 
 on: 
-  push:
-    branches: [main]
-    paths:
-      - 'crystall/**'
-      - '.github/workflows/coreTests_Windows.yaml'
-      - 'pyproject.toml'
-  
-  pull_request:
-    branches: [main]
-    paths:
-      - 'crystall/**'
-      - '.github/workflows/coreTests_Windows.yaml'
-      - 'pyproject.toml'
+  #push:
+  #  branches: [main]
+  #  paths:
+  #    - 'crystall/**'
+  #    - '.github/workflows/coreTests_Windows.yaml'
+  #    - 'pyproject.toml'
+  #
+  #pull_request:
+  #  branches: [main]
+  #  paths:
+  #    - 'crystall/**'
+  #    - '.github/workflows/coreTests_Windows.yaml'
+  #    - 'pyproject.toml'
 
   workflow_dispatch:
 
