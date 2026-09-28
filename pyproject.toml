@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crystall-search"
-version = "0.5.0"
+version = "0.5.2"
 authors = [
   { name="Ricardo Amaral", email="rna5137@psu.edu" },
   { name="Adam Krajewski", email="adam@phaseslab.org" },
