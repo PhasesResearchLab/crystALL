@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "crystall"
+name = "crystall-search"
 version = "0.5.0"
 authors = [
   { name="Ricardo Amaral", email="rna5137@psu.edu" },
@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Database :: Front-Ends",
 ]
-description = "Pure data-driven structure prediction combining MPDD's Big Data (ALL 'crystals') from DFT with high-throughput substitutions, stability predictions, candidate selection, and DFT+experiment validation. Developed since 2021 and demonstrated in the identification of new atomic structures in Nd-Bi and Al-Fe systems."
+description = "Data-driven crystal structure prediction and ergodic candidate ensemble discovery beyond the convex hull, embracing structural diversity and compositional uncertainty. Under name crystall-search on PyPI."
 readme = "README.md"
 
 requires-python = ">=3.11, <3.13"
