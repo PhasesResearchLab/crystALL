@@ -12,6 +12,8 @@ authors = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Development Status :: 3 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -20,7 +22,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Physics",
-    "Topic :: Database :: Front-Ends",
+]
+keywords = [
+    "materials-science",
+    "crystallography",
+    "crystal-structure-prediction",
+    "materials-discovery",
+    "machine-learning",
+    "ergodic-ensembles",
+    "convex-hull",
+    "mpdd",
+    "optimade",
 ]
 description = "Data-driven crystal structure prediction and ergodic candidate ensemble discovery beyond the convex hull, embracing structural diversity and compositional uncertainty. Under name crystall-search on PyPI."
 readme = "README.md"
