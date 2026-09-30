@@ -33,7 +33,7 @@ _This is just a quick introduction to the main features and workflow of crystALL
 
 **On the high-level, `crystALL` allows you to take a chemical composition/s of interest, whether you measured it experimentally or hypothesized it, and then systematically explore them with minimal bias to form an approximately ergodic ensemble of candidates by feature space analysis and evaluation over any metric of interest to fulfill your research objectives.** This description is not vague, but rather emphasizes the framework's ability to fit different needs. These can range from [discovering crystal structure of previously unexplained experimental observations](https://doi.org/10.1016/j.actamat.2021.117448) to high-throughput screening for novel materials exhibiting certain topological characteristics (ongoing work). Overall, `crystALL` is a great fit for both experimentalists and computational researchers aiming to accelerate discovery of novel materials in underexplored regions of chemical space or cases escaping the generative learning or conventional computational approaches focusing only on the most probable answers.
 
-In a _typical_ workflow, depicted in the figure below for a single target composition ("compound"), `crystALL` systematically generates, featurizes, and evaluates candidate crystal structures to identify the most promising configurations. It starts by gathering prototype structures (provided via MPDD / OPTIMADE API or local files) and performing all permutations of substitution into the target composition (oragne). Then, it featurizes the candidates with `pySIPFENN`'s (python toolset for Structure-Informed Property and Feature Engineering with Neural Networks) `KS2022` (by default) to then analyze the embeddings (blue) while predicting properties of interest with ML models from pySIPFENN and community (purple). Filtering and clustering in the feature space are used to select top candidates from unique structures/energy basins (green), and final DFT relaxations leading to match with experimental observations (red). 
+In a _typical_ workflow, depicted in the figure below for a single target composition ("compound"), `crystALL` systematically generates, featurizes, and evaluates candidate crystal structures to identify the most promising configurations. It starts by gathering prototype structures (provided via MPDD / OPTIMADE API or local files) and performing all permutations of substitution into the target composition (orange). Then, it featurizes the candidates with `pySIPFENN`'s (python toolset for Structure-Informed Property and Feature Engineering with Neural Networks) `KS2022` (by default) to then analyze the embeddings (blue) while predicting properties of interest with ML models from pySIPFENN and community (purple). Filtering and clustering in the feature space are used to select top candidates from unique structures/energy basins (green), and final DFT relaxations leading to match with experimental observations (red). 
 
 The example depicts a dramatic filtering cascade - 5M structures from MPDD are harnessed to generate around 50k ABCD3 candidates, then ML-filtered to 5k in 500 clusters, culminating in DFT calculations for the top 50 cluster representatives to construct an approximately ergodic ensemble and match experimental observations; while feedback loop to MPDD creates a self-improving ecosystem for materials discovery that grows with `crystALL` use.
 
@@ -41,7 +41,7 @@ The example depicts a dramatic filtering cascade - 5M structures from MPDD are h
   <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/2cc27a91b6396b8cc776075b3696411f061b268c/docs/_static/crystALL_Compounds_V7.png" alt="Main figure for compound search" width="750"/>
 </div>
 
-**One of the unique features within `crystALL`, mentioned in the summary and explored in detail in the paper, is the ability to perform searches over compositional ranges, positioning it as an invaluable tool for interpreting real measurements of compositions, without assuming that molar ratios are low integers** - a very common pitfall researchers fall into. As illustrated below, **when combined with `MPDD**`**, `crystALL` accepts an uncertainty range for each element individually and systematically explores all prototypical structures within the specified compositional subspace, covering both low- and high-index anonymous formulas.
+**One of the unique features within `crystALL`, mentioned in the summary and explored in detail in the paper, is the ability to perform searches over compositional ranges, positioning it as an invaluable tool for interpreting real measurements of compositions, without assuming that molar ratios are low integers** - a very common pitfall researchers fall into. As illustrated below, **when combined with `MPDD`, `crystALL` accepts an uncertainty range for each element individually and systematically explores all prototypical structures within the specified compositional subspace, covering both low- and high-index anonymous formulas.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/2cc27a91b6396b8cc776075b3696411f061b268c/docs/_static/crystALL_Compositional_V5.png" alt="Main figure for compositional search" width="750"/>
@@ -77,7 +77,7 @@ _For detailed account of changes, please consult the GitHub [changelog](https://
 
 ## Installation
 
-Installing `crystALL` on your machine can be done via the `PyPI` package repository, `conda-forge`  package repository, or by cloning from GitHub directly, following the instructions below. You can also effortlessly run it on the cloud [by clicking here to launch a pre-configured GitHub Codespaces environment](https://codespaces.new/PhasesResearchLab/crystALL?quickstart=1) with [tutorials](#tutorials) ready to go.
+Installing `crystALL` on your machine can be done via the `PyPI` package repository, or by cloning from GitHub directly, following the instructions below. You can also effortlessly run it on the cloud [by clicking here to launch a pre-configured GitHub Codespaces environment](https://codespaces.new/PhasesResearchLab/crystALL?quickstart=1) with [tutorials](#tutorials) ready to go.
 
 While not required, it is recommended to first set up a virtual environment using `micromamba`, `miniconda`, or `venv`. This ensures that (a) one of the required versions of Python (3.11+) is used and (b) there are no dependency conflicts. If you have Conda installed on your system (see [`micromamba` install instructions](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html)), you can create a new environment using:
 
@@ -88,7 +88,7 @@ micromamba activate crystall
 
 Then install `crystALL` (regular)
 ``` shell
-pip install crystall
+pip install crystall-search
 ```
 
 or if you work with the source code directly, you can clone the GitHub repository and install it in editable mode:
@@ -129,6 +129,26 @@ The tutorials currently consist of 3 Jupyter notebooks covering:
 - [01. QuickStart.ipynb](tutorial/01.QuickStart.ipynb) - Core API, BaSO4 walk-through, clustering and visualization
 - [02. HydridesExample.ipynb](tutorial/02.HydridesExample.ipynb) - Real-world discovery in complex metal hydrides.
 - [03. RefiningMPDDSearch.ipynb](tutorial/03.RefiningMPDDSearch.ipynb) - Advanced queries (dimensionality filtering, crystal system constraints, compositional limits).
+
+## New in v0.6.0
+
+The upcoming `v0.6.0` release introduces a fully modular architecture driven by the `MLIPAdapter` registry, enabling automated structure relaxations and multi-property predictions across diverse machine-learned interatomic potentials. Each potential manages its own execution micro-environment with support for CPU and CUDA acceleration, full cell/volume optimization, and optional piping into downstream static property models. Below is a summary of the machine-learned interatomic potentials integrated into `crystALL` v0.6.0 via the `MLIPAdapter` registry:
+
+| Model | Architecture Backbone | Training Dataset | Hardware | Variants | Citation |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **CHGNet** | Invariant GNN (charge-informed) | MPtrj | CPU, CUDA | 3 | [Deng et al. (2023)](https://doi.org/10.1038/s42256-023-00716-3) |
+| **TensorNet** | Invariant Cartesian Tensor GNN | MatPES / QM9 | CPU, CUDA | 2 | [Simeon & de Fabritiis (2023)](https://arxiv.org/abs/2306.06482) |
+| **ORB** | Invariant Graph Transformer | OMat24 / MPtrj | CPU, CUDA | 3 | [Rhodes et al. (2025)](https://arxiv.org/abs/2504.06231) |
+| **ORB-D3** | Invariant Graph Transformer (+ D3) | OMat24 / MPtrj | CPU, CUDA | 2 | [Rhodes et al. (2025)](https://arxiv.org/abs/2504.06231) |
+| **MACE** | Higher-Order Equivariant GNN (Multi-ACE) | MPtrj / OMat24 | CPU, CUDA | 6 | [Batatia et al. (2022)](https://arxiv.org/abs/2206.00133) |
+| **MatterSim** | Equivariant GNN (deep learning potential) | MatterSim-DB | CPU, CUDA | 2 | [Yang et al. (2024)](https://arxiv.org/abs/2405.04967) |
+| **NequIP** | Equivariant GNN ($E(3)$-equivariant) | OMat24 | CUDA | 3 | [Batzner et al. (2022)](https://doi.org/10.1038/s41467-022-29939-5) |
+| **SevenNet** | Equivariant GNN (parallel) | OMat24 / MPtrj | CPU, CUDA | 3 | [Park et al. (2024)](https://doi.org/10.1021/acs.jctc.4c00190) |
+| **UPET** | Equivariant GNN (point equivariant transformer) | OMat24 / PET-MAD | CPU, CUDA | 3 | [Bigi et al. (2026)](https://arxiv.org/abs/2601.16195) |
+| **UMA** | Equivariant Graph Transformer (universal model) | OMat24 | CPU, CUDA | 3 | [Wood et al. (2025)](https://arxiv.org/abs/2506.23971) |
+| **GRACE** | Graph Atomic Cluster Expansion | OMat24 | CPU, CUDA | 3 | [Bochkarev et al. (2024)](https://doi.org/10.1103/PhysRevX.14.021036) |
+| **OSAKA** | Fine-tuned Equivariant GNN (actinide-extended) | Literature Heavy-Element | CPU, CUDA | 3 | Kuroda et al. (2026) |
+| **Total** | **12 Architectures** | | | **36** | |
 
 ## Contributing
 
