@@ -894,7 +894,7 @@ def _get_reference_energy(atoms, model_code, matbench_path, calc):
             return None
 
         if model_code not in entry:
-            poscar_str = entry.get("poscar")
+            poscar_str = entry.get("structure")
             if not poscar_str:
                 return None
             try:
