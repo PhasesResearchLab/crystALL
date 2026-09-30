@@ -9,17 +9,23 @@ relaxed structures::
 
     matgl = MatGLAdapter()
     alignn = AlignnAdapter()
-    adapter = MLIPAdapter("MACE", custom={"model": "mh-1"}, static=[matgl, alignn])
+    adapter = MLIPAdapter("MACE", custom={"model": "medium-mpa-0"}, static=[matgl, alignn])
 
 Piped objectives appear in results with code-prefixed keys::
 
-    "MACE_MH_MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom] (via MatGL)"
-    "MACE_MH_ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV] (via ALIGNN)"
+    "MACE_MEDIUM_MPA_0_MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom] (via MatGL)"
+    "MACE_MEDIUM_MPA_0_ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV] (via ALIGNN)"
+
+A D4 dispersion correction can be added to any model, which appends ``D4``
+to the code prefix and output names::
+
+    adapter = MLIPAdapter("MACE", dispersion="d4")  # MACE_D4_RELAX_E, MACE-D4_<stem>.vasp
 """
 
 import os
 import re
 import json
+import hashlib
 import warnings
 from pathlib import Path
 from typing import Dict, List, Sequence, Any, Literal, Tuple
@@ -57,6 +63,60 @@ def _sanitize_model_code(name: str) -> str:
     """
     sanitized = re.sub(r"[^A-Za-z0-9]", "_", name).upper().strip("_")
     return re.sub(r"_+", "_", sanitized)
+
+
+def _variant_parts(
+    config_custom: Dict[str, Any],
+    custom_overrides: Dict[str, Any],
+    dispersion: str | None,
+    dispersion_kwargs: Dict[str, Any],
+) -> List[str]:
+    """Name parts that distinguish a configured model from its mlips.json defaults.
+
+    These are appended to the model name so that objective codes, output files
+    and cached elemental references of different configurations never collide.
+    With all defaults the list is empty, so default names are unchanged.
+
+    - Each non-default ``custom`` value, e.g. ``model='medium-mpa-0'`` ->
+      ``'MEDIUM_MPA_0'``. Values whose default is an env-var placeholder
+      (tokens) are never included.
+    - The dispersion correction, e.g. ``'D4'``, then the D4 method if it is not
+      PBE, then a short hash of any other dispersion settings.
+
+    Args:
+        config_custom: The model's ``custom`` defaults from mlips.json.
+        custom_overrides: User overrides of those values.
+        dispersion: Dispersion correction name, or None.
+        dispersion_kwargs: Settings passed to the dispersion calculator.
+
+    Returns:
+        List[str]: Sanitized name parts, in a deterministic order.
+    """
+    keys = [k for k in config_custom if k in custom_overrides]
+    keys += sorted(k for k in custom_overrides if k not in config_custom)
+    parts = []
+    for key in keys:
+        default = config_custom.get(key)
+        if isinstance(default, str) and _ENV_VAR_RE.match(default):
+            continue
+        value = custom_overrides[key]
+        if default is not None and str(value) == str(default):
+            continue
+        if part := _sanitize_model_code(str(value)):
+            parts.append(part)
+
+    if dispersion is not None:
+        parts.append(_sanitize_model_code(dispersion))
+        extra = dict(dispersion_kwargs)
+        method = extra.pop("method", None)
+        if method is None:
+            parts.append("CUSTOM")
+        elif str(method).upper() != "PBE":
+            parts.append(_sanitize_model_code(str(method)))
+        if extra:
+            blob = json.dumps(extra, sort_keys=True, default=str).encode()
+            parts.append(hashlib.sha1(blob).hexdigest()[:6].upper())
+    return parts
 
 
 from crystall.prototypes import _STRUCTURE_FORMATS, _read_structure_format
@@ -98,7 +158,8 @@ class MLIPAdapter(BaseCalculator):
 
     Each instance corresponds to a single MLIP model key from
     ``mlips.json``.  The micro-env is created under
-    ``<env_root>/mlip_envs/<model_name>/``.
+    ``<env_root>/mlip_envs/<model_name>/`` and is shared by all
+    configurations of that model (``custom`` overrides, dispersion).
 
     Example (standalone usage)::
 
@@ -106,6 +167,23 @@ class MLIPAdapter(BaseCalculator):
         adapter.setup_env()                         # one-time install
         result = adapter.run_on_structure("POSCAR")  # single file
         results = adapter.run_on_directory("./dir")  # batch
+
+    Dispersion correction (Linux only)::
+
+        adapter = MLIPAdapter("MACE", dispersion="d4")
+        adapter = MLIPAdapter("MACE", dispersion="d4", dispersion_kwargs={"method": "r2SCAN"})
+
+    The D4 energy, forces and stress are added to the MLIP's through ASE's
+    ``SumCalculator``, including for the elemental references used in the
+    formation energy. Notes:
+
+    - Match ``method`` to the functional the MLIP was trained on (PBE for
+      OMat24, MPtrj and MatPES-PBE models).
+    - Do not add D4 to a model that already includes dispersion (e.g.
+      ``ORB-D3``), or dispersion is counted twice.
+    - The default ``isif=8`` scales the cell uniformly, so c/a cannot change
+      and D4 cannot close the gap between layers. Use ``isif=3`` for layered
+      materials.
     """
 
     calculator_type: Literal["mlip", "static"] = "mlip"
@@ -142,6 +220,8 @@ class MLIPAdapter(BaseCalculator):
         device: str | None = None,
         static: List[BaseCalculator] | None = None,
         custom: Dict[str, Any] | None = None,
+        dispersion: Literal["d4"] | None = None,
+        dispersion_kwargs: Dict[str, Any] | None = None,
         **kwargs,
     ):
         """Initialize the MLIPAdapter instance.
@@ -150,11 +230,20 @@ class MLIPAdapter(BaseCalculator):
             model_name: The name of the MLIP model to load (e.g. 'MACE', 'ORB').
             device: Optional hardware device target ('cpu', 'cuda').
             static: Optional list of static adapters to pipe onto relaxed structures.
-            custom: Optional dictionary of custom config overrides.
+            custom: Optional dictionary of custom config overrides. Non-default
+                values are appended to the objective codes and output names.
+            dispersion: Optional dispersion correction added to the MLIP.
+                Only ``'d4'`` is supported.
+            dispersion_kwargs: Optional settings for ``dftd4.ase.DFTD4``,
+                merged over the default ``{"method": "PBE"}``. For example
+                ``{"method": "r2SCAN"}``, or ``{"params_tweaks": {"atm": False}}``
+                to drop the three-body term.
             **kwargs: Additional parameters forwarded to the base class.
 
         Raises:
-            ValueError: If model_name is not configured in mlips.json.
+            ValueError: If model_name is not configured in mlips.json, the
+                dispersion is unsupported, or dispersion_kwargs is given
+                without a dispersion.
         """
         super().__init__(**kwargs)
         config = _load_mlips_config()
@@ -163,54 +252,71 @@ class MLIPAdapter(BaseCalculator):
                 f"Model '{model_name}' not found in mlips.json. "
                 f"Available: {list(config.keys())}"
             )
+        if dispersion not in (None, "d4"):
+            raise ValueError(
+                f"Unsupported dispersion '{dispersion}'. Supported: 'd4'."
+            )
+        if dispersion_kwargs and dispersion is None:
+            raise ValueError("dispersion_kwargs requires dispersion='d4'.")
         self._model_name = model_name
         self._config = config[model_name]
         self._device_override = device.lower() if isinstance(device, str) else "cpu"
         self._static_adapters: List[BaseCalculator] = []
         self._custom_overrides: Dict[str, Any] = custom or {}
+        self._dispersion = dispersion
+        self._dispersion_kwargs: Dict[str, Any] = (
+            {"method": "PBE", **(dispersion_kwargs or {})} if dispersion else {}
+        )
 
-        self.name = model_name
-        self._model_code = _sanitize_model_code(model_name)
+        # e.g. 'MACE', 'MACE-D4', 'MACE-MEDIUM_MPA_0-D4'; used for output names
+        parts = _variant_parts(
+            self._config.get("custom", {}),
+            self._custom_overrides,
+            self._dispersion,
+            self._dispersion_kwargs,
+        )
+        self.name = "-".join([model_name, *parts])
+        self._model_code = _sanitize_model_code("_".join([model_name, *parts]))
         self._own_objectives = ObjectiveRegistry(
             [
                 Objective(
                     code=f"{self._model_code}_RELAX_E",
-                    description=f"{model_name} Relaxed Energy [eV/atom]",
+                    description=f"{self.name} Relaxed Energy [eV/atom]",
                     dispatch_key=(("model", "ase_relax"),),
                     backend=model_name,
                     kind="scalar",
                 ),
                 Objective(
                     code=f"{self._model_code}_RELAX_EF",
-                    description=f"{model_name} Relaxed Formation Energy [eV/atom]",
+                    description=f"{self.name} Relaxed Formation Energy [eV/atom]",
                     dispatch_key=(("model", "ase_relax"),),
                     backend=model_name,
                     kind="scalar",
                 ),
                 Objective(
                     code=f"{self._model_code}_RELAX_F",
-                    description=f"{model_name} Relaxed RMS Force [eV/A]",
+                    description=f"{self.name} Relaxed RMS Force [eV/A]",
                     dispatch_key=(("model", "ase_relax"),),
                     backend=model_name,
                     kind="scalar",
                 ),
                 Objective(
                     code=f"{self._model_code}_RELAX_STRESS",
-                    description=f"{model_name} Relaxed Von Mises Stress [GPa]",
+                    description=f"{self.name} Relaxed Von Mises Stress [GPa]",
                     dispatch_key=(("model", "ase_relax"),),
                     backend=model_name,
                     kind="scalar",
                 ),
                 Objective(
                     code=f"{self._model_code}_RELAX_VOL",
-                    description=f"{model_name} Relaxed Volume [A^3/atom]",
+                    description=f"{self.name} Relaxed Volume [A^3/atom]",
                     dispatch_key=(("model", "ase_relax"),),
                     backend=model_name,
                     kind="scalar",
                 ),
                 Objective(
                     code=f"{self._model_code}_RELAX_STRUCT",
-                    description=f"{model_name} Relaxed Structure",
+                    description=f"{self.name} Relaxed Structure",
                     dispatch_key=(("model", "ase_relax"),),
                     backend=model_name,
                     kind="artifact",
@@ -282,12 +388,15 @@ class MLIPAdapter(BaseCalculator):
     # ── Micro-env Path ────────────────────────────────────────────────────────
 
     def _env_path(self) -> Path:
-        """MLIPs live under ``<env_root>/mlip_envs/<name>/``.
+        """MLIPs live under ``<env_root>/mlip_envs/<model_name>/``.
+
+        Keyed by the mlips.json model name, not ``self.name``, so every
+        configuration of a model (custom overrides, dispersion) shares one env.
 
         Returns:
             Path: The absolute path to the micro-environment directory.
         """
-        return self._env_root() / "mlip_envs" / self.name.lower()
+        return self._env_root() / "mlip_envs" / self._model_name.lower()
 
     # ── Hook Overrides ────────────────────────────────────────────────────────
 
@@ -298,9 +407,16 @@ class MLIPAdapter(BaseCalculator):
             str: The formatted section content string.
         """
         device = self._device_override
+        dispersion = (
+            f"Dispersion: {Fore.MAGENTA}{self._dispersion} "
+            f"{self._dispersion_kwargs}{Style.RESET_ALL}\n"
+            if self._dispersion
+            else ""
+        )
         return (
-            f"Model: {Fore.MAGENTA}{self._model_name}{Style.RESET_ALL}\n"
-            f"Device: {Fore.MAGENTA}{device}{Style.RESET_ALL}\n\n"
+            f"Model: {Fore.MAGENTA}{self.name}{Style.RESET_ALL}\n"
+            f"Device: {Fore.MAGENTA}{device}{Style.RESET_ALL}\n"
+            f"{dispersion}\n"
             f"Supported OS: {Fore.YELLOW}{self.supported_os}{Style.RESET_ALL}\n"
             f"Supported Devices: {Fore.YELLOW}{self.supported_devices}{Style.RESET_ALL}"
         )
@@ -408,6 +524,9 @@ class MLIPAdapter(BaseCalculator):
             "torch-geometric==2.7.0",
             "ase>=3.27.0",
             "setuptools",
+            # D4 dispersion correction. >=4.3.0 fixes inconsistent periodic
+            # three-body forces; wheels are published for Linux only.
+            "dftd4>=4.3.0; sys_platform == 'linux'",
         ]
 
     def _layer3_setup_commands(self) -> List[str]:
@@ -514,8 +633,8 @@ class MLIPAdapter(BaseCalculator):
         stem = os.path.splitext(os.path.basename(abs_path))[0] or os.path.basename(
             abs_path
         )
-        # Naming convention: {model_name}_{stem}{fmt_ext}  e.g. ORB_Fe2O3.vasp
-        output_stem_prefix = f"{self._model_name}_"
+        # Naming convention: {name}_{stem}{fmt_ext}  e.g. ORB_Fe2O3.vasp, ORB-D4_Fe2O3.vasp
+        output_stem_prefix = f"{self.name}_"
 
         self._current_output_dir = output_dir
         self._current_output_stem_prefix = output_stem_prefix
@@ -535,7 +654,7 @@ class MLIPAdapter(BaseCalculator):
         filename = os.path.basename(abs_path)
 
         if self._static_adapters:
-            saved_path = os.path.join(output_dir, f"{self._model_name}_{stem}{out_ext}")
+            saved_path = os.path.join(output_dir, f"{output_stem_prefix}{stem}{out_ext}")
             if os.path.isfile(saved_path):
                 parsed = self._run_static_pipe_single(saved_path, parsed)
                 _upsert_objectives_json(
@@ -545,7 +664,7 @@ class MLIPAdapter(BaseCalculator):
                 )
             else:
                 warnings.warn(
-                    f"[{self._model_name}] Relaxed structure not found at "
+                    f"[{self.name}] Relaxed structure not found at "
                     f"'{saved_path}'; skipping static piping for this structure."
                 )
 
@@ -567,6 +686,8 @@ class MLIPAdapter(BaseCalculator):
                     for line in self._config.get("calculator", [])
                 ],
                 "model_code": self._model_code,  # sanitized code prefix for full-key labelling
+                "dispersion": self._dispersion,
+                "dispersion_kwargs": self._dispersion_kwargs,
                 "traj_dir": getattr(self, "_current_output_dir", ""),
                 "traj_prefix": getattr(self, "_current_output_stem_prefix", ""),
                 "persist_traj": getattr(self, "_current_persist_traj", False),
@@ -656,7 +777,7 @@ class MLIPAdapter(BaseCalculator):
         """Run MLIP relaxation on all structures in a directory.
 
         Relaxed structures are always saved to a sibling directory named
-        ``{model_name}_{input_dir_basename}/``.  If static adapters are
+        ``{name}_{input_dir_basename}/`` (e.g. ``MACE-D4_structures/``).  If static adapters are
         configured they run on the saved relaxed structures and results are merged.
 
         Args:
@@ -682,7 +803,7 @@ class MLIPAdapter(BaseCalculator):
         input_dir_name = os.path.basename(abs_path)
         default_results_dir = os.path.join(
             os.path.dirname(abs_path),
-            f"{self._model_name}_{input_dir_name}",
+            f"{self.name}_{input_dir_name}",
         )
         results_dir = kwargs.pop("results_dir", default_results_dir)
 
@@ -986,6 +1107,23 @@ def main():
             f"a \\'calc\\' variable."
         )
     calc = local_ns["calc"]
+
+    # ── Optional dispersion correction ──────────────────────────────
+    # Wrapped before anything uses calc, so the elemental references
+    # for the formation energy include it too.
+    dispersion = req.get('dispersion')
+    if dispersion == 'd4':
+        try:
+            from dftd4.ase import DFTD4
+        except ImportError as exc:
+            raise ImportError(
+                'dispersion=d4 needs dftd4>=4.3.0 in this micro-env. Install it with: '
+                'uv pip install "dftd4>=4.3.0" --python ' + sys.executable
+            ) from exc
+        from ase.calculators.mixing import SumCalculator
+        calc = SumCalculator([calc, DFTD4(**req.get('dispersion_kwargs', {}))])
+    elif dispersion is not None:
+        raise ValueError('Unsupported dispersion: ' + str(dispersion))
 
     # ── Import ASE components ───────────────────────────────────────
     from ase.io import read, write
