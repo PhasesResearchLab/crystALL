@@ -10,6 +10,7 @@
 .. toctree::
    _source/installation
    _source/tutorials
+   _source/new_in_v060
    api
    genindex
    :hidden:
