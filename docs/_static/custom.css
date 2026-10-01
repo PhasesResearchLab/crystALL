@@ -26,12 +26,3 @@
 .wy-side-nav-search {
     background-color: #efefef !important;
 }
-
-/* Borderless table for logo and badges */
-.rst-content table.borderless,
-.rst-content table.borderless td {
-    border: none !important;
-    background: transparent !important;
-}
-
-
