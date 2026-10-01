@@ -42,6 +42,16 @@ from crystall.calculators import (
 
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
+# D4 dispersion backend. >=4.3.0 fixes inconsistent periodic three-body
+# forces; wheels are published for Linux only.
+_DFTD4_MIN_VERSION = "4.3.0"
+_DFTD4_REQUIREMENT = f"dftd4>={_DFTD4_MIN_VERSION}"
+
+
+def _version_tuple(version: str) -> Tuple[int, ...]:
+    """'4.3.0' -> (4, 3, 0); ignores any pre-release or local suffix."""
+    return tuple(int(x) for x in re.findall(r"\d+", version)[:3])
+
 # Matches "${VAR_NAME}" optionally followed by whitespace and a guidance message.
 # Used in mlips.json custom values to indicate env-var resolution.
 _ENV_VAR_RE = re.compile(r"^\$\{([A-Z_][A-Z0-9_]*)\}\s*(.*)", re.DOTALL)
@@ -267,6 +277,7 @@ class MLIPAdapter(BaseCalculator):
         self._dispersion_kwargs: Dict[str, Any] = (
             {"method": "PBE", **(dispersion_kwargs or {})} if dispersion else {}
         )
+        self._dftd4_checked = False
 
         # e.g. 'MACE', 'MACE-D4', 'MACE-MEDIUM_MPA_0-D4'; used for output names
         parts = _variant_parts(
@@ -524,9 +535,7 @@ class MLIPAdapter(BaseCalculator):
             "torch-geometric==2.7.0",
             "ase>=3.27.0",
             "setuptools",
-            # D4 dispersion correction. >=4.3.0 fixes inconsistent periodic
-            # three-body forces; wheels are published for Linux only.
-            "dftd4>=4.3.0; sys_platform == 'linux'",
+            f"{_DFTD4_REQUIREMENT}; sys_platform == 'linux'",
         ]
 
     def _layer3_setup_commands(self) -> List[str]:
@@ -589,6 +598,68 @@ class MLIPAdapter(BaseCalculator):
             for adapter in self._static_adapters:
                 adapter.setup_env()
 
+    def setup_env(self) -> None:
+        """Create the micro-env (idempotent), then add dftd4 if D4 is requested."""
+        super().setup_env()
+        self._helper_ensure_dftd4()
+
+    def _helper_dftd4_version(self) -> str | None:
+        """Version of dftd4 usable from the micro-env, or None if it cannot be imported.
+
+        Returns:
+            str | None: The installed version string, or None.
+        """
+        import subprocess as sp
+
+        probe = "import dftd4.ase, importlib.metadata as m; print(m.version('dftd4'))"
+        try:
+            result = sp.run(
+                [str(self._micro_python()), "-c", probe],
+                text=True,
+                capture_output=True,
+                timeout=120,
+            )
+        except (OSError, sp.TimeoutExpired):
+            return None
+        return result.stdout.strip() if result.returncode == 0 else None
+
+    def _helper_ensure_dftd4(self) -> None:
+        """Install or upgrade dftd4 in an existing micro-env when D4 is requested.
+
+        Envs created before dftd4 became a layer-2 dependency are never rebuilt,
+        so they are updated in place here. Checked at most once per instance.
+
+        Raises:
+            RuntimeError: If dftd4 cannot be installed or still fails to import.
+        """
+        if not self._dispersion or self._dftd4_checked or not self.is_env_ready():
+            return
+
+        version = self._helper_dftd4_version()
+        minimum = _version_tuple(_DFTD4_MIN_VERSION)
+        if version is None or _version_tuple(version) < minimum:
+            found = f"dftd4 {version}" if version else "no usable dftd4"
+            print(
+                f"[{self.name}] Found {found} in the micro-env; "
+                f"installing '{_DFTD4_REQUIREMENT}' for D4 dispersion..."
+            )
+            env = os.environ.copy()
+            env["UV_CACHE_DIR"] = str(self._env_root() / "uv_cache")
+            try:
+                self._run_setup_command(f"pip install '{_DFTD4_REQUIREMENT}'", env)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"[{self.name}] Could not install '{_DFTD4_REQUIREMENT}' into "
+                    f"{self._env_path()}: {exc}"
+                ) from exc
+            version = self._helper_dftd4_version()
+            if version is None or _version_tuple(version) < minimum:
+                raise RuntimeError(
+                    f"[{self.name}] dftd4 is still not usable in {self._env_path()} "
+                    f"after installation (found: {version})."
+                )
+        self._dftd4_checked = True
+
     def run_on_structure(
         self,
         file_path: str,
@@ -620,6 +691,7 @@ class MLIPAdapter(BaseCalculator):
             print("=" * 51)
 
         self._assert_os_supported()
+        self._helper_ensure_dftd4()
 
         abs_path = os.path.abspath(file_path)
         output_dir = os.path.dirname(abs_path)
@@ -798,6 +870,7 @@ class MLIPAdapter(BaseCalculator):
             print("=" * 51)
 
         self._assert_os_supported()
+        self._helper_ensure_dftd4()
 
         abs_path = os.path.abspath(path)
         input_dir_name = os.path.basename(abs_path)
