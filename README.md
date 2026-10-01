@@ -1,7 +1,7 @@
 # crystALL
 
 <div align="center">
-<table>
+<table class="borderless">
   <tr>
     <td width="160">
       <img src="docs/_static/crystALL.png" alt="crystALL Logo" width="140"/>

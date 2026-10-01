@@ -1,5 +1,5 @@
 <div align="center">
-<table>
+<table class="borderless">
   <tr>
     <td width="160">
       <img src="_static/crystALL.png" alt="crystALL Logo" width="140"/>
