@@ -5,16 +5,15 @@
   <br><br>
 
   <!-- Row 1: Publication, Docs & License -->
-  <a href="https://doi.org/10.xxxx/xxxxx"><img src="https://img.shields.io/badge/DOI-10.xxxx/xxxxx-blue" alt="DOI"/></a>
-  <a href="https://arxiv.org/abs/YYMM.xxxxx"><img src="https://img.shields.io/badge/arXiv-YYMM.xxxxx-darkred" alt="arXiv"/></a>
-  <img src="https://img.shields.io/badge/Docs-readthedocs-informational" alt="Docs"/>
+  <a href="https://doi.org/10.1016/j.actamat.2021.117448"><img src="https://img.shields.io/badge/DOI-10.1016%2Fj.actamat.2021.117448-blue" alt="DOI"/></a>
+  <a href="https://doi.org/10.1038/s41598-021-03578-0"><img src="https://img.shields.io/badge/DOI-10.1038%2Fs41598--021--03578--0-blue" alt="arXiv"/></a>
+  <a href="https://doi.org/10.1016/j.molliq.2025.127811"><img src="https://img.shields.io/badge/DOI-10.1016%2Fj.molliq.2025.127811-blue" alt="arXiv"/></a>
   <br>
 
   <!-- Row 2: Live CI / OS Tests -->
   <a href="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml"><img src="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg" alt="Linux"/></a>
   <a href="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Windows.yaml"><img src="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Windows.yaml/badge.svg" alt="Windows"/></a>
   <a href="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Mac.yaml"><img src="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Mac.yaml/badge.svg" alt="macOS"/></a>
-  <img src="https://img.shields.io/badge/Codecov-100%25-fe226d" alt="Codecov"/>
   <br>
 
   <!-- Row 3: Environment & Release -->
