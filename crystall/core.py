@@ -620,6 +620,9 @@ def run_MPDD(
                 s = Structure.from_dict(json.loads(prototype['material']['mgJSON']))
 
                 permuts = element_permutations(sorted_elements_list(Composition(s.formula)))
+
+                assert permuts, "No allowed substitutions found for the given composition. This indicates incorrect prototype identification or target stoichiometry."
+                
                 spGroupA = SpacegroupAnalyzer(s)
 
                 nameRoot = prototype['material']['reducedFormula'] + '-' + str(
@@ -905,6 +908,8 @@ def run_MPDD_devs(
 
                 oAS = ordered_allowed_substitutions(target_composition_dict, devs, cDict)
 
+                assert oAS, "No allowed substitutions found for the given composition. This indicates incorrect prototype identification or target stoichiometry."
+
                 permutNList += [len(oAS)]
 
                 spGroupA = SpacegroupAnalyzer(s)
@@ -915,6 +920,8 @@ def run_MPDD_devs(
                 if 'parentDatabaseID' in prototype['metadata']:
                     nameRoot = nameRoot + '-' + prototype['metadata']['parentDatabaseID'].replace('/', '-').replace(':','-').replace('-', '')
 
+                # Generate all possible substituted structures based on allowed substitutions
+                # Start with permutation index 1 since oAS contains at least one allowed substitution for each element
                 p = 1
                 for substitutions in oAS:
                     d = {}
