@@ -1667,13 +1667,13 @@ class CrystALLSearch:
                 if filename not in {prototype['name'] for prototype in self.prototypes}:
                     os.remove(os.path.join(self.prototype_path, filename))
 
-        # Update the 'index' key of each dictionary in self.prototypes to its position in the list
-        for i, prototype in enumerate(self.prototypes):
-            prototype['index'] = i + 1
-
         # Update self.ks2022 to only include the values at the positions specified by the "index" key in the filtered self.prototypes
         indices = [prototype['index'] - 1 for prototype in self.prototypes]
         self.ks2022 = self.ks2022[indices]
+
+        # Update the 'index' key of each dictionary in self.prototypes to its position in the list
+        for i, prototype in enumerate(self.prototypes):
+            prototype['index'] = i + 1
 
         if max_prototypes:
             print(f"Filtered prototypes to {Fore.GREEN}{Style.BRIGHT}{len(self.prototypes)}{Style.RESET_ALL} based on the maximum number of prototypes of {max_prototypes}")
