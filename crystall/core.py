@@ -1045,9 +1045,9 @@ def ordered_allowed_substitutions(
         target_comp_dict: Dict[str, int],
         devs: Dict[str, int],
         prototype_comp_dict: Dict[str, int]
-    ) -> List[List[str]]:
+    ) -> List[Tuple[str, ...]]:
     """
-    Return elements grouped by their occurrence in the formula, starting from the least common.
+    Return all valid ordered element substitution tuples for a prototype structure within allowed compositional deviations.
 
     Args:
         target_comp_dict: Dictionary with element symbols as keys and their amounts as values.
@@ -1055,7 +1055,7 @@ def ordered_allowed_substitutions(
         prototype_comp_dict: Dictionary with element symbols as keys and their amounts as values for the prototype.
 
     Returns:
-        List of lists of element symbols representing allowed substitutions.
+        List of tuples of element symbols representing allowed substitutions.
     """
 
     # Finds what elements can be used for substitution
@@ -1949,7 +1949,7 @@ class CrystALLSearch:
         """
 
         assert len(self.prototypes) > 0, 'No prototypes identified. Please run `generate_MPDD` or `generate_local` first.'
-        assert not any(value not in ['all-prototypes', 'top-candidates'] for value in content), 'Content should contain only `all_prototypes` and/or `top_candidates`'
+        assert not any(value not in ['all-prototypes', 'top-candidates'] for value in content), 'Content should contain only `all-prototypes` and/or `top-candidates`'
 
         if 'top-candidates' in content and not self.top_candidates:
             print("No clustered prototypes identified. Please run `cluster_prototypes` first. \nChanging content to 'all-prototypes' only.")
