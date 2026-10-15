@@ -2492,18 +2492,22 @@ class BaseCalculator:
         
 # Package Metadata **************************************************************************
 try:
-    with importlib.resources.files("crystall").joinpath("pyproject.toml").open("rb") as f:
-        _toml = tomllib.load(f)
-    _project = _toml.get("project", {})
-    _urls = _project.get("urls", {})
-    __name__ = _project.get("name")
-    __version__ = _project.get("version")
-    __release__ = _project.get("release")
-    __authors__ = ", ".join([a.get("name", "") for a in _project.get("authors", [])])
+    import importlib.metadata
+    try:
+        _meta = importlib.metadata.metadata("crystall-search")
+    except importlib.metadata.PackageNotFoundError:
+        _meta = importlib.metadata.metadata("crystall")
+    _urls = dict(u.split(", ", 1) for u in _meta.get_all("Project-URL", []) if ", " in u)
+    __name__ = _meta.get("Name")
+    __version__ = _meta.get("Version")
+    __release__ = _urls.get("Release")
+    __authors__ = _meta.get("Author") or ", ".join(
+        re.sub(r"\s*<.*?>", "", a) for a in _meta.get_all("Author-email", [])
+    )
     __doc__ = _urls.get("Documentation")
     __rep__ = _urls.get("Repository")
     __doi__ = _urls.get("DOI")
-except (FileNotFoundError, ModuleNotFoundError):
+except importlib.metadata.PackageNotFoundError:
     __name__ = "crystall"
     __version__ = "X.X.X"
     __release__ = "YYYY-MM"
