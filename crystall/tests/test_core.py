@@ -594,6 +594,29 @@ class TestTopLevelFunctions(unittest.TestCase):
             self.assertIn("fake.one", msg)
             self.assertIn("fake.two", msg)
 
+    def test_aggregate_pipeline_msgs(self) -> None:
+        """_aggregate_pipeline wraps string msgs and accepts tuple/list msgs without character slicing."""
+        from crystall.core import _aggregate_pipeline
+        from unittest.mock import MagicMock
+
+        mock_col = MagicMock()
+        mock_col.aggregate.return_value = [{"result": 1}]
+
+        # Single string should be wrapped so spinner text starts with the whole string
+        with patch("crystall.core.yaspin") as mock_yaspin:
+            _aggregate_pipeline(mock_col, [], msgs="single message")
+            mock_yaspin.assert_called_once_with(text="single message")
+
+        # Tuple of messages
+        with patch("crystall.core.yaspin") as mock_yaspin:
+            _aggregate_pipeline(mock_col, [], msgs=("msg1", "msg2"))
+            mock_yaspin.assert_called_once_with(text="msg1")
+
+        # None defaults to the built-in alternating messages
+        with patch("crystall.core.yaspin") as mock_yaspin:
+            _aggregate_pipeline(mock_col, [])
+            mock_yaspin.assert_called_once_with(text="rɛplacing elɛments in thɛ prototypes")
+
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
         # Sweep all Ni22Ru8 / Al26Ru8 prototype directories. The query.yaml

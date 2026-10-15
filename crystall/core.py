@@ -225,7 +225,7 @@ def _aggregate_pipeline(
         collection,
         pipeline: List[Dict[str, Any]],
         hint: Optional[Dict[str, int]] = None,
-        msgs: Optional[Sequence[str]] = None,
+        msgs: Optional[Union[Sequence[str], str]] = None,
         interval: float = 0.6
     ) -> List[Dict[str, Any]]:
     """
@@ -233,7 +233,9 @@ def _aggregate_pipeline(
     cycles through a short list of status messages.
     """
 
-    if msgs is None:
+    if isinstance(msgs, str):
+        msgs = (msgs,)
+    elif msgs is None:
         msgs = (
             'rɛplacing elɛments in thɛ prototypes',
             'replacing ɛlemɛnts in the prototypɛs',
@@ -497,7 +499,7 @@ def run_MPDD(
             facet_out = _aggregate_pipeline(
                 MPDD[col],
                 pipeline,
-                msgs=('matching native candidates')
+                msgs=('matching native candidates',)
             )
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
@@ -764,7 +766,7 @@ def run_MPDD_devs(
             facet_out = _aggregate_pipeline(
                 MPDD[col],
                 pipeline,
-                msgs=('matching native candidates')
+                msgs=('matching native candidates',)
             )
 
             facet = facet_out[0] if facet_out else {"data": [], "meta": []}
