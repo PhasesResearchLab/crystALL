@@ -2,43 +2,21 @@
 
 <div align="center">
   <img src="docs/_static/crystALL.png" alt="crystALL Logo" width="180"/>
-  <br><br>
-
-  <!-- Row 1: Publication, Docs & License -->
-  <a href="https://doi.org/10.1016/j.actamat.2021.117448"><img src="https://img.shields.io/badge/DOI-10.1016%2Fj.actamat.2021.117448-blue" alt="DOI"/></a>
-  <a href="https://doi.org/10.1038/s41598-021-03578-0"><img src="https://img.shields.io/badge/DOI-10.1038%2Fs41598--021--03578--0-blue" alt="arXiv"/></a>
-  <a href="https://doi.org/10.1016/j.molliq.2025.127811"><img src="https://img.shields.io/badge/DOI-10.1016%2Fj.molliq.2025.127811-blue" alt="arXiv"/></a>
   <br>
-
-  <!-- Row 2: Live CI / OS Tests -->
-  <a href="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml"><img src="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg" alt="Linux"/></a>
-  <a href="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Windows.yaml"><img src="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Windows.yaml/badge.svg" alt="Windows"/></a>
-  <a href="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Mac.yaml"><img src="https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Mac.yaml/badge.svg" alt="macOS"/></a>
-  <br>
-
-  <!-- Row 3: Environment & Release -->
-  <a href="https://github.com/PhasesResearchLab/crystALL"><img src="https://img.shields.io/github/languages/top/PhasesResearchLab/crystALL" alt="GitHub top language"/></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/></a>
-  <a href="https://pypi.org/project/crystall-search"><img src="https://img.shields.io/badge/pypi-v0.5.2-purple" alt="PyPI"/></a>
 </div>
-<br>
 
-<!---
+
+[![license](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/crystall-search)](https://pypi.org/project/crystall-search)
 [![PyPI - Version](https://img.shields.io/pypi/v/crystall-search?label=PyPI&color=green)](https://pypi.org/project/crystall-search)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/crystall-search)](https://pypi.org/project/crystall-search)
-
-[![codecov](https://codecov.io/gh/PhasesResearchLab/crystALL/branch/main/graph/badge.svg)](https://codecov.io/gh/PhasesResearchLab/crystALL)
-[![stable](https://img.shields.io/badge/Read%20The%20Docs-Stable-green)](https://crystall.readthedocs.io/en/stable/) 
-[![latest](https://img.shields.io/badge/Read%20The%20Docs-Latest-green)](https://crystall.readthedocs.io/en/latest/)
+[![LinuxTests](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml)
 
 
-Examples:
+Example Publications using `crystALL`:
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.actamat.2021.117448-blue)](https://doi.org/10.1016/j.actamat.2021.117448)
 [![DOI](https://img.shields.io/badge/DOI-10.1038%2Fs41598--021--03578--0-blue)](https://doi.org/10.1038/s41598-021-03578-0)
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.molliq.2025.127811-blue)](https://doi.org/10.1016/j.molliq.2025.127811)
-
--->
 
 ## Summary
 
@@ -62,7 +40,7 @@ The example depicts a dramatic filtering cascade - 5M structures from MPDD are h
   <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/2cc27a91b6396b8cc776075b3696411f061b268c/docs/_static/crystALL_Compounds_V7.png" alt="Main figure for compound search" width="750"/>
 </div>
 
-**One of the unique features within `crystALL`, mentioned in the summary and explored in detail in the paper, is the ability to perform searches over compositional ranges, positioning it as an invaluable tool for interpreting real measurements of compositions, without assuming that molar ratios are low integers** - a very common pitfall researchers fall into. As illustrated below, **when combined with `MPDD`, `crystALL` accepts an uncertainty range for each element individually and systematically explores all prototypical structures within the specified compositional subspace, covering both low- and high-index anonymous formulas.
+**One of the unique features within `crystALL`, mentioned in the summary and explored in detail in the paper, is the ability to perform searches over compositional ranges, positioning it as an invaluable tool for interpreting real measurements of compositions, without assuming that molar ratios are low integers** - a very common pitfall researchers fall into. As illustrated below, **when combined with `MPDD`, `crystALL` accepts an uncertainty range for each element individually and systematically explores all prototypical structures within the specified compositional subspace**, covering both low- and high-index anonymous formulas.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/2cc27a91b6396b8cc776075b3696411f061b268c/docs/_static/crystALL_Compositional_V5.png" alt="Main figure for compositional search" width="750"/>
