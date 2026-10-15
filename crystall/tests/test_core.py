@@ -198,14 +198,35 @@ class TestTopLevelFunctions(unittest.TestCase):
         self.assertEqual(result, [["Al"], ["Ni"], ["Zr"]])
 
     def test_element_permutations(self) -> None:
-        """Test element_permutations generates permutations of the element list."""
+        """Test element_permutations generates permutations within stoichiometric groups."""
         from crystall.core import element_permutations
 
-        elements = ["A", "B", "C"]
-        perms = element_permutations(elements)
-        # Should return at least the original ordering as a list
-        self.assertGreaterEqual(len(perms), 1)
-        self.assertIn(["A", "B", "C"], perms)
+        # Case 1: Single group with 3 elements of identical multiplicity -> 3! = 6 permutations
+        sEL_single = [["A", "B", "C"]]
+        perms_single = element_permutations(sEL_single)
+        self.assertEqual(len(perms_single), 6)
+        expected_single = [
+            ["A", "B", "C"],
+            ["A", "C", "B"],
+            ["B", "A", "C"],
+            ["B", "C", "A"],
+            ["C", "A", "B"],
+            ["C", "B", "A"],
+        ]
+        self.assertEqual(perms_single, expected_single)
+
+        # Case 2: Multiple groups: 2 elements in first group, 1 in second -> 2! * 1! = 2 permutations
+        sEL_multi = [["A", "B"], ["C"]]
+        perms_multi = element_permutations(sEL_multi)
+        self.assertEqual(len(perms_multi), 2)
+        self.assertEqual(perms_multi, [["A", "B", "C"], ["B", "A", "C"]])
+
+        # Case 3: Multiple groups with 2 elements each -> 2! * 2! = 4 permutations
+        sEL_two_pairs = [["A", "B"], ["C", "D"]]
+        perms_pairs = element_permutations(sEL_two_pairs)
+        self.assertEqual(len(perms_pairs), 4)
+        self.assertIn(["A", "B", "C", "D"], perms_pairs)
+        self.assertIn(["B", "A", "D", "C"], perms_pairs)
 
     def test_comp2acomp_q(self) -> None:
         """Test comp2acomp_q builds a valid anonymized composition MPDD query."""
