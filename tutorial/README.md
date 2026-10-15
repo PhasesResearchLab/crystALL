@@ -21,3 +21,11 @@ A real-world case study demonstrating the discovery of new material structures i
 - Practical application of crystALL
 - Materials discovery workflow
 - Advanced structure analysis
+
+### [03. Refining MPDD Prototype Search](03.RefiningMPDDSearch.ipynb)
+How to refine and constrain prototype generation from MPDD using custom MongoDB filter queries (`other_targets`).
+
+**Topics covered:**
+- Constraining searches by dimensionality, crystal system, and other MPDD properties
+- MongoDB query operator usage in `other_targets`
+- Output directory hashing and `query.yaml` provenance tracking
