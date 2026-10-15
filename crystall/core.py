@@ -1629,6 +1629,7 @@ class CrystALLSearch:
             max_prototypes: int,
             cutoff: float = 0.5,
             objective: str | None = None,
+            delete_fltered_structures: bool = True,
     ) -> None:
         """
         Filter the prototypes based on the Formation Energy cutoff value provided.
@@ -1638,6 +1639,7 @@ class CrystALLSearch:
             cutoff: The Formation Energy cutoff value. Defaults to 0.5.
             objective: Name of the objective to use for filtering. If None,
                 the first entry in self.predicted_objectives is used.
+            delete_fltered_structures: Whether to delete the structure files not in the filtered prototypes. Defaults to True.
 
         Raises:
             AssertionError: If no prototypes are identified or if no features are identified.
@@ -1659,10 +1661,11 @@ class CrystALLSearch:
                 if prototype[objective] < cutoff + min_energy
             ]
 
-        # Delete files not in filtered self.prototypes
-        for filename in os.listdir(self.prototype_path):
-            if filename not in {prototype['name'] for prototype in self.prototypes}:
-                os.remove(os.path.join(self.prototype_path, filename))
+        # Delete files not in filtered self.prototypes if delete_fltered_structures is True
+        if delete_fltered_structures:
+            for filename in os.listdir(self.prototype_path):
+                if filename not in {prototype['name'] for prototype in self.prototypes}:
+                    os.remove(os.path.join(self.prototype_path, filename))
 
         # Update the 'index' key of each dictionary in self.prototypes to its position in the list
         for i, prototype in enumerate(self.prototypes):
