@@ -1359,8 +1359,17 @@ class CrystALLSearch:
             self.prototype_path = run_MPDD(self.target_formula, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
         else:
             self.prototype_path = run_MPDD_devs(self.target_formula, devs, self.MPDD, self.collections, target_prototypes, filter_prototypes, limit, other_targets)
-        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS]
-        self.prototypes = [{"index": i + 1, "name": file} for i, file in enumerate(inputFiles)]
+
+        inputFiles = [
+            f for f in natsorted(os.listdir(self.prototype_path)) 
+            if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS
+        ]
+        self.prototypes = [
+            {
+                "index": i + 1,
+                "name": file
+            } for i, file in enumerate(inputFiles)
+        ]
 
     def generate_local(
             self,
@@ -1378,9 +1387,23 @@ class CrystALLSearch:
 
         self.prototype_path = prototype_path if prototype_path is not None else self.prototype_path
         assert self.prototype_path, 'No prototypes folder identified. Please provide a path to the prototypes folder.'
-        self.prototype_path = run_local(self.target_formula, self.prototype_path)
-        inputFiles = [f for f in natsorted(os.listdir(self.prototype_path)) if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS]
-        self.prototypes = [{"index": i, "name": file} for i, file in enumerate(inputFiles)]
+
+        self.prototype_path = run_local(
+            self.target_formula, 
+            self.prototype_path
+        )
+
+        inputFiles = [
+            f for f in 
+            natsorted(os.listdir(self.prototype_path)) 
+            if os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS
+        ]
+        self.prototypes = [
+            {
+                "index": i + 1, 
+                "name": file
+            } for i, file in enumerate(inputFiles)
+        ]
 
     def run_pysipfenn(
             self,
