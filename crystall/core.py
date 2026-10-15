@@ -1661,10 +1661,11 @@ class CrystALLSearch:
                 if prototype[objective] < cutoff + min_energy
             ]
 
-        # Delete files not in filtered self.prototypes if delete_fltered_structures is True
-        if delete_fltered_structures:
+        # Delete files not in filtered self.prototypes if delete_filtered_structures is True
+        if delete_filteredout_structures:
             for filename in os.listdir(self.prototype_path):
-                if filename not in {prototype['name'] for prototype in self.prototypes}:
+                ext = os.path.splitext(filename)[1].casefold()
+                if ext in _STRUCTURE_EXTENSIONS and filename not in {prototype['name'] for prototype in self.prototypes}:
                     os.remove(os.path.join(self.prototype_path, filename))
 
         # Update self.ks2022 to only include the values at the positions specified by the "index" key in the filtered self.prototypes
