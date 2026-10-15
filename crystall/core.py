@@ -8,6 +8,7 @@ import json
 import csv
 import time
 import hashlib
+from contextlib import redirect_stdout
 from ruamel.yaml import YAML
 import numpy as np
 import pandas as pd
@@ -1113,9 +1114,8 @@ class CrystALLSearch:
         else:
             raise TypeError('Target formula must be a string or a pymatgen Composition object')
 
-        stdout, sys.stdout = sys.stdout, io.StringIO()
-        self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
-        sys.stdout = stdout
+        with redirect_stdout(io.StringIO()):
+            self.Calculator = calculator if calculator is not None else Calculator(autoLoad=False, verbose=False)
 
         self.MPDD = None
         
@@ -1138,9 +1138,8 @@ class CrystALLSearch:
             loadedCompatibleModels = set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys()))
             if not len(loadedCompatibleModels) > 0:
                 alternative_model = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.network_list_available)))[0]
-                stdout, sys.stdout = sys.stdout, io.StringIO()
-                self.Calculator.loadModels(network = alternative_model)
-                sys.stdout = stdout
+                with redirect_stdout(io.StringIO()):
+                    self.Calculator.loadModels(network = alternative_model)
             # Record pySIPFENN available objectives
             self.available_calculators['pySIPFENN'] = list(set(self.Calculator.findCompatibleModels('KS2022')).intersection(set(self.Calculator.loadedModels.keys())))
         else:
@@ -1429,9 +1428,8 @@ class CrystALLSearch:
         # Track which objectives (models) will be predicted by pySIPFENN
         for model in self.available_calculators.get('pySIPFENN', []):
             if model not in self.Calculator.loadedModels:
-                stdout, sys.stdout = sys.stdout, io.StringIO()
-                self.Calculator.loadModels(network = model)
-                sys.stdout = stdout
+                with redirect_stdout(io.StringIO()):
+                    self.Calculator.loadModels(network = model)
             if model not in self.predicted_objectives:
                 self.predicted_objectives.append(model)
 

@@ -617,6 +617,17 @@ class TestTopLevelFunctions(unittest.TestCase):
             _aggregate_pipeline(mock_col, [])
             mock_yaspin.assert_called_once_with(text="rɛplacing elɛments in thɛ prototypes")
 
+    def test_stdout_redirection_safety(self) -> None:
+        """Verify redirect_stdout safely restores sys.stdout even if an exception occurs."""
+        import sys
+
+        original_stdout = sys.stdout
+        with patch("crystall.core.Calculator", side_effect=RuntimeError("Simulated Calculator init failure")):
+            with self.assertRaises(RuntimeError):
+                crystall.CrystALLSearch("Fe2O3")
+        # Ensure sys.stdout was properly restored and not left pointing to a dead StringIO
+        self.assertIs(sys.stdout, original_stdout)
+
     def tearDown(self) -> None:
         """Clean up any local and MPDD-generated directories after each test."""
         # Sweep all Ni22Ru8 / Al26Ru8 prototype directories. The query.yaml
