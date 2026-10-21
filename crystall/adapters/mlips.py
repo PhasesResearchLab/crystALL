@@ -16,9 +16,10 @@ Piped objectives appear in results with code-prefixed keys::
     "MACE_MEDIUM_MPA_0_MATGL_EF_MEGNET: Formation Energy MEGNet [eV/atom] (via MatGL)"
     "MACE_MEDIUM_MPA_0_ALIGNN_BG_ALEX: ALIGNN-Alexandria Bandgap [eV] (via ALIGNN)"
 
-A D4 dispersion correction can be added to any model, which appends ``D4``
-to the code prefix and output names::
+A D3 or D4 dispersion correction can be added to any model, which appends
+``D3``/``D4`` to the code prefix and output names::
 
+    adapter = MLIPAdapter("MACE", dispersion="d3")  # MACE_D3_RELAX_E, MACE-D3_<stem>.vasp
     adapter = MLIPAdapter("MACE", dispersion="d4")  # MACE_D4_RELAX_E, MACE-D4_<stem>.vasp
 """
 
@@ -42,10 +43,29 @@ from crystall.calculators import (
 
 _STRUCTURE_MARKER_KEY = "__crystall_pymatgen_structure__"
 
-# D4 dispersion backend. >=4.3.0 fixes inconsistent periodic three-body
-# forces; wheels are published for Linux only.
-_DFTD4_MIN_VERSION = "4.3.0"
-_DFTD4_REQUIREMENT = f"dftd4>={_DFTD4_MIN_VERSION}"
+# Dispersion corrections: Python package, ASE calculator class (in
+# ``<package>.ase``) and default settings. Older releases give periodic
+# forces inconsistent with their energies (dftd3 <1.3.0, dftd4 <4.1.1).
+_DISPERSION_BACKENDS: Dict[str, Dict[str, Any]] = {
+    "d3": {
+        "package": "dftd3",
+        "min_version": "1.3.0",
+        "calculator": "DFTD3",
+        "defaults": {"method": "PBE", "damping": "d3bj"},
+    },
+    "d4": {
+        "package": "dftd4",
+        "min_version": "4.3.0",
+        "calculator": "DFTD4",
+        "defaults": {"method": "PBE"},
+    },
+}
+
+
+def _dispersion_requirement(dispersion: str) -> str:
+    """Pip requirement for a dispersion backend, e.g. 'dftd4>=4.3.0'."""
+    backend = _DISPERSION_BACKENDS[dispersion]
+    return f"{backend['package']}>={backend['min_version']}"
 
 
 def _version_tuple(version: str) -> Tuple[int, ...]:
@@ -90,8 +110,10 @@ def _variant_parts(
     - Each non-default ``custom`` value, e.g. ``model='medium-mpa-0'`` ->
       ``'MEDIUM_MPA_0'``. Values whose default is an env-var placeholder
       (tokens) are never included.
-    - The dispersion correction, e.g. ``'D4'``, then the D4 method if it is not
-      PBE, then a short hash of any other dispersion settings.
+    - The dispersion correction (``'D3'`` or ``'D4'``), then each default
+      setting that was changed (e.g. ``'R2SCAN'`` for the method, ``'D3ZERO'``
+      for the D3 damping; ``'CUSTOM'`` if the method is unset), then a short
+      hash of any other dispersion settings.
 
     Args:
         config_custom: The model's ``custom`` defaults from mlips.json.
@@ -118,11 +140,12 @@ def _variant_parts(
     if dispersion is not None:
         parts.append(_sanitize_model_code(dispersion))
         extra = dict(dispersion_kwargs)
-        method = extra.pop("method", None)
-        if method is None:
-            parts.append("CUSTOM")
-        elif str(method).upper() != "PBE":
-            parts.append(_sanitize_model_code(str(method)))
+        for key, default in _DISPERSION_BACKENDS[dispersion]["defaults"].items():
+            value = extra.pop(key, None)
+            if value is None:
+                parts.append("CUSTOM")
+            elif str(value).upper() != str(default).upper():
+                parts.append(_sanitize_model_code(str(value)))
         if extra:
             blob = json.dumps(extra, sort_keys=True, default=str).encode()
             parts.append(hashlib.sha1(blob).hexdigest()[:6].upper())
@@ -180,20 +203,24 @@ class MLIPAdapter(BaseCalculator):
 
     Dispersion correction (Linux only)::
 
-        adapter = MLIPAdapter("MACE", dispersion="d4")
+        adapter = MLIPAdapter("MACE", dispersion="d3")  # D3(BJ), two-body
+        adapter = MLIPAdapter("MACE", dispersion="d3", dispersion_kwargs={"damping": "d3zero"})
+        adapter = MLIPAdapter("MACE", dispersion="d4")  # D4, with three-body term
         adapter = MLIPAdapter("MACE", dispersion="d4", dispersion_kwargs={"method": "r2SCAN"})
 
-    The D4 energy, forces and stress are added to the MLIP's through ASE's
-    ``SumCalculator``, including for the elemental references used in the
-    formation energy. Notes:
+    The dispersion energy, forces and stress are added to the MLIP's through
+    ASE's ``SumCalculator``, including for the elemental references used in
+    the formation energy. Notes:
 
     - Match ``method`` to the functional the MLIP was trained on (PBE for
       OMat24, MPtrj and MatPES-PBE models).
-    - Do not add D4 to a model that already includes dispersion (e.g.
-      ``ORB-D3``), or dispersion is counted twice.
+    - Do not add a dispersion correction to a model that already includes one
+      (e.g. ``ORB-D3``), or dispersion is counted twice.
+    - Following each package's default, D4 includes the three-body (ATM) term
+      and D3 does not. The three-body term dominates the cost.
     - The default ``isif=8`` scales the cell uniformly, so c/a cannot change
-      and D4 cannot close the gap between layers. Use ``isif=3`` for layered
-      materials.
+      and the correction cannot close the gap between layers. Use ``isif=3``
+      for layered materials.
     """
 
     calculator_type: Literal["mlip", "static"] = "mlip"
@@ -230,7 +257,7 @@ class MLIPAdapter(BaseCalculator):
         device: str | None = None,
         static: List[BaseCalculator] | None = None,
         custom: Dict[str, Any] | None = None,
-        dispersion: Literal["d4"] | None = None,
+        dispersion: Literal["d3", "d4"] | None = None,
         dispersion_kwargs: Dict[str, Any] | None = None,
         **kwargs,
     ):
@@ -242,18 +269,24 @@ class MLIPAdapter(BaseCalculator):
             static: Optional list of static adapters to pipe onto relaxed structures.
             custom: Optional dictionary of custom config overrides. Non-default
                 values are appended to the objective codes and output names.
-            dispersion: Optional dispersion correction added to the MLIP.
-                Only ``'d4'`` is supported.
-            dispersion_kwargs: Optional settings for ``dftd4.ase.DFTD4``,
-                merged over the default ``{"method": "PBE"}``. For example
-                ``{"method": "r2SCAN"}``, or ``{"params_tweaks": {"atm": False}}``
-                to drop the three-body term.
+            dispersion: Optional dispersion correction added to the MLIP:
+                ``'d3'`` (``dftd3.ase.DFTD3``) or ``'d4'`` (``dftd4.ase.DFTD4``).
+                Linux only.
+            dispersion_kwargs: Optional settings for that calculator, merged
+                over the defaults ``{"method": "PBE", "damping": "d3bj"}`` (D3)
+                or ``{"method": "PBE"}`` (D4). For example ``{"damping": "d3zero"}``
+                for D3, ``{"method": "r2SCAN"}``, or for D4
+                ``{"params_tweaks": {"atm": False}}`` to drop the three-body
+                term. D3 omits it by default; to add it, pass
+                ``{"params_tweaks": {"method": "PBE", "atm": True}}``, which
+                replaces ``method``.
             **kwargs: Additional parameters forwarded to the base class.
 
         Raises:
             ValueError: If model_name is not configured in mlips.json, the
                 dispersion is unsupported, or dispersion_kwargs is given
                 without a dispersion.
+            RuntimeError: If a dispersion is requested on an OS other than Linux.
         """
         super().__init__(**kwargs)
         config = _load_mlips_config()
@@ -262,12 +295,20 @@ class MLIPAdapter(BaseCalculator):
                 f"Model '{model_name}' not found in mlips.json. "
                 f"Available: {list(config.keys())}"
             )
-        if dispersion not in (None, "d4"):
+        if dispersion is not None and dispersion not in _DISPERSION_BACKENDS:
             raise ValueError(
-                f"Unsupported dispersion '{dispersion}'. Supported: 'd4'."
+                f"Unsupported dispersion '{dispersion}'. "
+                f"Supported: {sorted(_DISPERSION_BACKENDS)}."
             )
         if dispersion_kwargs and dispersion is None:
-            raise ValueError("dispersion_kwargs requires dispersion='d4'.")
+            raise ValueError("dispersion_kwargs requires dispersion='d3' or 'd4'.")
+        if dispersion and self._current_os() != "linux":
+            # Fail before setup. Only Linux has been validated, and dftd4 has
+            # no Windows wheel, so installing would try to compile from source.
+            raise RuntimeError(
+                f"dispersion='{dispersion}' is currently supported on Linux "
+                f"only; this system is '{self._current_os()}'."
+            )
         self._model_name = model_name
         self._config = config[model_name]
         self._device_override = device.lower() if isinstance(device, str) else "cpu"
@@ -275,11 +316,13 @@ class MLIPAdapter(BaseCalculator):
         self._custom_overrides: Dict[str, Any] = custom or {}
         self._dispersion = dispersion
         self._dispersion_kwargs: Dict[str, Any] = (
-            {"method": "PBE", **(dispersion_kwargs or {})} if dispersion else {}
+            {**_DISPERSION_BACKENDS[dispersion]["defaults"], **(dispersion_kwargs or {})}
+            if dispersion
+            else {}
         )
-        self._dftd4_checked = False
+        self._dispersion_checked = False
 
-        # e.g. 'MACE', 'MACE-D4', 'MACE-MEDIUM_MPA_0-D4'; used for output names
+        # e.g. 'MACE', 'MACE-D3', 'MACE-MEDIUM_MPA_0-D4'; used for output names
         parts = _variant_parts(
             self._config.get("custom", {}),
             self._custom_overrides,
@@ -535,7 +578,10 @@ class MLIPAdapter(BaseCalculator):
             "torch-geometric==2.7.0",
             "ase>=3.27.0",
             "setuptools",
-            f"{_DFTD4_REQUIREMENT}; sys_platform == 'linux'",
+            *(
+                f"{_dispersion_requirement(d)}; sys_platform == 'linux'"
+                for d in _DISPERSION_BACKENDS
+            ),
         ]
 
     def _layer3_setup_commands(self) -> List[str]:
@@ -599,19 +645,24 @@ class MLIPAdapter(BaseCalculator):
                 adapter.setup_env()
 
     def setup_env(self) -> None:
-        """Create the micro-env (idempotent), then add dftd4 if D4 is requested."""
+        """Create the micro-env (idempotent), then add the dispersion package if requested."""
         super().setup_env()
-        self._helper_ensure_dftd4()
+        self._helper_ensure_dispersion()
 
-    def _helper_dftd4_version(self) -> str | None:
-        """Version of dftd4 usable from the micro-env, or None if it cannot be imported.
+    def _helper_dispersion_version(self) -> str | None:
+        """Version of the dispersion package usable from the micro-env.
 
         Returns:
-            str | None: The installed version string, or None.
+            str | None: The installed version string, or None if the package's
+            ASE calculator cannot be imported.
         """
         import subprocess as sp
 
-        probe = "import dftd4.ase, importlib.metadata as m; print(m.version('dftd4'))"
+        package = _DISPERSION_BACKENDS[self._dispersion]["package"]
+        probe = (
+            f"import {package}.ase, importlib.metadata as m; "
+            f"print(m.version('{package}'))"
+        )
         try:
             result = sp.run(
                 [str(self._micro_python()), "-c", probe],
@@ -623,42 +674,45 @@ class MLIPAdapter(BaseCalculator):
             return None
         return result.stdout.strip() if result.returncode == 0 else None
 
-    def _helper_ensure_dftd4(self) -> None:
-        """Install or upgrade dftd4 in an existing micro-env when D4 is requested.
+    def _helper_ensure_dispersion(self) -> None:
+        """Install or upgrade the dispersion package in an existing micro-env.
 
-        Envs created before dftd4 became a layer-2 dependency are never rebuilt,
-        so they are updated in place here. Checked at most once per instance.
+        Envs created before the package became a layer-2 dependency are never
+        rebuilt, so they are updated in place here. Does nothing without a
+        dispersion correction.
 
         Raises:
-            RuntimeError: If dftd4 cannot be installed or still fails to import.
+            RuntimeError: If the package cannot be installed or still fails to import.
         """
-        if not self._dispersion or self._dftd4_checked or not self.is_env_ready():
+        if not self._dispersion or self._dispersion_checked or not self.is_env_ready():
             return
 
-        version = self._helper_dftd4_version()
-        minimum = _version_tuple(_DFTD4_MIN_VERSION)
+        backend = _DISPERSION_BACKENDS[self._dispersion]
+        requirement = _dispersion_requirement(self._dispersion)
+        minimum = _version_tuple(backend["min_version"])
+        version = self._helper_dispersion_version()
         if version is None or _version_tuple(version) < minimum:
-            found = f"dftd4 {version}" if version else "no usable dftd4"
+            found = f"{backend['package']} {version}" if version else f"no usable {backend['package']}"
             print(
                 f"[{self.name}] Found {found} in the micro-env; "
-                f"installing '{_DFTD4_REQUIREMENT}' for D4 dispersion..."
+                f"installing '{requirement}' for {self._dispersion.upper()} dispersion..."
             )
             env = os.environ.copy()
             env["UV_CACHE_DIR"] = str(self._env_root() / "uv_cache")
             try:
-                self._run_setup_command(f"pip install '{_DFTD4_REQUIREMENT}'", env)
+                self._run_setup_command(f"pip install '{requirement}'", env)
             except Exception as exc:
                 raise RuntimeError(
-                    f"[{self.name}] Could not install '{_DFTD4_REQUIREMENT}' into "
+                    f"[{self.name}] Could not install '{requirement}' into "
                     f"{self._env_path()}: {exc}"
                 ) from exc
-            version = self._helper_dftd4_version()
+            version = self._helper_dispersion_version()
             if version is None or _version_tuple(version) < minimum:
                 raise RuntimeError(
-                    f"[{self.name}] dftd4 is still not usable in {self._env_path()} "
-                    f"after installation (found: {version})."
+                    f"[{self.name}] {backend['package']} is still not usable in "
+                    f"{self._env_path()} after installation (found: {version})."
                 )
-        self._dftd4_checked = True
+        self._dispersion_checked = True
 
     def run_on_structure(
         self,
@@ -691,7 +745,7 @@ class MLIPAdapter(BaseCalculator):
             print("=" * 51)
 
         self._assert_os_supported()
-        self._helper_ensure_dftd4()
+        self._helper_ensure_dispersion()
 
         abs_path = os.path.abspath(file_path)
         output_dir = os.path.dirname(abs_path)
@@ -760,6 +814,15 @@ class MLIPAdapter(BaseCalculator):
                 "model_code": self._model_code,  # sanitized code prefix for full-key labelling
                 "dispersion": self._dispersion,
                 "dispersion_kwargs": self._dispersion_kwargs,
+                "dispersion_backend": (
+                    {
+                        "package": _DISPERSION_BACKENDS[self._dispersion]["package"],
+                        "calculator": _DISPERSION_BACKENDS[self._dispersion]["calculator"],
+                        "requirement": _dispersion_requirement(self._dispersion),
+                    }
+                    if self._dispersion
+                    else None
+                ),
                 "traj_dir": getattr(self, "_current_output_dir", ""),
                 "traj_prefix": getattr(self, "_current_output_stem_prefix", ""),
                 "persist_traj": getattr(self, "_current_persist_traj", False),
@@ -870,7 +933,7 @@ class MLIPAdapter(BaseCalculator):
             print("=" * 51)
 
         self._assert_os_supported()
-        self._helper_ensure_dftd4()
+        self._helper_ensure_dispersion()
 
         abs_path = os.path.abspath(path)
         input_dir_name = os.path.basename(abs_path)
@@ -1185,18 +1248,22 @@ def main():
     # Wrapped before anything uses calc, so the elemental references
     # for the formation energy include it too.
     dispersion = req.get('dispersion')
-    if dispersion == 'd4':
+    if dispersion is not None:
+        backend = req['dispersion_backend']
+        import importlib
         try:
-            from dftd4.ase import DFTD4
+            dispersion_module = importlib.import_module(backend['package'] + '.ase')
         except ImportError as exc:
             raise ImportError(
-                'dispersion=d4 needs dftd4>=4.3.0 in this micro-env. Install it with: '
-                'uv pip install "dftd4>=4.3.0" --python ' + sys.executable
+                'dispersion=' + dispersion + ' needs ' + backend['requirement']
+                + ' in this micro-env. Install it with: uv pip install "'
+                + backend['requirement'] + '" --python ' + sys.executable
             ) from exc
         from ase.calculators.mixing import SumCalculator
-        calc = SumCalculator([calc, DFTD4(**req.get('dispersion_kwargs', {}))])
-    elif dispersion is not None:
-        raise ValueError('Unsupported dispersion: ' + str(dispersion))
+        dispersion_calc = getattr(dispersion_module, backend['calculator'])(
+            **req.get('dispersion_kwargs', {})
+        )
+        calc = SumCalculator([calc, dispersion_calc])
 
     # ── Import ASE components ───────────────────────────────────────
     from ase.io import read, write
