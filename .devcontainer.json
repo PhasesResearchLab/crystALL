@@ -26,5 +26,6 @@
     "cpus": 4,
     "memory": "16gb",
     "storage": "16gb"
-  }
+  },
+  "postCreateCommand": "pip install yaspin"
 }
