@@ -133,7 +133,7 @@ The tutorials currently consist of 3 Jupyter notebooks covering:
 
 The upcoming `v0.6.0` release introduces a fully modular architecture driven by the `MLIPAdapter` registry, enabling automated structure relaxations and multi-property predictions across diverse machine-learned interatomic potentials. Each potential manages its own execution micro-environment with support for CPU and CUDA acceleration, full cell/volume optimization, and optional piping into downstream static property models. Below is a summary of the machine-learned interatomic potentials integrated into `crystALL` v0.6.0 via the `MLIPAdapter` registry:
 
-| Model Family | Checkpoint Pinned | Hardware | Release | Citation |
+| Model Family | Checkpoint Pinned | Hardware | Distribution | Citation |
 | :--- | :--- | :--- | :---: | :--- |
 | **DeePMD** | DPA-4.0.1-Pro-MPtrj | CPU, CUDA | From source | [Wang et al. (2018)](https://doi.org/10.1016/j.cpc.2018.03.016) |
 | **CHGNet** | 0.3.0 | CPU, CUDA | PyPI | [Deng et al. (2023)](https://doi.org/10.1038/s42256-023-00716-3) |
