@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional, Sequence
 from itertools import repeat  
 import traceback  
 from crystall import BaseCalculator
+from crystall.core import _STRUCTURE_EXTENSIONS
 
 _MPS_ERROR_TOKEN = "MPS backend"
 
@@ -588,7 +589,7 @@ class CHGNetStaticAdapter(BaseCalculator):
         file_names: List[str] = []
         for f in os.listdir(path):
             fp = os.path.join(path, f)
-            if os.path.isfile(fp):
+            if os.path.isfile(fp) and os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS:
                 file_names.append(f)
 
         if mode == 'parallel':
@@ -744,7 +745,7 @@ class CHGNetRelaxAdapter(BaseCalculator):
         file_names: List[str] = []
         for f in os.listdir(path):
             fp = os.path.join(path, f)
-            if os.path.isfile(fp):
+            if os.path.isfile(fp) and os.path.splitext(f)[1].casefold() in _STRUCTURE_EXTENSIONS:
                 file_names.append(f)
 
         final_structures: List[tuple] = []
