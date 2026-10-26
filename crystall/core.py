@@ -13,10 +13,8 @@ from ruamel.yaml import YAML
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
-import importlib.resources
 import threading
 import warnings
-import tomllib
 
 # Common tool libraries
 from tqdm import tqdm
@@ -1800,6 +1798,8 @@ class CrystALLSearch:
     ) -> None:
         """
         Cluster the prototypes using DBSCAN, assign each data point to its cluster, and select the best prototypes.
+        Any noise/outlier points identified by DBSCAN (``label == -1``) are grouped together by design into a single
+        additional cluster so that a representative candidate is also selected from the unclustered points.
 
         Args:
             eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other. Defaults to 0.3.
@@ -2174,7 +2174,7 @@ class CrystALLSearch:
 
             hovertext_prototypes = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:2] + [c['name'].split('-')[-1]])] + 
                                     ['<b>Affiliation: </b>' + c['name'].split('-')[2]] + 
-                                    ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
+                                    ['<b>Objective: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
             
             hovertext_top_candidates = hovertext_prototypes.pop(0)
@@ -2321,7 +2321,7 @@ class CrystALLSearch:
 
             hovertext_prototypes = ['<br>'.join(['<b>Prototype: </b>' + '-'.join(c['name'].split('-')[0:2] + [c['name'].split('-')[-1]])] +
                                     ['<b>Affiliation: </b>' + c['name'].split('-')[2]] + 
-                                    ['<b>Formation Energy: </b> ' + str(round(c['objective'], 4))])  
+                                    ['<b>Objective: </b> ' + str(round(c['objective'], 4))])  
                         for _, c in df_cluster.iterrows()]
             
             hovertext_top_candidates = hovertext_prototypes.pop(0)
