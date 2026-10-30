@@ -2,6 +2,7 @@ import time
 from urllib.error import HTTPError
 from decimal import Decimal, ROUND_DOWN
 from importlib import resources
+from importlib.util import find_spec
 from crystall import BaseCalculator
 from typing import Sequence, Optional, Dict, Any, List
 
@@ -20,11 +21,25 @@ class AlignnAdapter(BaseCalculator):
         "ALIGNN-Alexandria Volume Per Atom [A^3]",
     ]
 
+    @classmethod
+    def is_available(cls) -> bool:
+        """Return True when both `alignn` (mpdd-alignn) and `dgl` are installed."""
+        return find_spec("alignn") is not None and find_spec("dgl") is not None
+
     def load_calculator(self, mode: str = "serial", retries: int = 3, delay: int = 5) -> None:
         """Set up and download ALIGNN models"""
+        try:
+            if not self.is_available():
+                raise ImportError("Required packages 'mpdd-alignn' and 'dgl' not found.")
+            from alignn import pretrained  # local import to avoid core coupling
+        except ImportError as exc:
+            raise ImportError(
+                "ALIGNN calculator requires 'mpdd-alignn' and 'dgl' "
+                "(installed by default on Linux/Codespaces, or via `pip install \"crystall-search[alignn]\"`)."
+            ) from exc
+
         # First, attempt the concise presence check
         try:
-            from alignn import pretrained
             alignn_root = resources.files('alignn')
             for model_dict in pretrained.get_default_models():
                 rel = model_dict.get('model') or model_dict.get('path') or ''
@@ -44,7 +59,6 @@ class AlignnAdapter(BaseCalculator):
         if resp not in ("", "y", "yes"):
             raise RuntimeError("ALIGNN models are required but not installed. Aborting.")
 
-        from alignn import pretrained  # local import to avoid core coupling
         print("Downloading models for MPDD-ALIGNN..")
         for attempt in range(retries):
             try:

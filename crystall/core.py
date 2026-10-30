@@ -1198,6 +1198,9 @@ class CrystALLSearch:
             for name, adapter_cls in getattr(self, "supported_calculators", {}).items():
                 if name == 'pySIPFENN' or adapter_cls is None:
                     continue
+                is_avail = getattr(adapter_cls, "is_available", None)
+                if callable(is_avail) and not is_avail():
+                    continue
                 objectives = getattr(adapter_cls, "objectives", []) or []
                 if name not in self.available_calculators:
                     self.available_calculators[name] = list(objectives)
@@ -1289,13 +1292,17 @@ class CrystALLSearch:
         """Stub to setup an external calculator adapter.
 
         For now, this just registers the adapter's declared objectives into
-        available_calculators so they appear in the objective list.
+        available_calculators so they appear in the objective list, provided
+        the adapter's runtime dependencies are available.
 
         Args:
             calculator_name: Name of the calculator (adapter key).
         """
         adapter_cls = getattr(self, 'supported_calculators', {}).get(calculator_name)
         if adapter_cls is None:
+            return
+        is_avail = getattr(adapter_cls, 'is_available', None)
+        if callable(is_avail) and not is_avail():
             return
         objectives = getattr(adapter_cls, 'objectives', []) or []
         if calculator_name not in self.available_calculators:
@@ -2408,6 +2415,16 @@ class CrystALLSearch:
 class BaseCalculator:
     name: str
     objectives: Sequence[str]
+
+    @classmethod
+    def is_available(cls) -> bool:
+        """Return True if the calculator's runtime dependencies are installed.
+
+        Adapters with optional or platform-specific dependencies can override
+        this method so unavailable calculators are skipped during discovery.
+        """
+        return True
+
     def run_on_directory(
         self,
         path: str,
