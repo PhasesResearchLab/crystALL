@@ -1,7 +1,7 @@
 # crystALL
 
 <div align="center">
-  <img src="https://github.com/PhasesResearchLab/crystALL/blob/ce4bfd1bb0b16eabdcc2cd28dcf9333f657b122c/docs/_static/crystALL.png" alt="crystALL Logo" width="180"/>
+  <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/refs/heads/main/docs/_static/crystALL.png" alt="crystALL Logo" width="180"/>
   <br>
 </div>
 
@@ -11,21 +11,23 @@
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/crystall-search)](https://pypi.org/project/crystall-search)
 [![LinuxTests](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml)
 
+`crystALL` manuscript: _arXiv link pending_
 
 Example Publications using `crystALL`:
+
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.actamat.2021.117448-blue)](https://doi.org/10.1016/j.actamat.2021.117448)
 [![DOI](https://img.shields.io/badge/DOI-10.1038%2Fs41598--021--03578--0-blue)](https://doi.org/10.1038/s41598-021-03578-0)
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.molliq.2025.127811-blue)](https://doi.org/10.1016/j.molliq.2025.127811)
 
 ## Summary
 
-**crystALL** is an open-source data-driven framework for atomic structure prediction and materials discovery, designed to address the critical gap between computational predictions and experimental observations. Unlike methods focused solely on stable ground states, crystALL systematically embraces structural diversity and compositional uncertainty, enabling the discovery, modeling, and validation of both stable and metastable crystal configurations, going beyond more common data-driven discovery approaches that prioritize only the lowest-energy structures often failing to explain experimental observations or propose structures stable under conditions of interest.
+**`crystALL`** is an open-source data-driven framework for atomic structure prediction and materials discovery, designed to address the critical gap between computational predictions and experimental observations. Unlike methods focused solely on stable ground states, `crystALL` systematically embraces structural diversity and compositional uncertainty, enabling the discovery, modeling, and validation of both stable and metastable crystal configurations, going beyond more common data-driven discovery approaches that prioritize only the lowest-energy structures often failing to explain experimental observations or propose structures stable under conditions of interest.
 
 By leveraging millions of relaxed and experimental structures from the MPDD Database and OPTIMADE API, `crystALL` rapidly generates wide ensembles of candidate configurations for either target compositions or compositional ranges, with the latter being a unique strength of `crystALL`+`MPDD` combination. These candidates undergo all permutations of atomic substitution, advanced machine learning-based featurization, clustering, and multi-model property prediction, supporting robust selection and direct ab initio or experimental validation (in a typical use case).
 
 ## Features
 
-_This is just a quick introduction to the main features and workflow of crystALL. Please refer to the `crystALL` journal article for a complete, yet still concise, description of the framework, motivation behind it, and the underlying methodology._
+_This is just a quick introduction to the main features and workflow of `crystALL`. Please refer to the `crystALL` journal article for a complete, yet still concise, description of the framework, motivation behind it, and the underlying methodology._
 
 ### Overview
 
@@ -49,16 +51,16 @@ The example depicts a dramatic filtering cascade - 5M structures from MPDD are h
 
 To illustrate the scoring step, the bar plot below shows formation energies sorted from lowest to highest for a focused ensemble of 100 `NaMg(BH4)3` prototypes. This view helps rapidly identify low‑energy regions in the ensemble and informs which clusters deserve further attention.
 
-Property prediction in `crystALL` is modular. `pySIPFENN` models are available natively and external calculators plug in through adapter classes. `ALIGNN` and `CHGNet` are provided as examples of such adapters: `ALIGNN` exposes multi‑head formation energy outputs (`MP` and `DFT-JARVIS`) which can be filtered according to user request, and `CHGNet` reports static and relaxed energies computed independently so users can skip relaxation when it is not needed. The adapters accept an explicit list of objectives, enabling selective computation and reduced runtime for expensive predictors.
+Property prediction in `crystALL` is modular. `pySIPFENN` models are available natively and external calculators plug in through adapter classes. `ALIGNN` and `CHGNet` are provided as examples of such adapters: [`MPDD-ALIGNN`](https://github.com/amkrajewski/mpdd-alignn) exposes multi‑head formation energy outputs (based on `MP`, `DFT-JARVIS`, and `Alexandria`) as well as 7 other properties run by default (see `MPDD-ALIGNN/`[`alignn/config.yaml`](https://github.com/amkrajewski/mpdd-alignn/blob/main/alignn/config.yaml) or [MPDD Database (`mpdd.org`)](https://mpdd.org)), which can be filtered according to user request, and `CHGNet` reports static and relaxed energies computed independently so users can skip relaxation when it is not needed. The adapters accept an explicit list of objectives, enabling selective computation and reduced runtime for expensive predictors.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/2cc27a91b6396b8cc776075b3696411f061b268c/docs/_static/barplot.png" alt="Sorted bar chart of formation energies" width="750"/>
+  <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/refs/heads/main/docs/_static/barplot.png" alt="Sorted bar chart of formation energies" width="750"/>
 </div>
 
-After featurization and property assignment, `crystALL` clusters the prototype ensemble (t‑SNE for embedding + KMeans/DBSCAN for grouping) and annotates clusters with objective statistics. The figure below shows the t‑SNE embedding for the same `NaMg(BH4)3` set: seven clusters are recovered and correspond to distinct structural families (for example, clusters 1 and 2 are enriched in hexagonal motifs, cluster 3 in triclinic arrangements, clusters 4, 5 and 7 in trigonal lattices, and cluster 6 contains perovskite‑type geometries). This separation illustrates how descriptor‑based clustering can disentangle fundamentally different local chemistries and geometries.
+After featurization and property assignment, `crystALL` scales the 256-dimensional `KS2022` descriptor vectors, projects them into 2D and 3D t-SNE manifolds for visualization, and partitions the prototype ensemble into structural basins—either directly in the **full 256D scaled `KS2022` feature space** via `DBSCAN` (avoiding low-dimensional projection distortion) or on the **2D t-SNE manifold** via `KMeans` (with automatic silhouette-based cluster-count selection when `n_clusters` is omitted). The figure below shows the 2D t-SNE embedding for the same `NaMg(BH4)3` set: seven clusters are recovered and correspond to distinct structural families (for example, clusters 1 and 2 are enriched in hexagonal motifs, cluster 3 in triclinic arrangements, clusters 4, 5, and 7 in trigonal lattices, and cluster 6 contains perovskite-type geometries). This separation illustrates how descriptor-based clustering disentangles fundamentally different local chemistries and coordination geometries.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/2cc27a91b6396b8cc776075b3696411f061b268c/docs/_static/2dcluster.png" alt="2D t-SNE of prototypes colored by clusters" width="750"/>
+  <img src="https://raw.githubusercontent.com/PhasesResearchLab/crystALL/refs/heads/main/docs/_static/2dcluster.png" alt="2D t-SNE of prototypes colored by clusters" width="750"/>
 </div>
 
 The final selection step produces Top Candidates by selecting the lowest‑energy representative from each cluster for every available objective; these candidates provide a compact, diverse set for higher‑accuracy DFT relaxation or experimental validation. Outputs are exportable as CSV (`all-prototypes` and `top-candidates`), and an optional MPDD convex‑hull check (energy‑above‑hull) can be performed to further prioritize thermodynamically plausible entries.
@@ -109,13 +111,13 @@ The `dgl` library is infrequently updated as of 2026 but still widely used for d
     pip install --no-deps 'dgl==2.5.0' -f https://data.dgl.ai/wheels/torch-2.6/repo.html
     ```
 
-3. If you are using **Windows** or **macOS**, the versions between `v0.3.x` and `v0.5.0` should install without major issues using standard `pip` commands, possibly with manual `pip install "dgl==2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html` first; however, versions `v0.5.x` had to top with the latest releases of `torch`. 
+3. If you are using **Windows** or **macOS**, the versions between `v0.3.x` and `v0.5.0` should install without major issues using standard `pip` commands, possibly with manual `pip install "dgl==2.2.0" -f https://data.dgl.ai/wheels/torch-2.3/repo.html` first; however, versions `v0.5.x` had to keep up with the latest releases of `torch`. 
 
 4. If you need to install the latest version on **Windows** or **macOS**, consider doing so in environments like Windows Subsystem for Linux [`WSL`](https://learn.microsoft.com/en-us/windows/wsl/install), Linux VM, or [`Docker`](https://www.docker.com/get-started) to avoid compatibility issues.
 
 ## Tutorials
 
-If you would like to try **crystALL**'s functionalities in a reproducible, hands-on environment, we provide a pre-configured GitHub Codespace with all required dependencies and local-access to MongoDB database for running our tutorials:
+If you would like to try **`crystALL`**'s functionalities in a reproducible, hands-on environment, we provide a pre-configured GitHub Codespace with all required dependencies and local-access to MongoDB database for running our tutorials:
 
    [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/PhasesResearchLab/crystALL?quickstart=1)
 
@@ -128,9 +130,9 @@ The tutorials currently consist of 3 Jupyter notebooks covering:
 - [02. HydridesExample.ipynb](tutorial/02.HydridesExample.ipynb) - Real-world discovery in complex metal hydrides.
 - [03. RefiningMPDDSearch.ipynb](tutorial/03.RefiningMPDDSearch.ipynb) - Advanced queries (dimensionality filtering, crystal system constraints, compositional limits).
 
-## New in v0.6.0
+## New MLIP support, with beta testing available in `v0.6.0` branch
 
-The upcoming `v0.6.0` release introduces a fully modular architecture driven by the `MLIPAdapter` registry, enabling automated structure relaxations and multi-property predictions across diverse machine-learned interatomic potentials. Each potential manages its own execution micro-environment with support for CPU and CUDA acceleration, full cell/volume optimization, and optional piping into downstream static property models. Below is a summary of the machine-learned interatomic potentials integrated into `crystALL` v0.6.0 via the `MLIPAdapter` registry:
+The upcoming [`v0.6.0` release](https://github.com/PhasesResearchLab/crystALL/tree/v0.6.0) introduces a fully modular architecture driven by the `MLIPAdapter` registry, enabling automated structure relaxations and multi-property predictions across diverse machine-learned interatomic potentials. Each potential manages its own execution micro-environment with support for CPU and CUDA acceleration, full cell/volume optimization, and optional piping into downstream static property models. Below is a summary of the machine-learned interatomic potentials integrated into `crystALL` v0.6.0 via the `MLIPAdapter` registry:
 
 | Model Family | Checkpoint Pinned | Hardware | Distribution | Citation |
 | :--- | :--- | :--- | :---: | :--- |
@@ -169,7 +171,7 @@ For coding contributions, fork the repository, create a topic branch, and open a
 If reporting a bug or requesting a feature, please open an issue with a minimal reproduction (code snippet or dataset), environment details, and the expected vs actual behaviour; users may also raise questions and contribute to discussions via issues. 
 
 **Adding property-prediction models via calculator adapters:**
-Extending crystALL with new property predictors is welcome. We integrate models as *calculator adapters* so the rest of the codebase can call different predictor objectives via a uniform interface (see `alignn.py` and `chgnet.py`). Key requirements for adapters:
+Extending `crystALL` with new property predictors is welcome. We integrate models as *calculator adapters* so the rest of the codebase can call different predictor objectives via a uniform interface (see `alignn.py` and `chgnet.py`). Key requirements for adapters:
 
 - Adapter location: Create a module under `crystall/calculators/` (one file or a small package).
 - I/O contract: accept pymatgen `Structure`; document outputs in the module docstring.
@@ -182,9 +184,8 @@ Extending crystALL with new property predictors is welcome. We integrate models 
 
 ## Citing
 
-**crystALL** is an open-source Python package developed by the [Phases Research Lab](https://phaseslab.com/) at The Pennsylvania State University, under the supervision of Dr. Zi-Kui Liu, and distributed under the MIT License.
+**`crystALL`** is an open-source Python package developed by the [Phases Research Lab](https://phaseslab.com/) at The Pennsylvania State University, under the supervision of Dr. Zi-Kui Liu, and distributed under the MIT License.
 
-If you use **crystALL** in scientific publications, please cite:
+If you use **`crystALL`** in scientific publications, please cite:
 
-- Adam Krajewski, Ricardo Amaral, Zi-Kui Liu, et al. "Data-driven candidate structure ensemble generation beyond the convex hull with crystALL". (2025).  
-  [DOI:10.xxxx/xxxxx](https://doi.org/10.xxxx/xxxxx), [arXiv:YYMM.xxxxx](https://arxiv.org/abs/YYMM.xxxxx)
+- Adam M. Krajewski, Ricardo Amaral, Jonathan W. Siegel, Luke A. Myers, Rushi Gong, Shun-Li Shang, Zi-Kui Liu, "Data-driven candidate structure ensemble generation beyond the convex hull with crystALL approach" (October 2026)
