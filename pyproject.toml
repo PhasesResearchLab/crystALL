@@ -10,13 +10,13 @@ authors = [
   { name="Adam Krajewski", email="adam@phaseslab.org" },
   { name="Jonathan Siegel", email="jwsiegel@tamu.edu" },
 ]
+license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Development Status :: 3 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
