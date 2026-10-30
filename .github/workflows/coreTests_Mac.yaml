@@ -1,19 +1,19 @@
 name: Mac M1
 
 on: 
-  #push:
-  #  branches: [main]
-  #  paths:
-  #    - 'crystall/**'
-  #    - '.github/workflows/coreTests_Mac.yaml'
-  #    - 'pyproject.toml'
-  #
-  #pull_request:
-  #  branches: [main]
-  #  paths:
-  #    - 'crystall/**'
-  #    - '.github/workflows/coreTests_Mac.yaml'
-  #    - 'pyproject.toml'
+  push:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_Mac.yaml'
+      - 'pyproject.toml'
+  
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crystall/**'
+      - '.github/workflows/coreTests_Mac.yaml'
+      - 'pyproject.toml'
 
   workflow_dispatch:
 
