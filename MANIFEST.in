@@ -1,0 +1,4 @@
+prune tutorial
+prune docs
+prune paper
+prune .github

@@ -10,7 +10,7 @@ authors = [
   { name="Adam Krajewski", email="adam@phaseslab.org" },
   { name="Jonathan Siegel", email="jwsiegel@tamu.edu" },
 ]
-license = { text = "MIT" }
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -92,8 +92,8 @@ dev = [
     "isort",
 ]
 
-[tool.setuptools]
-packages = { find = { exclude = ["paper", "oldfiles"] } }
+[tool.setuptools.packages.find]
+include = ["crystall*"]
 
 [tool.setuptools.package-data]
 "crystall.utils" = ["*.yaml"]
