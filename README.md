@@ -9,7 +9,11 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/crystall-search)](https://pypi.org/project/crystall-search)
 [![PyPI - Version](https://img.shields.io/pypi/v/crystall-search?label=PyPI&color=green)](https://pypi.org/project/crystall-search)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/crystall-search)](https://pypi.org/project/crystall-search)
+
 [![LinuxTests](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_LinuxUbuntu.yaml)
+[![Windows](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Windows.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Windows.yaml)
+[![Mac M1](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Mac.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/coreTests_Mac.yaml)
+[![Full Tests](https://github.com/PhasesResearchLab/crystALL/actions/workflows/fullTests.yaml/badge.svg)](https://github.com/PhasesResearchLab/crystALL/actions/workflows/fullTests.yaml)
 
 `crystALL` manuscript: _arXiv link pending_
 

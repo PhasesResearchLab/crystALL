@@ -1,4 +1,4 @@
-name: Full Tests
+name: Linux (E2E incl. ML runtime)
 
 on:
   pull_request:

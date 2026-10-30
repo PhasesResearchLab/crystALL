@@ -1,4 +1,4 @@
-name: Mac M1
+name: MacOS (core)
 
 on: 
   push:
