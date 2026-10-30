@@ -1,10 +1,9 @@
 # crystALL
 
 <div align="center">
-  <img src="docs/_static/crystALL.png" alt="crystALL Logo" width="180"/>
+  <img src="https://github.com/PhasesResearchLab/crystALL/blob/ce4bfd1bb0b16eabdcc2cd28dcf9333f657b122c/docs/_static/crystALL.png" alt="crystALL Logo" width="180"/>
   <br>
 </div>
-
 
 [![license](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/crystall-search)](https://pypi.org/project/crystall-search)
