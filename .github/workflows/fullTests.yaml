@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongodb:
-        image: mongo:8.0
+        image: mongo:9.0
         ports:
           - 27017:27017
         options: >-
@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongodb:
-        image: mongo:8.0
+        image: mongo:9.0
         ports:
           - 27017:27017
         options: >-
@@ -98,11 +98,6 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v7
-
-      - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.12.1
-        with:
-          mongodb-version: '8.0'
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v7

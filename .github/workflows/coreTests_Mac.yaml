@@ -32,8 +32,8 @@ jobs:
         run: |
           brew trust mongodb/brew
           brew tap mongodb/brew
-          brew install mongodb-community@8.0
-          brew services start mongodb/brew/mongodb-community@8.0
+          brew install mongodb-community@9.0
+          brew services start mongodb/brew/mongodb-community@9.0
           for i in {1..30}; do
             if command -v mongosh >/dev/null 2>&1; then
               mongosh --quiet --eval "db.adminCommand('ping')" >/dev/null 2>&1 && break
